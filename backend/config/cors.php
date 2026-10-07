@@ -19,11 +19,15 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => array_values(array_unique(array_filter([
-        env('FRONTEND_URL', 'http://localhost:5173'),
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-    ]))),
+    'allowed_origins' => (function () {
+        $raw = env('ALLOWED_ORIGINS', env('FRONTEND_URL', ''));
+        $list = array_map('trim', explode(',', (string) $raw));
+        $list = array_merge($list, [
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
+        ]);
+        return array_values(array_unique(array_filter($list)));
+    })(),
 
     'allowed_origins_patterns' => [],
 

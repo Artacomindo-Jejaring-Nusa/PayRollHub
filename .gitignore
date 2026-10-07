@@ -1,0 +1,48 @@
+# Sensitive & Workspace Files
+PRD_PayrollHub.md
+skills-lock.json
+contoh(1).xlsx
+*.xlsx
+*.xls
+57814.jpg
+.agents/
+
+# Environment Files
+.env
+.env.*
+.env.backup
+.env.production
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+frontend/.env.local
+frontend/.env.*.local
+!frontend/.env.example
+
+# Backend Laravel
+backend/vendor/
+backend/storage/*.key
+backend/storage/logs/*.log
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*.php
+backend/bootstrap/cache/*.php
+backend/public/storage
+backend/public/hot
+backend/.phpunit.cache/
+
+# Frontend Vite & Node
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+
+# System & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

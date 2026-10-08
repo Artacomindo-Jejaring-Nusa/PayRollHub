@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../features/auth/services/authService';
+import { useTenantTheme } from '../lib/theme';
+import { TenantSwitcher } from '../components/shared/TenantSwitcher';
 import { Badge } from '../components/ui/Badge';
 import {
   Wallet,
@@ -16,10 +18,13 @@ import {
 
 export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
+  const { tenant, tenantId } = useTenantTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const isTopNavLayout = tenantId === 'rimamandiri';
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -32,19 +37,19 @@ export const DashboardLayout: React.FC = () => {
     {
       label: 'Dashboard Overview',
       path: '/dashboard',
-      icon: <LayoutDashboard className="w-5 h-5" />,
+      icon: <LayoutDashboard className="w-4 h-4" />,
       adminOnly: false,
     },
     {
       label: 'Data Penggajian',
       path: '/payrolls',
-      icon: <FileSpreadsheet className="w-5 h-5" />,
+      icon: <FileSpreadsheet className="w-4 h-4" />,
       adminOnly: false,
     },
     {
       label: 'Manajemen Pengguna',
       path: '/users',
-      icon: <Users className="w-5 h-5" />,
+      icon: <Users className="w-4 h-4" />,
       adminOnly: true,
     },
   ];
@@ -53,6 +58,165 @@ export const DashboardLayout: React.FC = () => {
     (item) => !item.adminOnly || user?.role === 'admin'
   );
 
+  const isItemActive = (path: string) => {
+    return path === '/dashboard'
+      ? location.pathname === '/' || location.pathname === '/dashboard'
+      : location.pathname === path ||
+        (path !== '/' && location.pathname.startsWith(path + '/'));
+  };
+
+  // ==============================================================
+  // 1. TOP NAVIGATION BAR LAYOUT (Untuk riamamandiripratama.com / Riama Mandiri)
+  //    Sidebar pindah ke atas / menu-menu horizontal di atas
+  // ==============================================================
+  if (isTopNavLayout) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col text-on-surface">
+        {/* Top Navbar Sticky */}
+        <header className="bg-surface-panel border-b border-border-subtle sticky top-0 z-30 shadow-xs">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            {/* Brand Logo & Title */}
+            <div className="flex items-center space-x-3 flex-shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-headline-page text-[17px] sm:text-[18px] font-bold text-text-primary tracking-tight">
+                    HRD Mandiri
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wide">
+                    {tenant.badgeText}
+                  </span>
+                </div>
+                <span className="block text-[11px] text-text-muted font-medium truncate max-w-[180px] sm:max-w-none">
+                  {tenant.companyLegalName}
+                </span>
+              </div>
+            </div>
+
+            {/* Desktop Horizontal Navigation Links (Menu di atas) */}
+            <nav className="hidden md:flex items-center gap-1.5 mx-4">
+              {visibleNavItems.map((item) => {
+                const active = isItemActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                      active
+                        ? 'bg-primary text-white shadow-xs font-semibold'
+                        : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                    }`}
+                  >
+                    <span className={active ? 'text-white' : 'text-text-muted'}>
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Right Controls */}
+            <div className="flex items-center gap-2 sm:gap-3.5 flex-shrink-0">
+              <TenantSwitcher variant="compact" />
+
+              <div className="hidden lg:block h-6 w-px bg-border-subtle" />
+
+              {/* User Profile Info */}
+              <div className="hidden lg:flex items-center gap-2.5">
+                <div className="text-right">
+                  <div className="font-body-semibold text-[13px] text-text-primary leading-tight">
+                    {user?.name}
+                  </div>
+                  <div className="text-[11px] text-text-muted">
+                    {user?.role === 'admin' ? 'Super Administrator' : 'Staf User (Read-Only)'}
+                  </div>
+                </div>
+                <div className="w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white">
+                  {user?.name?.charAt(0).toUpperCase() || 'U'}
+                </div>
+              </div>
+
+              {/* Logout Button */}
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium text-status-danger-text hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200"
+                title="Keluar Akun"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden md:inline">Keluar</span>
+              </button>
+
+              {/* Mobile Menu Toggle Button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container transition-colors"
+                aria-label="Toggle navigation"
+              >
+                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Drawer Navigation */}
+          {mobileMenuOpen && (
+            <div className="md:hidden border-t border-border-row bg-surface-panel px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
+              <div className="px-2 pb-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                Menu Utama — {tenant.shortName}
+              </div>
+              {visibleNavItems.map((item) => {
+                const active = isItemActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all ${
+                      active
+                        ? 'bg-primary text-white font-semibold'
+                        : 'text-text-primary hover:bg-surface-container'
+                    }`}
+                  >
+                    <span className={active ? 'text-white' : 'text-text-muted'}>
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+
+              <div className="pt-2 border-t border-border-row flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-[13px] text-text-primary">{user?.name}</div>
+                  <div className="text-[11px] text-text-muted">{user?.email}</div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-status-danger-text hover:bg-red-50 rounded-lg"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Keluar</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
+  // ==============================================================
+  // 2. VERTICAL SIDEBAR LAYOUT (Untuk rimbunbuanasejahtera.com / RBS Global)
+  //    Sidebar tetap di samping kiri
+  // ==============================================================
   return (
     <div className="min-h-screen bg-surface flex flex-col lg:flex-row text-on-surface">
       {/* Mobile Header Bar */}
@@ -62,20 +226,23 @@ export const DashboardLayout: React.FC = () => {
             <Wallet className="w-5 h-5" />
           </div>
           <div>
-            <span className="font-headline-page text-[16px] font-semibold text-text-primary tracking-tight">
+            <span className="font-headline-page text-[15px] font-semibold text-text-primary tracking-tight">
               HRD Mandiri
             </span>
-            <span className="block text-[11px] text-text-muted font-medium">RBS Global</span>
+            <span className="block text-[11px] text-text-muted font-medium">{tenant.shortName}</span>
           </div>
         </div>
 
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container transition-colors"
-          aria-label="Toggle menu"
-        >
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <TenantSwitcher variant="compact" />
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container transition-colors"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </div>
 
       {/* Sidebar Navigation */}
@@ -97,14 +264,17 @@ export const DashboardLayout: React.FC = () => {
                 </span>
               </div>
               <span className="block text-[12px] text-text-muted font-medium">
-                Sistem Penggajian
+                {tenant.shortName}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border-row/60 text-[11px] text-text-muted font-medium" title="RBS Global • PT. Rimbun Buana Sejahtera">
+          <div
+            className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border-row/60 text-[11px] text-text-muted font-medium"
+            title={tenant.companyLegalName}
+          >
             <Building2 className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
-            <span className="truncate">RBS Global • PT. Rimbun Buana Sejahtera</span>
+            <span className="truncate">{tenant.companyLegalName}</span>
           </div>
         </div>
 
@@ -114,11 +284,7 @@ export const DashboardLayout: React.FC = () => {
             Menu Utama
           </div>
           {visibleNavItems.map((item) => {
-            const isActive =
-              item.path === '/dashboard'
-                ? location.pathname === '/' || location.pathname === '/dashboard'
-                : location.pathname === item.path ||
-                  (item.path !== '/' && location.pathname.startsWith(item.path + '/'));
+            const isActive = isItemActive(item.path);
 
             return (
               <Link
@@ -181,12 +347,17 @@ export const DashboardLayout: React.FC = () => {
         <header className="hidden lg:flex bg-surface-panel border-b border-border-subtle h-16 px-8 items-center justify-between sticky top-0 z-20">
           <div className="flex items-center gap-3">
             <span className="font-headline-page text-[18px] font-semibold text-text-primary">
-              Portal Administrasi Gaji
+              {tenant.portalTitle}
             </span>
             <span className="text-border-subtle">|</span>
+            <span className="text-[12px] font-medium text-text-muted">
+              {tenant.shortName}
+            </span>
           </div>
 
           <div className="flex items-center gap-4">
+            <TenantSwitcher />
+            <div className="h-6 w-px bg-border-subtle" />
             <div className="text-right">
               <div className="font-body-semibold text-[13px] text-text-primary">
                 {user?.name}

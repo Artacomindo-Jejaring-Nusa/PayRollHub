@@ -380,4 +380,198 @@ class PayrollHubApiTest extends TestCase
         $response->assertHeader('X-Frame-Options', 'SAMEORIGIN');
         $response->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     }
+
+    public function test_formula_and_absence_deduction_calculation(): void
+    {
+        // Net Base Price: 3,462,919
+        // BPJS Kes: 173,146
+        // BPJS TK: 319,974
+        // Formula Gaji Pokok = 3,462,919 - 173,146 - 319,974 = 2,969,799
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/payrolls', [
+                'employee_name' => 'Septian Gaji Test',
+                'province' => 'DKI Jakarta',
+                'period' => '2026-09',
+                'net_base_price' => 3462919,
+                'bpjs_kes' => 173146,
+                'bpjs_tk' => 319974,
+                'absence_count' => 2,
+                'absence_rate' => 50000,
+                'status' => 'active',
+            ]);
+
+        $response->assertStatus(201);
+        $data = $response->json('data');
+
+        $this->assertEquals(2969799, $data['basic_salary']);
+        $this->assertEquals(100000, $data['absence_deduction']);
+        $this->assertEquals(2969799 - 100000, $data['take_home_pay']);
+    }
+
+    public function test_admin_can_toggle_employee_status_to_off_and_active(): void
+    {
+        $payroll = Payroll::factory()->create([
+            'employee_name' => 'Karyawan Akan Off',
+            'status' => 'active',
+        ]);
+
+        // Toggle to off with resign date
+        $offResponse = $this->actingAs($this->admin, 'sanctum')
+            ->patchJson("/api/payrolls/{$payroll->id}/status", [
+                'status' => 'off',
+                'resign_date' => '2026-09-30',
+            ]);
+
+        $offResponse->assertStatus(200);
+        $this->assertEquals('off', $offResponse->json('data.status'));
+        $this->assertEquals('2026-09-30', $offResponse->json('data.resign_date'));
+
+        // Verify dashboard metrics reflect the off employee
+        $metricsResponse = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/payrolls');
+
+        $metricsResponse->assertStatus(200);
+        $this->assertGreaterThanOrEqual(1, $metricsResponse->json('metrics.total_off_employees'));
+
+        // Toggle back to active
+        $activeResponse = $this->actingAs($this->admin, 'sanctum')
+            ->patchJson("/api/payrolls/{$payroll->id}/status", [
+                'status' => 'active',
+            ]);
+
+        $activeResponse->assertStatus(200);
+        $this->assertEquals('active', $activeResponse->json('data.status'));
+    }
+
+    public function test_user_can_download_payroll_template_xlsx_and_csv(): void
+    {
+        // Test XLSX download
+        $responseXlsx = $this->actingAs($this->admin, 'sanctum')
+            ->get('/api/payrolls/template?format=xlsx');
+
+        $responseXlsx->assertStatus(200);
+        $this->assertTrue(str_contains(
+            $responseXlsx->headers->get('content-disposition') ?? '',
+            'template_import_payrollhub.xlsx'
+        ));
+
+        // Test CSV download
+        $responseCsv = $this->actingAs($this->admin, 'sanctum')
+            ->get('/api/payrolls/template?format=csv');
+
+        $responseCsv->assertStatus(200);
+        $this->assertTrue(str_contains(
+            $responseCsv->headers->get('content-disposition') ?? '',
+            'template_import_payrollhub.csv'
+        ));
+        $content = $responseCsv->getContent();
+        $this->assertStringContainsString('NAMA LENGKAP', $content);
+        $this->assertStringContainsString('FEBRI HIDAYAT', $content);
+    }
+
+    public function test_admin_can_preview_import_without_saving_to_database(): void
+    {
+        $csvContent = "\xEF\xBB\xBF" .
+            "NO,WILAYAH,SEKOLAH RAKYAT PERMANEN,NIK,NAMA LENGKAP,FUNGSI TENAGA KEPENDIDIKAN,TANGGAL MASUK,STATUS,TANGGAL KELUAR,PERUSAHAAN,HARGA DASAR (NET PPH & FEE),BPJS KES 5%,BPJS TK 9.24%,GAJI POKOK,POTONGAN ABSENSI,KETERANGAN ABSENSI,NO REKENING,BANK,PERIODE\n" .
+            "# PETUNJUK: Baris petunjuk ini harus otomatis diabaikan,,,,,,,,,,,,,,,\n" .
+            "1,DKI JAKARTA,Salemba Pusat,'3171012304910001,Karyawan Preview 1,Staff,01-08-2024,Aktif,,rbs,6000000,300000,554400,5145600,0,,2098199007,BNI,2026-09\n" .
+            "2,SUMATERA UTARA,Unit 2,'1213131111910001,Karyawan Preview 2,Security,25-07-2024,Off,15-09-2026,rima,3500000,175000,323400,3001600,100000,Izin 1 hari,2097700845,BNI,2026-09\n";
+
+        $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('preview_test.csv', $csvContent);
+
+        $initialCount = Payroll::count();
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/payrolls/import/preview', [
+                'file' => $file,
+                'period' => '2026-09',
+            ]);
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+
+        // Verify statistics
+        $this->assertEquals(2, $data['total_rows']);
+        $this->assertEquals(1, $data['active_count']);
+        $this->assertEquals(1, $data['off_count']);
+        $this->assertCount(2, $data['rows']);
+
+        // Assert database is UNTOUCHED during preview
+        $this->assertEquals($initialCount, Payroll::count());
+    }
+
+    public function test_instruction_sheet_is_not_imported_into_database(): void
+    {
+        // Generate real 2-sheet spreadsheet (Data + Petunjuk Pengisian)
+        $spreadsheet = \App\Exports\PayrollTemplateExporter::createSpreadsheet();
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_import_') . '.xlsx';
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($tempPath);
+
+        $file = new \Illuminate\Http\UploadedFile(
+            $tempPath,
+            'template_with_guide.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            null,
+            true
+        );
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/payrolls/import', [
+                'file' => $file,
+                'period' => '2026-08',
+            ]);
+
+        $response->assertStatus(200);
+
+        // Verify only data from Sheet 1 is imported (3 sample employees)
+        $this->assertDatabaseHas('payrolls', [
+            'employee_name' => 'FEBRI HIDAYAT',
+        ]);
+        $this->assertDatabaseHas('payrolls', [
+            'employee_name' => 'RUDI SAPUTRA',
+            'status' => 'off',
+        ]);
+
+        // Verify NO instructions from Sheet 2 leaked into database
+        $this->assertDatabaseMissing('payrolls', [
+            'employee_name' => 'PETUNJUK LENGKAP PENGISIAN TEMPLATE DATA PENGGAJIAN (PAYROLLHUB)',
+        ]);
+        $this->assertDatabaseMissing('payrolls', [
+            'employee_name' => 'NAMA KOLOM HEADER',
+        ]);
+
+        if (file_exists($tempPath)) {
+            @unlink($tempPath);
+        }
+    }
+
+    public function test_payroll_period_filter_supports_sp_contracts(): void
+    {
+        Payroll::factory()->create([
+            'employee_name' => 'Karyawan SP 1',
+            'period' => '2026-08', // Legacy SP 1 data
+        ]);
+
+        Payroll::factory()->create([
+            'employee_name' => 'Karyawan SP 2',
+            'period' => 'SP 2',
+        ]);
+
+        // Filter by SP 1 should find the 2026-08 record
+        $responseSp1 = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/payrolls?period=SP 1');
+        $responseSp1->assertStatus(200);
+        $namesSp1 = collect($responseSp1->json('data'))->pluck('employee_name');
+        $this->assertTrue($namesSp1->contains('Karyawan SP 1'));
+
+        // Filter by SP 2 should find the SP 2 record
+        $responseSp2 = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/payrolls?period=SP 2');
+        $responseSp2->assertStatus(200);
+        $namesSp2 = collect($responseSp2->json('data'))->pluck('employee_name');
+        $this->assertTrue($namesSp2->contains('Karyawan SP 2'));
+        $this->assertFalse($namesSp2->contains('Karyawan SP 1'));
+    }
 }
+

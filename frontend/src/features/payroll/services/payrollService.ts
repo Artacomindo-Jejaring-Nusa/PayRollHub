@@ -1,6 +1,8 @@
 import { api } from '../../../lib/api';
+import { detectInitialTenant } from '../../../lib/theme';
 import {
   PayrollFormData,
+  PayrollImportPreviewData,
   PayrollImportResult,
   PayrollItem,
   PayrollListResponse,
@@ -12,12 +14,19 @@ export const payrollService = {
     province?: string;
     position?: string;
     period?: string;
+    status?: string;
+    company?: string;
     page?: number;
     per_page?: number;
     sort_by?: string;
     sort_order?: string;
   }): Promise<PayrollListResponse> => {
-    const response = await api.get<PayrollListResponse>('/payrolls', { params });
+    const activeTenant = detectInitialTenant();
+    const finalParams = {
+      company: params?.company || activeTenant,
+      ...params,
+    };
+    const response = await api.get<PayrollListResponse>('/payrolls', { params: finalParams });
     return response.data;
   },
 
@@ -36,16 +45,41 @@ export const payrollService = {
     return response.data.data;
   },
 
+  updateStatus: async (
+    id: number,
+    status: 'active' | 'off',
+    resignDate?: string | null
+  ): Promise<PayrollItem> => {
+    const response = await api.patch<{ status: string; data: PayrollItem }>(
+      `/payrolls/${id}/status`,
+      { status, resign_date: resignDate }
+    );
+    return response.data.data;
+  },
+
   deletePayroll: async (id: number): Promise<void> => {
     await api.delete(`/payrolls/${id}`);
   },
 
   exportFile: async (
     format: 'xlsx' | 'csv' | 'pdf',
-    params?: { search?: string; province?: string; position?: string; period?: string }
+    params?: {
+      search?: string;
+      province?: string;
+      position?: string;
+      period?: string;
+      status?: string;
+      company?: string;
+    }
   ): Promise<void> => {
+    const activeTenant = detectInitialTenant();
+    const finalParams = {
+      company: params?.company || activeTenant,
+      ...params,
+      format,
+    };
     const response = await api.get('/payrolls/export', {
-      params: { ...params, format },
+      params: finalParams,
       responseType: 'blob',
     });
 
@@ -85,11 +119,60 @@ export const payrollService = {
     window.URL.revokeObjectURL(url);
   },
 
-  importFile: async (file: File, period?: string): Promise<PayrollImportResult> => {
+  downloadTemplate: async (format: 'xlsx' | 'csv' = 'xlsx'): Promise<void> => {
+    const response = await api.get('/payrolls/template', {
+      params: { format },
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], {
+      type:
+        format === 'csv'
+          ? 'text/csv;charset=utf-8;'
+          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `template_import_payrollhub.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  previewImport: async (file: File, period?: string, company?: string): Promise<PayrollImportPreviewData> => {
     const formData = new FormData();
     formData.append('file', file);
     if (period) {
       formData.append('period', period);
+    }
+    if (company) {
+      formData.append('company', company);
+    }
+
+    const response = await api.post<{
+      status: string;
+      message: string;
+      data: PayrollImportPreviewData;
+    }>('/payrolls/import/preview', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data.data;
+  },
+
+  importFile: async (file: File, period?: string, company?: string): Promise<PayrollImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (period) {
+      formData.append('period', period);
+    }
+    if (company) {
+      formData.append('company', company);
     }
 
     const response = await api.post<{

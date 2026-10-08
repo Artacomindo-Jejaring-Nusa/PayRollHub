@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useTenantTheme } from '../../../lib/theme';
 import { payrollService } from '../services/payrollService';
 import { INDONESIAN_PROVINCES } from '../../../lib/constants';
 import { formatCurrency } from '../../../lib/utils';
+import { SP_PERIOD_LIST } from '../../../lib/period';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
@@ -18,14 +20,20 @@ import {
   Calendar,
   AlertCircle,
   Loader2,
+  CalendarX,
+  UserCheck,
+  UserX,
+  Wallet,
+  CheckCircle2,
 } from 'lucide-react';
 
 export const PayrollFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
+  const { tenant } = useTenantTheme();
 
-  // Form states matching contoh(1).xlsx
+  // Basic Information (Kotak 1)
   const [rowNo, setRowNo] = useState('');
   const [employeeName, setEmployeeName] = useState('');
   const [nik, setNik] = useState('');
@@ -33,23 +41,103 @@ export const PayrollFormPage: React.FC = () => {
   const [schoolUnit, setSchoolUnit] = useState('');
   const [position, setPosition] = useState('Wali Asuh');
   const [joinDate, setJoinDate] = useState('');
-  const [period, setPeriod] = useState('2026-08');
-  const [basicSalary, setBasicSalary] = useState<number | string>(0);
-  const [allowance, setAllowance] = useState<number | string>(0);
-  const [deduction, setDeduction] = useState<number | string>(0);
+  const [company, setCompany] = useState<'rbs' | 'rimamandiri'>(
+    tenant.id === 'rimamandiri' ? 'rimamandiri' : 'rbs'
+  );
+
+  // Status & Rekening (Kotak 2)
+  const [status, setStatus] = useState<'active' | 'off'>('active');
+  const [resignDate, setResignDate] = useState('');
+  const [period, setPeriod] = useState('SP 1');
   const [bankAccount, setBankAccount] = useState('');
   const [bankName, setBankName] = useState('BNI');
+
+  // Formula Gaji Pokok (Kotak 3)
+  // Col N: Harga Dasar di potong PPh & Fee manajemen
+  const [netBasePrice, setNetBasePrice] = useState<number | string>('');
+  // Col Q: BPJS KES 5%
+  const [bpjsKes, setBpjsKes] = useState<number | string>('');
+  // Col T: BPJS TK 9,24%
+  const [bpjsTk, setBpjsTk] = useState<number | string>('');
+  // Col U: Gaji Pokok (Col N - Col Q - Col T)
+  const [basicSalary, setBasicSalary] = useState<number | string>(0);
+  const [isManualBasicSalary, setIsManualBasicSalary] = useState(false);
+
+  // Potongan Absensi & Take Home Pay (Kotak 4)
+  const [absenceCount, setAbsenceCount] = useState<number>(0);
+  const [absenceRate, setAbsenceRate] = useState<number>(50000);
+  const [absenceDeduction, setAbsenceDeduction] = useState<number | string>(0);
+  const [absenceNote, setAbsenceNote] = useState('');
+  const [allowance, setAllowance] = useState<number | string>(0);
+  const [deduction, setDeduction] = useState<number | string>(0);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
 
-  // Live Take Home Pay calculation
+  // Auto calculate BPJS and Basic Salary from Net Base Price
+  const handleNetBasePriceChange = (valStr: string) => {
+    setNetBasePrice(valStr);
+    const val = parseFloat(valStr) || 0;
+    if (val > 0) {
+      const computedKes = Math.round(val * 0.05);
+      const computedTk = Math.round(val * 0.0924);
+      const computedBasic = Math.max(0, val - computedKes - computedTk);
+
+      setBpjsKes(computedKes);
+      setBpjsTk(computedTk);
+      if (!isManualBasicSalary) {
+        setBasicSalary(computedBasic);
+      }
+    } else {
+      setBpjsKes(0);
+      setBpjsTk(0);
+      if (!isManualBasicSalary) {
+        setBasicSalary(0);
+      }
+    }
+  };
+
+  const handleBpjsKesChange = (valStr: string) => {
+    setBpjsKes(valStr);
+    const valNet = parseFloat(String(netBasePrice)) || 0;
+    const valKes = parseFloat(valStr) || 0;
+    const valTk = parseFloat(String(bpjsTk)) || 0;
+    if (valNet > 0 && !isManualBasicSalary) {
+      setBasicSalary(Math.max(0, valNet - valKes - valTk));
+    }
+  };
+
+  const handleBpjsTkChange = (valStr: string) => {
+    setBpjsTk(valStr);
+    const valNet = parseFloat(String(netBasePrice)) || 0;
+    const valKes = parseFloat(String(bpjsKes)) || 0;
+    const valTk = parseFloat(valStr) || 0;
+    if (valNet > 0 && !isManualBasicSalary) {
+      setBasicSalary(Math.max(0, valNet - valKes - valTk));
+    }
+  };
+
+  // Potongan Absensi
+  const handleAbsenceMultiplierChange = (count: number) => {
+    setAbsenceCount(count);
+    const total = count * (absenceRate || 0);
+    setAbsenceDeduction(total);
+  };
+
+  const handleAbsenceRateChange = (rateVal: number) => {
+    setAbsenceRate(rateVal);
+    const total = (absenceCount || 0) * rateVal;
+    setAbsenceDeduction(total);
+  };
+
+  // Live Take Home Pay
   const numBasic = parseFloat(String(basicSalary)) || 0;
   const numAllowance = parseFloat(String(allowance)) || 0;
   const numDeduction = parseFloat(String(deduction)) || 0;
-  const takeHomePay = numBasic + numAllowance - numDeduction;
+  const numAbsence = parseFloat(String(absenceDeduction)) || 0;
+  const takeHomePay = Math.max(0, numBasic + numAllowance - numDeduction - numAbsence);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -65,7 +153,20 @@ export const PayrollFormPage: React.FC = () => {
           setPosition(data.position || 'Wali Asuh');
           setJoinDate(data.join_date || '');
           setPeriod(data.period);
+          setCompany(data.company === 'rimamandiri' ? 'rimamandiri' : 'rbs');
+          setStatus(data.status || 'active');
+          setResignDate(data.resign_date || '');
+
+          setNetBasePrice(data.net_base_price ?? '');
+          setBpjsKes(data.bpjs_kes ?? '');
+          setBpjsTk(data.bpjs_tk ?? '');
           setBasicSalary(data.basic_salary);
+
+          setAbsenceCount(data.absence_count ?? 0);
+          setAbsenceRate(data.absence_rate ?? 50000);
+          setAbsenceDeduction(data.absence_deduction ?? 0);
+          setAbsenceNote(data.absence_note || '');
+
           setAllowance(data.allowance);
           setDeduction(data.deduction);
           setBankAccount(data.bank_account || '');
@@ -78,7 +179,7 @@ export const PayrollFormPage: React.FC = () => {
           setIsLoading(false);
         });
     }
-  }, [isEdit, id]);
+  }, [isEdit, id, tenant.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,7 +196,20 @@ export const PayrollFormPage: React.FC = () => {
       position: position.trim() || undefined,
       join_date: joinDate.trim() || undefined,
       period: period.trim(),
+      company,
+      status,
+      resign_date: status === 'off' ? resignDate.trim() || undefined : undefined,
+
+      net_base_price: netBasePrice !== '' ? parseFloat(String(netBasePrice)) : undefined,
+      bpjs_kes: bpjsKes !== '' ? parseFloat(String(bpjsKes)) : undefined,
+      bpjs_tk: bpjsTk !== '' ? parseFloat(String(bpjsTk)) : undefined,
       basic_salary: numBasic,
+
+      absence_count: absenceCount || 0,
+      absence_rate: absenceRate || 0,
+      absence_deduction: numAbsence,
+      absence_note: absenceNote.trim() || undefined,
+
       allowance: numAllowance,
       deduction: numDeduction,
       bank_account: bankAccount.trim() || undefined,
@@ -136,24 +250,48 @@ export const PayrollFormPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center space-x-3">
-        <Link
-          to="/payrolls"
-          className="p-2 rounded-lg border border-border-subtle bg-surface-panel hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors shadow-sm"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
-            {isEdit ? 'Ubah Data Penggajian' : 'Tambah Data Penggajian Baru'}
-          </h1>
-          <p className="font-body-default text-body-default text-text-muted">
-            {isEdit
-              ? 'Perbarui data kompensasi dan rincian tenaga kependidikan.'
-              : 'Masukkan data tenaga kependidikan baru sesuai format Sekolah Rakyat.'}
-          </p>
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header with Title and Quick Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <Link
+            to="/payrolls"
+            className="p-2 rounded-lg border border-border-subtle bg-surface-panel hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors shadow-sm"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
+              {isEdit ? 'Ubah Data Penggajian' : 'Tambah Data Penggajian Baru'}
+            </h1>
+            <p className="font-body-default text-body-default text-text-muted">
+              {isEdit
+                ? 'Perbarui data rincian gaji, potongan absensi, dan status keaktifan tenaga kependidikan.'
+                : 'Masukkan data tenaga kependidikan baru lengkap dengan formula gaji pokok dan absensi.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            type="button"
+            size="sm"
+            onClick={() => navigate('/payrolls')}
+            disabled={isSubmitting}
+          >
+            Batal
+          </Button>
+          <Button
+            variant="primary"
+            type="button"
+            size="sm"
+            onClick={handleSubmit}
+            isLoading={isSubmitting}
+            leftIcon={<Save className="w-4 h-4" />}
+          >
+            {isEdit ? 'Simpan Perubahan' : 'Simpan Data Gaji'}
+          </Button>
         </div>
       </div>
 
@@ -164,180 +302,490 @@ export const PayrollFormPage: React.FC = () => {
         </div>
       )}
 
-      {/* Form Card */}
+      {/* Main 2x2 Grid Form Layout (4 Kotak / Quadrant Grid) */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Section 1: Data Identitas Karyawan */}
-        <Card className="p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-border-row">
-            <User className="w-5 h-5 text-primary" />
-            <h2 className="font-title-card text-[15px] font-bold text-text-primary">
-              1. Identitas & Penempatan Karyawan
-            </h2>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* ======================================================== */}
+          {/* KOTAK 1 (Kiri Atas): Identitas & Penempatan Karyawan       */}
+          {/* ======================================================== */}
+          <Card className="p-6 flex flex-col justify-between space-y-4 border border-border-subtle shadow-sm hover:border-slate-300 transition-colors">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-border-row">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-primary flex items-center justify-center font-bold">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="font-title-card text-[15px] font-bold text-text-primary">
+                    1. Identitas & Penempatan Karyawan
+                  </h2>
+                  <p className="text-[11px] text-text-muted">
+                    Data pribadi, NIK, dan penempatan unit Sekolah Rakyat
+                  </p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Nama Lengkap Karyawan *"
-              placeholder="Contoh: FEBRI HIDAYAT"
-              value={employeeName}
-              onChange={(e) => setEmployeeName(e.target.value)}
-              error={errors.employee_name}
-              required
-            />
+              <div className="space-y-3.5">
+                <Input
+                  label="Nama Lengkap Karyawan *"
+                  placeholder="Contoh: FEBRI HIDAYAT"
+                  value={employeeName}
+                  onChange={(e) => setEmployeeName(e.target.value)}
+                  error={errors.employee_name}
+                  required
+                />
 
-            <Input
-              label="Nomor Induk Kependudukan (NIK)"
-              placeholder="16 digit NIK (Boleh dikosongkan jika belum ada)"
-              value={nik}
-              onChange={(e) => setNik(e.target.value)}
-              error={errors.nik}
-            />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <Input
+                    label="Nomor Induk Kependudukan (NIK)"
+                    placeholder="16 digit NIK"
+                    value={nik}
+                    onChange={(e) => setNik(e.target.value)}
+                    error={errors.nik}
+                  />
 
-            <Select
-              label="Wilayah (Provinsi) *"
-              value={province}
-              onChange={(e) => setProvince(e.target.value)}
-              error={errors.province}
-              options={INDONESIAN_PROVINCES.map((p) => ({ label: p, value: p }))}
-              required
-            />
+                  <Select
+                    label="Wilayah (Provinsi) *"
+                    value={province}
+                    onChange={(e) => setProvince(e.target.value)}
+                    error={errors.province}
+                    options={INDONESIAN_PROVINCES.map((p) => ({ label: p, value: p }))}
+                    required
+                  />
+                </div>
 
-            <Input
-              label="Sekolah Rakyat Permanen (Unit Kerja)"
-              placeholder="Contoh: Sekolah Rakyat Menengah Atas 10 Jakarta Selatan"
-              value={schoolUnit}
-              onChange={(e) => setSchoolUnit(e.target.value)}
-              error={errors.school_unit}
-            />
+                <Input
+                  label="Sekolah Rakyat Permanen (Unit Kerja)"
+                  placeholder="Contoh: Sekolah Rakyat Menengah Atas 10 Jakarta Selatan"
+                  value={schoolUnit}
+                  onChange={(e) => setSchoolUnit(e.target.value)}
+                  error={errors.school_unit}
+                />
 
-            <Select
-              label="Fungsi Tenaga Kependidikan (Jabatan)"
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-              error={errors.position}
-              options={[
-                { label: 'Wali Asuh', value: 'Wali Asuh' },
-                { label: 'Cleaning Service', value: 'Cleaning Service' },
-                { label: 'Juru Masak', value: 'Juru Masak' },
-                { label: 'Wali Asrama', value: 'Wali Asrama' },
-                { label: 'Tata Usaha', value: 'Tata Usaha' },
-                { label: 'Operator Data Sekolah', value: 'Operator Data Sekolah' },
-              ]}
-            />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <Select
+                    label="Fungsi Tenaga Kependidikan (Jabatan)"
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    error={errors.position}
+                    options={[
+                      { label: 'Wali Asuh', value: 'Wali Asuh' },
+                      { label: 'Cleaning Service', value: 'Cleaning Service' },
+                      { label: 'Juru Masak', value: 'Juru Masak' },
+                      { label: 'Wali Asrama', value: 'Wali Asrama' },
+                      { label: 'Tata Usaha', value: 'Tata Usaha' },
+                      { label: 'Operator Data Sekolah', value: 'Operator Data Sekolah' },
+                    ]}
+                  />
 
-            <Input
-              label="Tanggal Masuk Bekerja"
-              placeholder="Contoh: 18 Agustus 2026 atau 1-Sep"
-              value={joinDate}
-              onChange={(e) => setJoinDate(e.target.value)}
-              error={errors.join_date}
-            />
-          </div>
-        </Card>
+                  <Input
+                    label="Tanggal Masuk Bekerja"
+                    placeholder="Contoh: 1 September 2026"
+                    value={joinDate}
+                    onChange={(e) => setJoinDate(e.target.value)}
+                    error={errors.join_date}
+                  />
+                </div>
 
-        {/* Section 2: Data Perbankan & Periode */}
-        <Card className="p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-border-row">
-            <CreditCard className="w-5 h-5 text-primary" />
-            <h2 className="font-title-card text-[15px] font-bold text-text-primary">
-              2. Data Rekening Bank & Periode
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Select
-              label="Nama Bank"
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              options={[
-                { label: 'BNI', value: 'BNI' },
-                { label: 'BRI', value: 'BRI' },
-                { label: 'MANDIRI', value: 'MANDIRI' },
-                { label: 'BCA', value: 'BCA' },
-                { label: 'Lainnya', value: 'Lainnya' },
-              ]}
-            />
-
-            <Input
-              label="Nomor Rekening"
-              placeholder="Nomor rekening bank"
-              value={bankAccount}
-              onChange={(e) => setBankAccount(e.target.value)}
-              error={errors.bank_account}
-            />
-
-            <Input
-              label="Periode Penggajian (YYYY-MM) *"
-              placeholder="Contoh: 2026-08"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              error={errors.period}
-              required
-            />
-          </div>
-        </Card>
-
-        {/* Section 3: Komponen Keuangan */}
-        <Card className="p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-border-row">
-            <Calculator className="w-5 h-5 text-primary" />
-            <h2 className="font-title-card text-[15px] font-bold text-text-primary">
-              3. Komponen Gaji & Take Home Pay
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              label="Gaji Pokok / Nilai Gaji (Rp) *"
-              type="number"
-              min="0"
-              step="1000"
-              value={basicSalary}
-              onChange={(e) => setBasicSalary(e.target.value)}
-              error={errors.basic_salary}
-              required
-            />
-
-            <Input
-              label="Tunjangan Tambahan (Rp)"
-              type="number"
-              min="0"
-              step="1000"
-              value={allowance}
-              onChange={(e) => setAllowance(e.target.value)}
-              error={errors.allowance}
-            />
-
-            <Input
-              label="Total Potongan (Rp)"
-              type="number"
-              min="0"
-              step="1000"
-              value={deduction}
-              onChange={(e) => setDeduction(e.target.value)}
-              error={errors.deduction}
-            />
-          </div>
-
-          {/* Live Preview Box */}
-          <div className="mt-4 p-4 rounded-xl bg-blue-50/70 border border-blue-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div>
-              <span className="text-[12px] font-bold uppercase tracking-wider text-primary block">
-                Total Take Home Pay Diterima (Bersih)
-              </span>
-              <span className="text-[11px] text-text-muted">
-                Rumus: Gaji Pokok + Tunjangan - Potongan
-              </span>
+                <Select
+                  label="Entitas Perusahaan (Tenant)"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value as 'rbs' | 'rimamandiri')}
+                  options={[
+                    { label: 'PT. Rimbun Buana Sejahtera (rimbunbuanasejahtera.com)', value: 'rbs' },
+                    { label: 'PT. Riama Mandiri Pratama (riamamandiripratama.com)', value: 'rimamandiri' },
+                  ]}
+                />
+              </div>
             </div>
+          </Card>
 
-            <div className="font-display-kpi text-[24px] font-bold text-primary font-mono">
-              {formatCurrency(takeHomePay)}
+          {/* ======================================================== */}
+          {/* KOTAK 2 (Kanan Atas): Status Keaktifan & Rekening Bank    */}
+          {/* ======================================================== */}
+          <Card className="p-6 flex flex-col justify-between space-y-4 border border-border-subtle shadow-sm hover:border-slate-300 transition-colors">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border-row">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-title-card text-[15px] font-bold text-text-primary">
+                      2. Status Keaktifan & Rekening Bank
+                    </h2>
+                    <p className="text-[11px] text-text-muted">
+                      Status keaktifan kerja, tanggal keluar, dan rekening bank
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status Indicator */}
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                    status === 'off'
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}
+                >
+                  {status === 'off' ? 'Off / Keluar' : 'Aktif'}
+                </span>
+              </div>
+
+              {/* Status Switcher Buttons */}
+              <div className="space-y-2">
+                <label className="block text-[12px] font-semibold text-text-secondary">
+                  Status Keaktifan Karyawan *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatus('active');
+                      setResignDate('');
+                    }}
+                    className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-[13px] font-semibold transition-all cursor-pointer ${
+                      status === 'active'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-2xs'
+                        : 'bg-surface border-border-subtle text-text-muted hover:bg-surface-container'
+                    }`}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    <span>Karyawan Aktif</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatus('off');
+                      if (!resignDate) {
+                        setResignDate(new Date().toISOString().split('T')[0]);
+                      }
+                    }}
+                    className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-[13px] font-semibold transition-all cursor-pointer ${
+                      status === 'off'
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-2xs'
+                        : 'bg-surface border-border-subtle text-text-muted hover:bg-surface-container'
+                    }`}
+                  >
+                    <UserX className="w-4 h-4" />
+                    <span>Off / Keluar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Tanggal Keluar (Jika Status Off) */}
+              {status === 'off' && (
+                <div className="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200 space-y-2">
+                  <label className="block text-[12px] font-semibold text-rose-800">
+                    Tanggal Keluar (Resign Date) *
+                  </label>
+                  <input
+                    type="date"
+                    value={resignDate}
+                    onChange={(e) => setResignDate(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg border border-rose-300 bg-white text-rose-900 text-[13px] outline-none focus:ring-2 focus:ring-rose-500"
+                    required={status === 'off'}
+                  />
+                  <p className="text-[11px] text-rose-700 leading-tight">
+                    Karyawan ini akan tercatat dalam laporan <strong>Karyawan Off</strong> di dashboard admin.
+                  </p>
+                </div>
+              )}
+
+              {/* Surat Pesanan (SP) / Periode */}
+              <Select
+                label="Surat Pesanan (SP) / Periode *"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                options={SP_PERIOD_LIST.map((sp) => ({
+                  label: sp.fullLabel,
+                  value: sp.code,
+                }))}
+                error={errors.period}
+                required
+              />
+
+              {/* Bank & Nomor Rekening */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <Select
+                  label="Nama Bank"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  options={[
+                    { label: 'BNI', value: 'BNI' },
+                    { label: 'BRI', value: 'BRI' },
+                    { label: 'MANDIRI', value: 'MANDIRI' },
+                    { label: 'BCA', value: 'BCA' },
+                    { label: 'BSI', value: 'BSI' },
+                    { label: 'Lainnya', value: 'Lainnya' },
+                  ]}
+                />
+
+                <Input
+                  label="Nomor Rekening Bank"
+                  placeholder="Nomor rekening"
+                  value={bankAccount}
+                  onChange={(e) => setBankAccount(e.target.value)}
+                  error={errors.bank_account}
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11.5px] text-text-muted flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
+                <span>
+                  Rekening digunakan untuk slip transfer gaji resmi periode <strong>{period}</strong>.
+                </span>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
 
-        {/* Submit Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-2">
+          {/* ======================================================== */}
+          {/* KOTAK 3 (Kiri Bawah): Formula Gaji Pokok (Rumus Excel)     */}
+          {/* ======================================================== */}
+          <Card className="p-6 flex flex-col justify-between space-y-4 border border-border-subtle shadow-sm hover:border-slate-300 transition-colors">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border-row">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                    <Calculator className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-title-card text-[15px] font-bold text-text-primary">
+                      3. Perhitungan Gaji Pokok (Rumus Excel)
+                    </h2>
+                    <p className="text-[11px] text-text-muted">
+                      Col U = Col N (Harga Dasar) - Q (BPJS KES) - T (BPJS TK)
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsManualBasicSalary(!isManualBasicSalary)}
+                  className="text-[11px] text-primary hover:underline font-semibold"
+                >
+                  {isManualBasicSalary ? 'Auto-Kalkulasi' : 'Manual'}
+                </button>
+              </div>
+
+              <div className="space-y-3.5">
+                {/* Col N */}
+                <div>
+                  <Input
+                    label="Harga Dasar di potong PPh & Fee (Rp) *"
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Contoh: 3462919"
+                    value={netBasePrice}
+                    onChange={(e) => handleNetBasePriceChange(e.target.value)}
+                    error={errors.net_base_price}
+                  />
+                  <span className="text-[10px] text-text-muted">
+                    Kolom N pada Excel (Dasar acuan persentase BPJS)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Col Q: BPJS KES 5% */}
+                  <div>
+                    <Input
+                      label="BPJS KES 5% (Rp)"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Otomatis 5%"
+                      value={bpjsKes}
+                      onChange={(e) => handleBpjsKesChange(e.target.value)}
+                      error={errors.bpjs_kes}
+                    />
+                    <span className="text-[10px] text-text-muted">
+                      Col Q (= 5% Col N)
+                    </span>
+                  </div>
+
+                  {/* Col T: BPJS TK 9.24% */}
+                  <div>
+                    <Input
+                      label="BPJS TK 9,24% (Rp)"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Otomatis 9.24%"
+                      value={bpjsTk}
+                      onChange={(e) => handleBpjsTkChange(e.target.value)}
+                      error={errors.bpjs_tk}
+                    />
+                    <span className="text-[10px] text-text-muted">
+                      Col T (= 9.24% Col N)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Banner Hasil Gaji Pokok (Col U) */}
+                <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[12px] font-bold uppercase tracking-wider text-primary block">
+                        Gaji Pokok Terhitung (Col U = N - Q - T)
+                      </span>
+                      <span className="text-[11px] text-text-muted font-mono">
+                        {netBasePrice ? formatCurrency(parseFloat(String(netBasePrice)) || 0) : 'Rp 0'} -{' '}
+                        {bpjsKes ? formatCurrency(parseFloat(String(bpjsKes)) || 0) : 'Rp 0'} -{' '}
+                        {bpjsTk ? formatCurrency(parseFloat(String(bpjsTk)) || 0) : 'Rp 0'}
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[20px] font-bold font-mono text-primary">
+                        {formatCurrency(numBasic)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isManualBasicSalary && (
+                    <div className="pt-2 border-t border-blue-200/60">
+                      <Input
+                        label="Nilai Gaji Pokok Manual (Override)"
+                        type="number"
+                        min="0"
+                        value={basicSalary}
+                        onChange={(e) => setBasicSalary(e.target.value)}
+                        error={errors.basic_salary}
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* ======================================================== */}
+          {/* KOTAK 4 (Kanan Bawah): Potongan Absensi & Take Home Pay    */}
+          {/* ======================================================== */}
+          <Card className="p-6 flex flex-col justify-between space-y-4 border border-border-subtle shadow-sm hover:border-slate-300 transition-colors">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-border-row">
+                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                  <CalendarX className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="font-title-card text-[15px] font-bold text-text-primary">
+                    4. Potongan Absensi & Take Home Pay
+                  </h2>
+                  <p className="text-[11px] text-text-muted">
+                    Kelipatan absensi (1x, 2x, 3x...), tunjangan & gaji bersih
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3.5">
+                {/* Kelipatan & Tarif */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-text-secondary mb-1">
+                      Kelipatan Absensi *
+                    </label>
+                    <select
+                      value={absenceCount}
+                      onChange={(e) => handleAbsenceMultiplierChange(parseInt(e.target.value, 10))}
+                      className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] font-medium cursor-pointer"
+                    >
+                      <option value={0}>0x (Tidak Ada Potongan)</option>
+                      <option value={1}>1x (1 Hari Absen)</option>
+                      <option value={2}>2x (2 Hari Absen)</option>
+                      <option value={3}>3x (3 Hari Absen)</option>
+                      <option value={4}>4x (4 Hari Absen)</option>
+                      <option value={5}>5x (5 Hari Absen)</option>
+                      <option value={6}>6x (6 Hari Absen)</option>
+                      <option value={7}>7x (7 Hari Absen)</option>
+                      <option value={8}>8x (8 Hari Absen)</option>
+                      <option value={9}>9x (9 Hari Absen)</option>
+                      <option value={10}>10x (10 Hari Absen)</option>
+                    </select>
+                  </div>
+
+                  <Input
+                    label="Tarif per Hari (Rp)"
+                    type="number"
+                    min="0"
+                    step="5000"
+                    value={absenceRate}
+                    onChange={(e) => handleAbsenceRateChange(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <Input
+                      label="Total Pot. Absensi (Rp)"
+                      type="number"
+                      min="0"
+                      value={absenceDeduction}
+                      onChange={(e) => setAbsenceDeduction(e.target.value)}
+                      error={errors.absence_deduction}
+                    />
+                    <span className="text-[10px] text-text-muted">
+                      = {absenceCount}x @ {formatCurrency(absenceRate)}
+                    </span>
+                  </div>
+
+                  <Input
+                    label="Tunjangan / Lembur (Rp)"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={allowance}
+                    onChange={(e) => setAllowance(e.target.value)}
+                    error={errors.allowance}
+                  />
+                </div>
+
+                <Input
+                  label="Keterangan Absensi (Opsional)"
+                  placeholder="Contoh: Izin 2 hari tanpa surat keterangan sakit"
+                  value={absenceNote}
+                  onChange={(e) => setAbsenceNote(e.target.value)}
+                  error={errors.absence_note}
+                />
+
+                <Input
+                  label="Potongan Lainnya di Luar Absensi (Rp)"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={deduction}
+                  onChange={(e) => setDeduction(e.target.value)}
+                  error={errors.deduction}
+                />
+
+                {/* Live Take Home Pay Highlight Banner */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 to-teal-50/80 border-2 border-emerald-400/50 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 block">
+                        TOTAL TAKE HOME PAY (BERSIH)
+                      </span>
+                      <span className="text-[10.5px] text-emerald-700 font-mono">
+                        Pokok ({formatCurrency(numBasic)}) + Tunjangan ({formatCurrency(numAllowance)}) - Absensi ({formatCurrency(numAbsence)}) - Potongan ({formatCurrency(numDeduction)})
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[22px] font-bold font-mono text-emerald-800">
+                        {formatCurrency(takeHomePay)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Bottom Action Footer */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-row">
           <Button
             variant="outline"
             type="button"

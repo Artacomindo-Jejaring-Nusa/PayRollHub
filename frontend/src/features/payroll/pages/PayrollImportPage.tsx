@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { payrollService } from '../services/payrollService';
-import { PayrollImportResult } from '../../../types/payroll';
+import {
+  PayrollImportPreviewData,
+  PayrollImportResult,
+} from '../../../types/payroll';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
-import { Input } from '../../../components/ui/Input';
 import {
   ArrowLeft,
   Upload,
@@ -14,28 +16,54 @@ import {
   Download,
   Calendar,
   X,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  UserCheck,
+  UserX,
+  Coins,
+  RefreshCw,
+  FileText,
+  Check,
+  ExternalLink,
+  Eye,
+  FileUp,
+  Building2,
 } from 'lucide-react';
+import { SP_PERIOD_LIST } from '../../../lib/period';
+import { useTenantTheme } from '../../../lib/theme';
 
 export const PayrollImportPage: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { tenant } = useTenantTheme();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [importPeriod, setImportPeriod] = useState('2026-08');
-  const [isUploading, setIsUploading] = useState(false);
+  const [importPeriod, setImportPeriod] = useState('SP 1');
+  const [importCompany, setImportCompany] = useState<string>(tenant.id);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState<'xlsx' | 'csv' | null>(null);
+
+  const [previewData, setPreviewData] = useState<PayrollImportPreviewData | null>(null);
   const [importResult, setImportResult] = useState<PayrollImportResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [previewPage, setPreviewPage] = useState(1);
+  const rowsPerPage = 8;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      validateAndSetFile(e.target.files[0]);
+      processSelectedFile(e.target.files[0]);
     }
   };
 
-  const validateAndSetFile = (file: File) => {
+  const processSelectedFile = async (file: File) => {
     setErrorMessage(null);
     setImportResult(null);
+    setPreviewData(null);
+    setPreviewPage(1);
 
     const validExtensions = ['.xlsx', '.xls', '.csv'];
     const fileName = file.name.toLowerCase();
@@ -43,7 +71,7 @@ export const PayrollImportPage: React.FC = () => {
 
     if (!isValid) {
       setErrorMessage(
-        'Format file tidak valid. Harap pilih file berekstensi .xlsx, .xls, atau .csv.'
+        'Format file tidak valid. Harap pilih file berekstensi Excel (.xlsx, .xls) atau CSV (.csv).'
       );
       return;
     }
@@ -54,6 +82,39 @@ export const PayrollImportPage: React.FC = () => {
     }
 
     setSelectedFile(file);
+    await fetchPreview(file, importPeriod, importCompany);
+  };
+
+  const fetchPreview = async (file: File, period: string, company: string = importCompany) => {
+    setIsPreviewLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const data = await payrollService.previewImport(file, period, company);
+      setPreviewData(data);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        'Gagal membaca file spreadsheet. Pastikan susunan kolom header sesuai dengan template.';
+      setErrorMessage(msg);
+      setPreviewData(null);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handlePeriodChange = async (newPeriod: string) => {
+    setImportPeriod(newPeriod);
+    if (selectedFile) {
+      await fetchPreview(selectedFile, newPeriod, importCompany);
+    }
+  };
+
+  const handleCompanyChange = async (newCompany: string) => {
+    setImportCompany(newCompany);
+    if (selectedFile) {
+      await fetchPreview(selectedFile, importPeriod, newCompany);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -69,241 +130,724 @@ export const PayrollImportPage: React.FC = () => {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      validateAndSetFile(e.dataTransfer.files[0]);
+      processSelectedFile(e.dataTransfer.files[0]);
     }
   };
 
-  const handleUpload = async () => {
+  const handleDownloadTemplate = async (format: 'xlsx' | 'csv') => {
+    try {
+      setIsDownloadingTemplate(format);
+      await payrollService.downloadTemplate(format);
+    } catch (err) {
+      console.error('Failed to download template', err);
+      alert('Gagal mengunduh template. Silakan coba lagi.');
+    } finally {
+      setIsDownloadingTemplate(null);
+    }
+  };
+
+  const handleConfirmImport = async () => {
     if (!selectedFile) return;
-    setIsUploading(true);
+
+    setIsImporting(true);
     setErrorMessage(null);
-    setImportResult(null);
 
     try {
-      const result = await payrollService.importFile(selectedFile, importPeriod);
+      const result = await payrollService.importFile(selectedFile, importPeriod, importCompany);
       setImportResult(result);
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||
-        'Gagal mengimpor file. Pastikan format kolom sesuai data Excel.';
+        'Gagal menyimpan data import ke database. Silakan periksa kembali file Anda.';
       setErrorMessage(msg);
     } finally {
-      setIsUploading(false);
+      setIsImporting(false);
     }
   };
 
-  const downloadSampleCsv = () => {
-    const csvContent =
-      'No,WILAYAH,SEKOLAH RAKYAT PERMANEN,NIK,NAMA LENGKAP,FUNGSI TENAGA KEPENDIDIKAN,TANGGAL MASUK,GAJI,NO REKENING,BANK\n' +
-      '109,DKI JAKARTA,Salemba (Pusat),,FEBRI HIDAYAT,,1-Sep," Rp 5,721,000 ",2098199007,BNI\n' +
-      '116,DKI JAKARTA,Sekolah Rakyat Menengah Atas 10 Jakarta Selatan,,MUHAMAD FERIANSAH,Cleaning Service,18 Agustus 2026," Rp 5,721,000 ",2098393515,BNI\n' +
-      '660,SUMATERA UTARA,Sekolah Rakyat Menengah Atas 30 Padang Sidempuan,1213131111910001,RUDI SAPUTRA,Cleaning Service,25 Juli 2026," Rp 3,159,000 ",2097700845,BNI';
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'template_standar_sekolah_rakyat.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+  const formatRupiah = (val: number) => {
+    return 'Rp ' + Number(val || 0).toLocaleString('id-ID');
   };
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center space-x-3">
-        <Link
-          to="/payrolls"
-          className="p-2 rounded-lg border border-border-subtle bg-surface-panel hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors shadow-sm"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
-            Import Data Gaji Massal (Spreadsheet)
-          </h1>
-          <p className="font-body-default text-body-default text-text-muted">
-            Mendukung langsung format standar Excel Sekolah Rakyat (contoh: contoh(1).xlsx).
-          </p>
-        </div>
-      </div>
+  // Pagination for preview rows
+  const totalPreviewRows = previewData?.rows.length || 0;
+  const totalPages = Math.ceil(totalPreviewRows / rowsPerPage) || 1;
+  const paginatedRows = previewData
+    ? previewData.rows.slice((previewPage - 1) * rowsPerPage, previewPage * rowsPerPage)
+    : [];
 
-      {/* Guide & Template Download Banner */}
-      <Card className="p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border-blue-200 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h3 className="font-title-card text-[15px] font-bold text-text-primary flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-primary" />
-              Format Kolom Excel Standar (Persis contoh(1).xlsx)
-            </h3>
-            <p className="text-[12.5px] text-text-muted">
-              Kolom: <span className="font-semibold text-text-primary">No, WILAYAH, SEKOLAH RAKYAT PERMANEN, NIK, NAMA LENGKAP, FUNGSI TENAGA KEPENDIDIKAN, TANGGAL MASUK, GAJI, NO REKENING, BANK</span>
+  return (
+    <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
+      {/* Top Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border-subtle">
+        <div className="flex items-center space-x-3">
+          <Link
+            to="/payrolls"
+            className="p-2.5 rounded-xl border border-border-subtle bg-surface-panel hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors shadow-xs"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
+              Import Data Gaji Massal (Bulk)
+            </h1>
+            <p className="font-body-default text-body-default text-text-muted">
+              Unggah file spreadsheet di sisi kiri, dan pantau hasil verifikasi data secara langsung di sisi kanan.
             </p>
           </div>
+        </div>
 
+        <div className="flex items-center gap-2.5">
           <Button
             variant="outline"
             size="sm"
-            onClick={downloadSampleCsv}
-            leftIcon={<Download className="w-4 h-4 text-primary" />}
+            onClick={() => setShowGuide(!showGuide)}
+            leftIcon={<Info className="w-4 h-4 text-primary" />}
+            rightIcon={
+              showGuide ? (
+                <ChevronUp className="w-4 h-4 text-text-muted" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-text-muted" />
+              )
+            }
           >
-            Unduh Format CSV
+            {showGuide ? 'Tutup Panduan Kolom' : 'Lihat Panduan 22 Kolom'}
           </Button>
         </div>
-      </Card>
+      </div>
 
-      {/* Upload Zone & Period Settings */}
-      <Card className="p-8 space-y-6">
-        {/* Period Picker */}
-        <div className="p-4 rounded-xl bg-surface-container-low border border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <span className="font-semibold text-[13px] text-text-primary flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-primary" />
-              Periode Penggajian untuk Data Ini
-            </span>
-            <span className="text-[12px] text-text-muted">
-              File Excel tanpa kolom periode otomatis diset ke periode yang Anda tentukan di sini.
-            </span>
-          </div>
-
-          <input
-            type="text"
-            value={importPeriod}
-            onChange={(e) => setImportPeriod(e.target.value)}
-            placeholder="YYYY-MM (contoh: 2026-08)"
-            className="w-40 h-9 px-3 bg-surface-panel rounded-lg border border-border-subtle font-mono text-[13px] text-text-primary outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-
-        {/* Drag and Drop Zone */}
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center space-y-3 ${
-            isDragOver
-              ? 'border-primary bg-primary-fixed/20'
-              : 'border-slate-300 hover:border-primary hover:bg-slate-50/60'
-          }`}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-
-          <div className="w-14 h-14 rounded-full bg-blue-50 text-primary flex items-center justify-center shadow-inner">
-            <Upload className="w-7 h-7" />
-          </div>
-
-          <div className="space-y-1">
-            <p className="font-body-semibold text-[15px] text-text-primary">
-              Tarik dan lepaskan file Excel / CSV ke sini
-            </p>
-            <p className="text-[13px] text-text-muted">
-              atau <span className="text-primary font-medium underline">pilih file dari perangkat</span>
-            </p>
-          </div>
-
-          <span className="text-[11px] text-text-muted">
-            Mendukung .xlsx, .xls, .csv (Maksimal 10 MB)
-          </span>
-        </div>
-
-        {/* Selected File Card */}
-        {selectedFile && (
-          <div className="flex items-center justify-between p-4 rounded-xl bg-surface-container-low border border-border-subtle">
-            <div className="flex items-center space-x-3 min-w-0">
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-                <FileSpreadsheet className="w-5 h-5" />
+      {/* Guide Accordion (Muncul saat tombol panduan diklik) */}
+      {showGuide && (
+        <Card className="p-6 border-blue-200 bg-surface-panel shadow-sm space-y-5 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
+                i
               </div>
-              <div className="min-w-0">
-                <div className="font-semibold text-text-primary truncate">
-                  {selectedFile.name}
-                </div>
-                <div className="text-[12px] text-text-muted">
-                  {(selectedFile.size / 1024).toFixed(1)} KB
-                </div>
+              <div>
+                <h3 className="font-title-card text-[15px] font-bold text-text-primary">
+                  Petunjuk & Aturan Pengisian Spreadsheet (22 Kolom)
+                </h3>
+                <p className="text-[12px] text-text-muted">
+                  Sheet "PETUNJUK_PENGISIAN" pada file Excel hanya sebagai referensi dan <span className="text-emerald-700 font-semibold">TIDAK AKAN MASUK KE DATABASE</span>.
+                </p>
               </div>
             </div>
-
             <button
-              onClick={() => setSelectedFile(null)}
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container"
-              title="Hapus pilihan file"
+              onClick={() => setShowGuide(false)}
+              className="p-1 rounded-md text-text-muted hover:text-text-primary hover:bg-slate-100"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-        )}
 
-        {/* Error Banner */}
-        {errorMessage && (
-          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-status-danger-text text-[13px] flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <div className="font-medium">{errorMessage}</div>
+          {/* Key Rule Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1">
+              <div className="text-[12px] font-bold text-blue-900 flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-blue-700" />
+                1. Rumus Gaji Pokok
+              </div>
+              <p className="text-[11.5px] text-blue-800 leading-relaxed">
+                <span className="font-semibold">Gaji Pokok = Harga Dasar - BPJS KES (5%) - BPJS TK (9.24%)</span>. Jika BPJS dikosongkan, dihitung otomatis.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-1">
+              <div className="text-[12px] font-bold text-amber-900 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-amber-700" />
+                2. Potongan Absensi
+              </div>
+              <p className="text-[11.5px] text-amber-800 leading-relaxed">
+                Nominal potongan absensi (hari x tarif harian). Rincian penjelasan ditulis di kolom <span className="font-semibold">Keterangan Absensi</span>.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200/80 space-y-1">
+              <div className="text-[12px] font-bold text-rose-900 flex items-center gap-1.5">
+                <UserX className="w-4 h-4 text-rose-700" />
+                3. Status Off & Tgl Keluar
+              </div>
+              <p className="text-[11.5px] text-rose-800 leading-relaxed">
+                Bila pegawai keluar, isi <span className="font-semibold">STATUS</span> = "Off" dan isi <span className="font-semibold">Tgl Keluar</span>. Otomatis masuk metrik report off.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 space-y-1">
+              <div className="text-[12px] font-bold text-emerald-900 flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-700" />
+                4. Awalan Petik (') NIK
+              </div>
+              <p className="text-[11.5px] text-emerald-800 leading-relaxed">
+                Beri tanda petik satu (') di depan <span className="font-semibold">NIK & No Rekening</span> agar angka 16 digit tidak rusak di Excel.
+              </p>
+            </div>
           </div>
-        )}
+        </Card>
+      )}
 
-        {/* Action Button */}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/payrolls')}
-            disabled={isUploading}
-          >
-            Batal
-          </Button>
-          <Button
-            variant="primary"
-            disabled={!selectedFile || isUploading}
-            isLoading={isUploading}
-            onClick={handleUpload}
-            leftIcon={<Upload className="w-4 h-4" />}
-          >
-            Mulai Import Data
-          </Button>
+      {/* 2-COLUMN SPLIT LAYOUT (IMPORT FORM DI KIRI, PRIVIEW DI KANAN) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* ============================================================ */}
+        {/* KOTAK KIRI: IMPORT FORM                                     */}
+        {/* ============================================================ */}
+        <div className="lg:col-span-5 space-y-5">
+          <Card className="p-6 border-slate-200/90 shadow-sm space-y-5 bg-surface-panel">
+            {/* Box Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <FileUp className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="font-title-card text-[16px] font-bold text-text-primary uppercase tracking-wide">
+                    IMPORT FORM
+                  </h2>
+                  <p className="text-[12px] text-text-muted">
+                    Masukkan file spreadsheet untuk proses bulk import
+                  </p>
+                </div>
+              </div>
+
+              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium text-[11px] border border-blue-200">
+                Langkah 1
+              </span>
+            </div>
+
+            {/* Template Download Shortcut */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-[12.5px] text-slate-800 flex items-center gap-1.5">
+                  <FileSpreadsheet className="w-4 h-4 text-primary" />
+                  Format Template Resmi
+                </span>
+                <span className="text-[11px] text-text-muted">2 Sheet (Data + Panduan)</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  isLoading={isDownloadingTemplate === 'xlsx'}
+                  onClick={() => handleDownloadTemplate('xlsx')}
+                  leftIcon={<Download className="w-3.5 h-3.5 text-primary" />}
+                  className="bg-white hover:bg-slate-100 text-[11.5px] h-8 justify-center"
+                >
+                  Excel (.xlsx)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  isLoading={isDownloadingTemplate === 'csv'}
+                  onClick={() => handleDownloadTemplate('csv')}
+                  leftIcon={<FileText className="w-3.5 h-3.5 text-slate-600" />}
+                  className="bg-white hover:bg-slate-100 text-[11.5px] h-8 justify-center"
+                >
+                  CSV (.csv)
+                </Button>
+              </div>
+            </div>
+
+            {/* Company / Entity Selector */}
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[13px] text-text-primary flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-primary" />
+                  Target Entitas Perusahaan
+                </span>
+                <span className="text-[11px] font-normal text-text-muted">
+                  Aktif: {tenant.name.split('(')[0].trim()}
+                </span>
+              </label>
+              <select
+                value={importCompany}
+                onChange={(e) => handleCompanyChange(e.target.value)}
+                className="w-full h-10 px-3.5 bg-surface-container-low rounded-xl border border-border-subtle text-[13.5px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-xs cursor-pointer"
+              >
+                <option value="rimamandiri">PT. Riama Mandiri Pratama (Riama)</option>
+                <option value="rbs">PT. Rimbun Buana Sejahtera (RBS)</option>
+              </select>
+              <p className="text-[11.5px] text-text-muted">
+                Data yang diimpor akan langsung tersimpan di bawah entitas ini.
+              </p>
+            </div>
+
+            {/* Period Input */}
+            <div className="space-y-1.5">
+              <label className="font-semibold text-[13px] text-text-primary flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  Target Surat Pesanan (SP) / Periode
+                </span>
+                <span className="text-[11px] font-normal text-text-muted">Kontrak Kemensos</span>
+              </label>
+              <select
+                value={importPeriod}
+                onChange={(e) => handlePeriodChange(e.target.value)}
+                className="w-full h-10 px-3.5 bg-surface-container-low rounded-xl border border-border-subtle text-[13.5px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-xs cursor-pointer"
+              >
+                {SP_PERIOD_LIST.map((sp) => (
+                  <option key={sp.code} value={sp.code}>
+                    {sp.fullLabel}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11.5px] text-text-muted">
+                Baris data tanpa kolom periode otomatis diset ke Surat Pesanan (SP) ini.
+              </p>
+            </div>
+
+            {/* Drag and Drop Zone */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-7 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center space-y-2.5 ${
+                isDragOver
+                  ? 'border-primary bg-primary-fixed/20 scale-[0.99]'
+                  : 'border-slate-300 hover:border-primary hover:bg-slate-50/70'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-primary flex items-center justify-center shadow-inner">
+                <Upload className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-0.5">
+                <p className="font-semibold text-[14px] text-text-primary">
+                  Tarik & letakkan file ke sini
+                </p>
+                <p className="text-[12px] text-text-muted">
+                  atau <span className="text-primary font-semibold underline underline-offset-2">pilih dari perangkat</span>
+                </p>
+              </div>
+
+              <div className="text-[11px] text-text-muted">
+                Mendukung .xlsx, .xls, .csv (Maks. 10 MB)
+              </div>
+            </div>
+
+            {/* Selected File Card */}
+            {selectedFile && (
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-container-low border border-border-subtle shadow-xs">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                    <FileSpreadsheet className="w-4.5 h-4.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-text-primary text-[13px] truncate">
+                      {selectedFile.name}
+                    </div>
+                    <div className="text-[11.5px] text-text-muted">
+                      {(selectedFile.size / 1024).toFixed(1)} KB • Siap dianalisis
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchPreview(selectedFile, importPeriod)}
+                    isLoading={isPreviewLoading}
+                    leftIcon={<RefreshCw className="w-3.5 h-3.5 text-text-muted" />}
+                    className="h-8 px-2.5 text-[11px]"
+                  >
+                    Refresh
+                  </Button>
+                  <button
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setPreviewData(null);
+                    }}
+                    className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-slate-200"
+                    title="Hapus pilihan"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-status-danger-text text-[12.5px] flex items-start gap-2.5">
+                <AlertTriangle className="w-4.5 h-4.5 flex-shrink-0 mt-0.5" />
+                <div className="font-medium leading-relaxed">{errorMessage}</div>
+              </div>
+            )}
+
+            {/* Action Buttons in Left Form */}
+            <div className="pt-2 flex items-center justify-between gap-3 border-t border-border-subtle">
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => {
+                  setSelectedFile(null);
+                  setPreviewData(null);
+                  setErrorMessage(null);
+                }}
+                disabled={!selectedFile || isImporting}
+              >
+                Reset
+              </Button>
+
+              <Button
+                variant="primary"
+                size="md"
+                disabled={!selectedFile || !previewData || isImporting || isPreviewLoading}
+                isLoading={isImporting}
+                onClick={handleConfirmImport}
+                leftIcon={<Upload className="w-4 h-4" />}
+                className="font-semibold flex-1 justify-center shadow-xs"
+              >
+                Mulai Import Data
+              </Button>
+            </div>
+          </Card>
         </div>
-      </Card>
 
-      {/* Import Result Summary Card */}
+        {/* ============================================================ */}
+        {/* KOTAK KANAN: PRIVIEW                                         */}
+        {/* ============================================================ */}
+        <div className="lg:col-span-7 space-y-5">
+          <Card className="p-6 border-slate-200/90 shadow-sm space-y-5 bg-surface-panel min-h-[580px] flex flex-col justify-between">
+            {/* Box Header */}
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                    <Eye className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-title-card text-[16px] font-bold text-text-primary uppercase tracking-wide">
+                      PRIVIEW
+                    </h2>
+                    <p className="text-[12px] text-text-muted">
+                      Pratinjau data dan validasi sebelum disimpan ke database
+                    </p>
+                  </div>
+                </div>
+
+                <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-medium text-[11px] border border-emerald-200">
+                  Langkah 2
+                </span>
+              </div>
+
+              {/* KONDISI 1: Belum ada file yang dipilih (Empty State) */}
+              {!selectedFile && !previewData && !isPreviewLoading && (
+                <div className="py-20 px-6 text-center space-y-3.5 my-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+                    <FileSpreadsheet className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-1 max-w-md mx-auto">
+                    <h3 className="font-semibold text-text-primary text-[15px]">
+                      Belum Ada File yang Dipilih
+                    </h3>
+                    <p className="text-[12.5px] text-text-muted leading-relaxed">
+                      Silakan pilih atau tarik file Excel / CSV di formulir <span className="font-semibold text-text-primary">IMPORT FORM</span> (sebelah kiri) untuk melihat pratinjau data secara langsung.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* KONDISI 2: Sedang membaca & memvalidasi file (Loading State) */}
+              {isPreviewLoading && (
+                <div className="py-20 px-6 text-center space-y-3.5 my-auto">
+                  <div className="inline-block animate-spin rounded-full h-9 w-9 border-3 border-primary border-t-transparent"></div>
+                  <div className="space-y-1 max-w-md mx-auto">
+                    <h3 className="font-semibold text-text-primary text-[15px]">
+                      Membaca & Memvalidasi File...
+                    </h3>
+                    <p className="text-[12.5px] text-text-muted leading-relaxed">
+                      Sistem sedang menghitung Gaji Pokok, BPJS, potongan absensi, dan memverifikasi baris data spreadsheet.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* KONDISI 3: Preview Data Siap (Preview Ready) */}
+              {previewData && !isPreviewLoading && (
+                <div className="space-y-4 pt-4">
+                  {/* KPI Summary Stats */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[11px] font-semibold text-slate-600 block uppercase">
+                        Total Baris
+                      </span>
+                      <span className="font-mono text-[18px] font-bold text-slate-800">
+                        {previewData.total_rows} Data
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                      <span className="text-[11px] font-semibold text-emerald-700 block uppercase">
+                        Pegawai Aktif
+                      </span>
+                      <span className="font-mono text-[18px] font-bold text-emerald-700">
+                        {previewData.active_count} Pegawai
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
+                      <span className="text-[11px] font-semibold text-rose-700 block uppercase">
+                        Pegawai Off
+                      </span>
+                      <span className="font-mono text-[18px] font-bold text-rose-700">
+                        {previewData.off_count} Pegawai
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                      <span className="text-[11px] font-semibold text-blue-700 block uppercase">
+                        Estimasi THP
+                      </span>
+                      <span className="font-mono text-[14px] font-bold text-blue-800 truncate block" title={formatRupiah(previewData.total_estimated_thp)}>
+                        {formatRupiah(previewData.total_estimated_thp)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Warnings if any */}
+                  {previewData.warnings && previewData.warnings.length > 0 && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11.5px] text-amber-800 space-y-1">
+                      <div className="font-semibold text-amber-900 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                        Catatan Pemeriksaan ({previewData.warnings.length} catatan):
+                      </div>
+                      <div className="max-h-20 overflow-y-auto pl-5 list-disc space-y-0.5">
+                        {previewData.warnings.slice(0, 4).map((w, i) => (
+                          <div key={i}>• {w}</div>
+                        ))}
+                        {previewData.warnings.length > 4 && (
+                          <div className="italic">...dan {previewData.warnings.length - 4} catatan lainnya.</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Table Container */}
+                  <div className="border border-border-subtle rounded-xl overflow-hidden shadow-xs">
+                    <div className="overflow-x-auto max-h-[360px]">
+                      <table className="w-full text-left text-[11.5px]">
+                        <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-border-subtle sticky top-0 whitespace-nowrap z-10">
+                          <tr>
+                            <th className="px-2.5 py-2 w-10 text-center">No</th>
+                            <th className="px-2.5 py-2 w-20">Status</th>
+                            <th className="px-2.5 py-2 w-16">Aksi</th>
+                            <th className="px-2.5 py-2 font-mono">NIK</th>
+                            <th className="px-2.5 py-2">Nama Pegawai</th>
+                            <th className="px-2.5 py-2">Wilayah</th>
+                            <th className="px-2.5 py-2">Sekolah / Unit</th>
+                            <th className="px-2.5 py-2">Jabatan</th>
+                            <th className="px-2.5 py-2 text-right font-mono">Gaji Pokok</th>
+                            <th className="px-2.5 py-2 text-right font-mono text-rose-600">Pot. Absen</th>
+                            <th className="px-2.5 py-2 text-right font-mono font-bold text-emerald-700">Take Home Pay</th>
+                            <th className="px-2.5 py-2">Rekening</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border-subtle text-text-primary whitespace-nowrap">
+                          {paginatedRows.map((row, idx) => (
+                            <tr
+                              key={idx}
+                              className={
+                                row.status === 'off'
+                                  ? 'bg-rose-50/50 hover:bg-rose-50/80'
+                                  : idx % 2 === 0
+                                  ? 'bg-white hover:bg-slate-50/80'
+                                  : 'bg-slate-50/30 hover:bg-slate-50/80'
+                              }
+                            >
+                              <td className="px-2.5 py-2 text-center text-text-muted font-mono">
+                                {row.row_no || (previewPage - 1) * rowsPerPage + idx + 1}
+                              </td>
+
+                              {/* Status */}
+                              <td className="px-2.5 py-2">
+                                {row.status === 'off' ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-rose-100 text-rose-800">
+                                    Off {row.resign_date ? `(${row.resign_date})` : ''}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-emerald-100 text-emerald-800">
+                                    Aktif
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Action */}
+                              <td className="px-2.5 py-2">
+                                {row.is_existing ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
+                                    Update
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">
+                                    + Baru
+                                  </span>
+                                )}
+                              </td>
+
+                              <td className="px-2.5 py-2 font-mono text-text-muted">
+                                {row.nik || <span className="text-amber-600 italic">Kosong</span>}
+                              </td>
+
+                              <td className="px-2.5 py-2 font-semibold text-text-primary">
+                                {row.employee_name}
+                              </td>
+
+                              <td className="px-2.5 py-2">{row.province}</td>
+                              <td className="px-2.5 py-2 text-text-muted">{row.school_unit || '-'}</td>
+                              <td className="px-2.5 py-2 text-text-muted">{row.position || '-'}</td>
+
+                              {/* Gaji Pokok */}
+                              <td className="px-2.5 py-2 text-right font-mono font-medium text-primary">
+                                {formatRupiah(row.basic_salary)}
+                              </td>
+
+                              {/* Potongan Absensi */}
+                              <td className="px-2.5 py-2 text-right font-mono">
+                                {row.absence_deduction > 0 ? (
+                                  <span className="text-rose-600 font-semibold" title={row.absence_note || ''}>
+                                    -{formatRupiah(row.absence_deduction)}
+                                  </span>
+                                ) : (
+                                  <span className="text-text-muted">0</span>
+                                )}
+                              </td>
+
+                              {/* THP */}
+                              <td className="px-2.5 py-2 text-right font-mono font-bold text-emerald-700">
+                                {formatRupiah(row.take_home_pay)}
+                              </td>
+
+                              {/* Rekening Bank */}
+                              <td className="px-2.5 py-2 text-text-muted font-mono">
+                                {row.bank_name ? `${row.bank_name} ` : ''}
+                                {row.bank_account || '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-border-subtle text-[11px] text-text-muted">
+                        <div>
+                          Menampilkan {(previewPage - 1) * rowsPerPage + 1} -{' '}
+                          {Math.min(previewPage * rowsPerPage, totalPreviewRows)} dari{' '}
+                          {totalPreviewRows} baris
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            disabled={previewPage === 1}
+                            onClick={() => setPreviewPage((p) => Math.max(1, p - 1))}
+                            className="px-2 py-0.5 rounded border border-border-subtle bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                          >
+                            Prev
+                          </button>
+                          <span className="px-1.5 font-mono">
+                            {previewPage} / {totalPages}
+                          </span>
+                          <button
+                            disabled={previewPage === totalPages}
+                            onClick={() => setPreviewPage((p) => Math.min(totalPages, p + 1))}
+                            className="px-2 py-0.5 rounded border border-border-subtle bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Confirmation Bar */}
+            {previewData && (
+              <div className="pt-4 border-t border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-[12px] text-text-muted">
+                  Data telah divalidasi. Klik konfirmasi untuk menyimpan secara permanen.
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="md"
+                  isLoading={isImporting}
+                  onClick={handleConfirmImport}
+                  leftIcon={<CheckCircle2 className="w-4 h-4" />}
+                  className="font-semibold shadow-xs"
+                >
+                  Konfirmasi & Simpan ke Database ({previewData.total_rows} Data)
+                </Button>
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+
+      {/* IMPORT RESULT SUCCESS MODAL / CARD */}
       {importResult && (
-        <Card className="p-6 space-y-4 border-emerald-200 bg-white">
-          <div className="flex items-center gap-3 text-status-success-text">
-            <CheckCircle2 className="w-6 h-6" />
-            <h3 className="font-title-card text-[17px] font-bold text-text-primary">
-              Proses Import Selesai
-            </h3>
+        <Card className="p-6 sm:p-8 space-y-6 border-emerald-300 bg-white shadow-md animate-in fade-in duration-200">
+          <div className="flex items-center gap-3.5 text-status-success-text">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+              <CheckCircle2 className="w-7 h-7 text-emerald-700" />
+            </div>
+            <div>
+              <h3 className="font-title-card text-[20px] font-bold text-text-primary">
+                Import Data Gaji Selesai
+              </h3>
+              <p className="text-[13px] text-text-muted">
+                Semua baris data telah diproses dan berhasil tersimpan ke dalam database.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {/* Stat Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
             <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
               <span className="text-[12px] font-medium text-emerald-800 uppercase block">
                 Data Baru Ditambahkan
               </span>
-              <span className="font-display-kpi text-[24px] font-bold text-emerald-700 font-mono">
+              <span className="font-display-kpi text-[26px] font-bold text-emerald-700 font-mono">
                 {importResult.imported_count} Data
               </span>
             </div>
 
             <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
               <span className="text-[12px] font-medium text-blue-800 uppercase block">
-                Data Yang Diperbarui
+                Data Diperbarui (Update)
               </span>
-              <span className="font-display-kpi text-[24px] font-bold text-blue-700 font-mono">
+              <span className="font-display-kpi text-[26px] font-bold text-blue-700 font-mono">
                 {importResult.updated_count} Data
+              </span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+              <span className="text-[12px] font-medium text-indigo-800 uppercase block">
+                Estimasi Total THP
+              </span>
+              <span className="font-display-kpi text-[20px] font-bold text-indigo-700 font-mono">
+                {formatRupiah(importResult.total_estimated_thp || 0)}
               </span>
             </div>
           </div>
 
-          {/* Any Row Errors */}
+          {/* Any Errors / Skipped Rows */}
           {importResult.errors && importResult.errors.length > 0 && (
-            <div className="mt-4 p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
               <div className="font-semibold text-amber-900 text-[13px] flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
                 Catatan ({importResult.errors.length} baris dilewati):
               </div>
               <ul className="list-disc list-inside text-[12px] text-amber-800 space-y-1">
@@ -314,8 +858,23 @@ export const PayrollImportPage: React.FC = () => {
             </div>
           )}
 
-          <div className="pt-4 flex justify-end">
-            <Button variant="primary" onClick={() => navigate('/payrolls')}>
+          <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border-subtle">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setImportResult(null);
+                setSelectedFile(null);
+                setPreviewData(null);
+              }}
+            >
+              Import File Lain
+            </Button>
+
+            <Button
+              variant="primary"
+              onClick={() => navigate('/payrolls')}
+              rightIcon={<ExternalLink className="w-4 h-4" />}
+            >
               Lihat Daftar Data Gaji
             </Button>
           </div>

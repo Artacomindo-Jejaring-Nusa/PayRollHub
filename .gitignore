@@ -46,3 +46,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# Deployment & Scratch Artifacts
+deploy_cpanel/
+scratch/

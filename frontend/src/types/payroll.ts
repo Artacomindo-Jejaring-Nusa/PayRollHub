@@ -7,16 +7,36 @@ export interface PayrollItem {
   school_unit?: string | null;
   position?: string | null;
   join_date?: string | null;
+  resign_date?: string | null;
+  status: 'active' | 'off';
+  company?: string;
   period: string;
-  basic_salary: number;
+
+  // New salary formula fields based on Excel
+  net_base_price: number; // Harga Dasar di potong PPh & Fee manajemen
+  bpjs_kes: number;       // BPJS KES 5%
+  bpjs_tk: number;        // BPJS TK 9,24%
+  basic_salary: number;   // Gaji Pokok = net_base_price - bpjs_kes - bpjs_tk
   allowance: number;
   deduction: number;
+
+  // Absence deduction fields
+  absence_count: number;    // Multiplier (1x, 2x, 3x...)
+  absence_rate: number;     // Tarif per absensi
+  absence_deduction: number;// Total Potongan Absensi
+  absence_note?: string | null;
+
   take_home_pay: number;
   bank_account?: string | null;
   bank_name?: string | null;
+
+  formatted_net_base_price?: string;
+  formatted_bpjs_kes?: string;
+  formatted_bpjs_tk?: string;
   formatted_basic_salary: string;
   formatted_allowance: string;
   formatted_deduction: string;
+  formatted_absence_deduction?: string;
   formatted_take_home_pay: string;
   created_at: string;
   updated_at: string;
@@ -33,6 +53,12 @@ export interface PayrollPaginationMeta {
 
 export interface PayrollMetrics {
   total_employees: number;
+  total_active_employees?: number;
+  total_off_employees?: number;
+  total_net_base_price?: number;
+  total_bpjs_kes?: number;
+  total_bpjs_tk?: number;
+  total_absence_deduction?: number;
   total_basic_salary: number;
   total_allowance: number;
   total_deduction: number;
@@ -45,6 +71,8 @@ export interface PayrollFilterOptions {
   provinces: string[];
   periods: string[];
   positions?: string[];
+  statuses?: string[];
+  companies?: string[];
 }
 
 export interface PayrollListResponse {
@@ -63,10 +91,23 @@ export interface PayrollFormData {
   school_unit?: string;
   position?: string;
   join_date?: string;
+  resign_date?: string;
+  status?: 'active' | 'off';
+  company?: string;
   period: string;
+
+  net_base_price?: number | string;
+  bpjs_kes?: number | string;
+  bpjs_tk?: number | string;
   basic_salary: number | string;
   allowance?: number | string;
   deduction?: number | string;
+
+  absence_count?: number | string;
+  absence_rate?: number | string;
+  absence_deduction?: number | string;
+  absence_note?: string;
+
   bank_account?: string;
   bank_name?: string;
 }
@@ -74,5 +115,49 @@ export interface PayrollFormData {
 export interface PayrollImportResult {
   imported_count: number;
   updated_count: number;
+  active_count?: number;
+  off_count?: number;
+  total_estimated_thp?: number;
+  errors: string[];
+  warnings?: string[];
+}
+
+export interface PayrollImportPreviewRow {
+  row_no?: string | number | null;
+  employee_name: string;
+  nik: string | null;
+  province: string;
+  school_unit?: string | null;
+  position?: string | null;
+  join_date?: string | null;
+  resign_date?: string | null;
+  status: 'active' | 'off';
+  company?: string;
+  period: string;
+  net_base_price: number;
+  bpjs_kes: number;
+  bpjs_tk: number;
+  basic_salary: number;
+  allowance: number;
+  deduction: number;
+  absence_deduction: number;
+  absence_note?: string | null;
+  take_home_pay: number;
+  bank_account?: string | null;
+  bank_name?: string | null;
+  is_existing?: boolean;
+  existing_id?: number | null;
+}
+
+export interface PayrollImportPreviewData {
+  filename: string;
+  file_size: number;
+  total_rows: number;
+  active_count: number;
+  off_count: number;
+  total_estimated_thp: number;
+  rows: PayrollImportPreviewRow[];
+  warnings: string[];
   errors: string[];
 }
+

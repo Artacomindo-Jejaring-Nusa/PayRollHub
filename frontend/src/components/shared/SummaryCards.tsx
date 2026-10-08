@@ -1,9 +1,8 @@
 import React from 'react';
 import { Card } from '../ui/Card';
 import { Skeleton } from '../ui/Skeleton';
-import { formatCurrency } from '../../lib/utils';
 import { PayrollMetrics } from '../../types/payroll';
-import { Users, DollarSign, Wallet, MapPin, Building2 } from 'lucide-react';
+import { Users, UserCheck, UserX, MapPin, Building2 } from 'lucide-react';
 
 export interface SummaryCardsProps {
   metrics: PayrollMetrics;
@@ -15,39 +14,58 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   metrics,
   isLoading,
 }) => {
+  const activeCount =
+    metrics.total_active_employees ??
+    Math.max(0, metrics.total_employees - (metrics.total_off_employees ?? 0));
+  const offCount = metrics.total_off_employees ?? 0;
+
   const cards = [
     {
       title: 'Total Karyawan',
       value: `${metrics.total_employees} Orang`,
       icon: <Users className="w-5 h-5 text-blue-600" />,
       bgIcon: 'bg-blue-50',
-      description: 'Dalam periode/filter aktif',
+      description: 'Total seluruh data terdaftar',
     },
     {
-      title: 'Total Provinsi',
-      value: `${metrics.total_provinces ?? 0} Provinsi`,
-      icon: <MapPin className="w-5 h-5 text-emerald-600" />,
+      title: 'Karyawan Aktif',
+      value: `${activeCount} Orang`,
+      icon: <UserCheck className="w-5 h-5 text-emerald-600" />,
       bgIcon: 'bg-emerald-50',
-      description: 'Cakupan wilayah aktif',
+      badge: `${metrics.total_employees > 0 ? Math.round((activeCount / metrics.total_employees) * 100) : 100}% Aktif`,
+      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      description: 'Tenaga kerja aktif bertugas',
     },
     {
-      title: 'Total Lokasi',
-      value: `${metrics.total_locations ?? 0} Lokasi`,
+      title: 'Karyawan Off / Keluar',
+      value: `${offCount} Orang`,
+      icon: <UserX className="w-5 h-5 text-rose-600" />,
+      bgIcon: 'bg-rose-50',
+      badge: offCount > 0 ? `${offCount} Non-Aktif` : '0 Off',
+      badgeColor: offCount > 0 ? 'bg-rose-50 text-rose-700 border-rose-200 font-semibold' : 'bg-slate-100 text-slate-600 border-slate-200',
+      highlightDanger: offCount > 0,
+      description: 'Status berhenti / non-aktif',
+    },
+    {
+      title: 'Cakupan Wilayah',
+      value: `${metrics.total_provinces ?? 0} Provinsi`,
       icon: <Building2 className="w-5 h-5 text-primary" />,
       bgIcon: 'bg-primary-fixed',
       highlight: true,
-      description: 'Unit Sekolah Rakyat terdaftar',
+      description: `${metrics.total_locations ?? 0} Unit Sekolah Rakyat`,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {cards.map((card, idx) => (
         <Card
           key={idx}
           className={`p-4 flex flex-col justify-between transition-all duration-200 ${
             card.highlight
               ? 'border-primary/30 bg-gradient-to-br from-white to-blue-50/40 shadow-sm ring-1 ring-primary/10'
+              : card.highlightDanger
+              ? 'border-rose-200 bg-gradient-to-br from-white to-rose-50/20 shadow-sm'
               : ''
           }`}
         >
@@ -76,12 +94,25 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               </div>
             ) : (
               <>
-                <div
-                  className={`font-display-kpi text-[20px] lg:text-[22px] font-bold tracking-tight truncate ${
-                    card.highlight ? 'text-primary' : 'text-text-primary'
-                  }`}
-                >
-                  {card.value}
+                <div className="flex items-baseline justify-between gap-2">
+                  <div
+                    className={`font-display-kpi text-[20px] lg:text-[22px] font-bold tracking-tight truncate ${
+                      card.highlight
+                        ? 'text-primary'
+                        : card.highlightDanger
+                        ? 'text-rose-700'
+                        : 'text-text-primary'
+                    }`}
+                  >
+                    {card.value}
+                  </div>
+                  {card.badge && (
+                    <span
+                      className={`text-[10.5px] px-2 py-0.5 rounded-full border ${card.badgeColor}`}
+                    >
+                      {card.badge}
+                    </span>
+                  )}
                 </div>
                 <p className="font-caption-regular text-[11px] text-text-muted mt-0.5 truncate">
                   {card.description}

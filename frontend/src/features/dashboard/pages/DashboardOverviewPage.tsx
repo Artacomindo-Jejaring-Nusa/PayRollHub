@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../store/authStore';
+import { useTenantTheme } from '../../../lib/theme';
 import { payrollService } from '../../payroll/services/payrollService';
 import {
   PayrollItem,
@@ -12,6 +13,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Skeleton } from '../../../components/ui/Skeleton';
 import { formatCurrency } from '../../../lib/utils';
+import { SP_PERIOD_LIST, formatPeriodDisplay } from '../../../lib/period';
 import {
   FileSpreadsheet,
   Plus,
@@ -32,6 +34,7 @@ import {
 export const DashboardOverviewPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { tenant } = useTenantTheme();
   const isAdmin = user?.role === 'admin';
 
   // Metrics and data state
@@ -50,6 +53,7 @@ export const DashboardOverviewPage: React.FC = () => {
   // Filter states
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [wilayahTab, setWilayahTab] = useState<'top5' | 'all'>('top5');
 
@@ -61,6 +65,8 @@ export const DashboardOverviewPage: React.FC = () => {
       const response = await payrollService.getPayrolls({
         province: selectedProvince,
         period: selectedPeriod,
+        status: selectedStatus,
+        company: tenant.id,
         page: 1,
         per_page: 5,
         sort_by: 'id',
@@ -81,6 +87,8 @@ export const DashboardOverviewPage: React.FC = () => {
       const statsResponse = await payrollService.getPayrolls({
         province: selectedProvince,
         period: selectedPeriod,
+        status: selectedStatus,
+        company: tenant.id,
         page: 1,
         per_page: 200,
       });
@@ -90,7 +98,7 @@ export const DashboardOverviewPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedProvince, selectedPeriod]);
+  }, [selectedProvince, selectedPeriod, selectedStatus, tenant.id]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -146,12 +154,25 @@ export const DashboardOverviewPage: React.FC = () => {
             </span>
           </div>
           <p className="font-body-default text-body-default text-text-muted mt-1">
-            Ringkasan operasional dan sebaran penempatan karyawan RBS Global (PT. Rimbun Buana Sejahtera).
+            Ringkasan operasional dan sebaran penempatan karyawan {tenant.shortName} ({tenant.companyLegalName}).
           </p>
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Status Filter */}
+          <div className="relative">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="h-9 pl-3 pr-8 bg-surface-panel rounded-lg text-[13px] font-medium text-text-primary border border-border-subtle outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+            >
+              <option value="">Semua Status</option>
+              <option value="active">🟢 Karyawan Aktif</option>
+              <option value="off">🔴 Off / Keluar</option>
+            </select>
+          </div>
+
           {/* Province Filter */}
           <div className="relative">
             <select
@@ -168,17 +189,17 @@ export const DashboardOverviewPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Period Filter */}
+          {/* SP / Period Filter */}
           <div className="relative">
             <select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
               className="h-9 pl-3 pr-8 bg-surface-panel rounded-lg text-[13px] font-medium text-text-primary border border-border-subtle outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
-              <option value="">Semua Periode</option>
-              {periodOptions.map((per) => (
-                <option key={per} value={per}>
-                  Periode: {per}
+              <option value="">Semua Periode / SP</option>
+              {SP_PERIOD_LIST.map((sp) => (
+                <option key={sp.code} value={sp.code}>
+                  {sp.fullLabel}
                 </option>
               ))}
             </select>
@@ -187,6 +208,7 @@ export const DashboardOverviewPage: React.FC = () => {
           {/* Reset / Refresh */}
           <button
             onClick={() => {
+              setSelectedStatus('');
               setSelectedProvince('');
               setSelectedPeriod('');
             }}
@@ -203,76 +225,91 @@ export const DashboardOverviewPage: React.FC = () => {
       <SummaryCards metrics={metrics} isLoading={isLoading} isAdmin={isAdmin} />
 
       {/* Quick Actions Action Strip */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button
-          onClick={() => navigate('/payrolls')}
-          className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-105 transition-transform">
-              <FileSpreadsheet className="w-5 h-5" />
+      {isAdmin ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={() => navigate('/payrolls')}
+            className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-105 transition-transform">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
+                  Lihat Data Penggajian
+                </div>
+                <div className="text-[12px] text-text-muted">
+                  Buka tabel lengkap dan cetak slip
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
-                {isAdmin ? 'Lihat Data Penggajian' : 'Lihat Data Karyawan'}
+            <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
+          </button>
+
+          <button
+            onClick={() => navigate('/payrolls/create')}
+            className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+                <Plus className="w-5 h-5" />
               </div>
-              <div className="text-[12px] text-text-muted">
-                {isAdmin ? 'Buka tabel lengkap dan cetak slip' : 'Buka tabel data karyawan dan penempatan'}
+              <div>
+                <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
+                  Tambah Data Gaji Baru
+                </div>
+                <div className="text-[12px] text-text-muted">
+                  Input manual slip gaji karyawan
+                </div>
               </div>
             </div>
-          </div>
-          <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
-        </button>
+            <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
+          </button>
 
-        {isAdmin ? (
-          <>
-            <button
-              onClick={() => navigate('/payrolls/create')}
-              className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
-                  <Plus className="w-5 h-5" />
+          <button
+            onClick={() => navigate('/payrolls/import')}
+            className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-105 transition-transform">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
+                  Import Excel Masal
                 </div>
-                <div>
-                  <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
-                    Tambah Data Gaji Baru
-                  </div>
-                  <div className="text-[12px] text-text-muted">
-                    Input manual slip gaji karyawan
-                  </div>
+                <div className="text-[12px] text-text-muted">
+                  Upload format .xlsx / .csv
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
-            </button>
-
-            <button
-              onClick={() => navigate('/payrolls/import')}
-              className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-105 transition-transform">
-                  <Upload className="w-5 h-5" />
+            </div>
+            <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
+          </button>
+        </div>
+      ) : (
+        <div className="max-w-md">
+          <button
+            onClick={() => navigate('/payrolls')}
+            className="w-full flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-105 transition-transform">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
+                  Lihat Data Karyawan
                 </div>
-                <div>
-                  <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
-                    Import Excel Masal
-                  </div>
-                  <div className="text-[12px] text-text-muted">
-                    Upload format .xlsx / .csv
-                  </div>
+                <div className="text-[12px] text-text-muted">
+                  Buka tabel data karyawan dan penempatan
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
-            </button>
-          </>
-        ) : (
-          <div className="md:col-span-2 flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface-container/50 text-[13px] text-text-muted">
-            <span>Status Hak Akses: Mode Pemantau (Viewer) — Data Read-Only</span>
-            <span className="font-mono text-[11px]">v1.0.0</span>
-          </div>
-        )}
-      </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
+          </button>
+        </div>
+      )}
 
       {/* Bottom Grid: Provincial Distribution & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -369,7 +406,7 @@ export const DashboardOverviewPage: React.FC = () => {
                       title={`Klik untuk memfilter dashboard berdasarkan ${item.province}`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
                           {/* Rank Pill */}
                           <span
                             className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 ${
@@ -386,7 +423,8 @@ export const DashboardOverviewPage: React.FC = () => {
                           </span>
                           <Badge
                             variant="province"
-                            className="font-semibold text-[11px] whitespace-nowrap"
+                            className="font-semibold text-[11px] max-w-[150px] sm:max-w-[220px] truncate block"
+                            title={item.province}
                           >
                             {item.province}
                           </Badge>
@@ -504,32 +542,48 @@ export const DashboardOverviewPage: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => navigate(`/payrolls/${item.id}`)}
-                  className="py-2.5 px-2 flex items-center justify-between hover:bg-surface-container/60 rounded-lg cursor-pointer transition-colors group"
+                  className="py-2.5 px-2.5 flex items-center justify-between gap-3 hover:bg-surface-container/60 rounded-lg cursor-pointer transition-colors group"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-primary font-bold text-[12px] shrink-0">
                       {item.employee_name.charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                      <div className="font-body-semibold text-[13px] text-text-primary group-hover:text-primary transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-body-semibold text-[13px] text-text-primary group-hover:text-primary transition-colors truncate">
                         {item.employee_name}
                       </div>
-                      <div className="text-[11px] text-text-muted font-mono truncate max-w-[280px]">
-                        {item.position ? `${item.position} • ` : ''}{item.school_unit || item.province} • {item.period}
+                      <div
+                        className="text-[11px] text-text-muted font-mono truncate max-w-[260px] sm:max-w-[320px]"
+                        title={`${item.position ? `${item.position} • ` : ''}${item.school_unit || item.province} • ${formatPeriodDisplay(item.period)}`}
+                      >
+                        {item.position ? `${item.position} • ` : ''}{item.school_unit || item.province} • {formatPeriodDisplay(item.period)}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <Badge variant="province" className="text-[11px]">
-                        {item.province}
-                      </Badge>
-                      <div className="text-[10px] text-text-muted mt-0.5">
-                        {item.join_date ? `Masuk: ${item.join_date}` : 'Aktif'}
+                  <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                    <div className="text-right flex flex-col items-end">
+                      <div className="flex items-center justify-end gap-1.5 max-w-[180px] sm:max-w-[220px]">
+                        <Badge variant={item.status === 'off' ? 'off' : 'active'} className="text-[10px] shrink-0">
+                          {item.status === 'off' ? 'Off' : 'Aktif'}
+                        </Badge>
+                        <Badge
+                          variant="province"
+                          className="text-[10.5px] max-w-[105px] sm:max-w-[135px] truncate block"
+                          title={item.province}
+                        >
+                          {item.province}
+                        </Badge>
+                      </div>
+                      <div className="text-[10px] text-text-muted mt-0.5 truncate max-w-[140px]">
+                        {item.status === 'off' && item.resign_date
+                          ? `Keluar: ${item.resign_date}`
+                          : item.join_date
+                          ? `Masuk: ${item.join_date}`
+                          : 'Aktif'}
                       </div>
                     </div>
-                    <Eye className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
+                    <Eye className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors shrink-0" />
                   </div>
                 </div>
               ))}

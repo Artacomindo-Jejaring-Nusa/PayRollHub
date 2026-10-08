@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../../store/authStore';
+import { useTenantTheme } from '../../../lib/theme';
 import { payrollService } from '../services/payrollService';
 import {
   PayrollItem,
@@ -12,6 +13,7 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { Modal } from '../../../components/ui/Modal';
 import { Pagination } from '../../../components/shared/Pagination';
 import { ConfirmDialog } from '../../../components/shared/ConfirmDialog';
+import { SP_PERIOD_LIST, formatPeriodDisplay } from '../../../lib/period';
 import {
   Search,
   Filter,
@@ -28,11 +30,14 @@ import {
   Loader2,
   Download,
   Lock,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
 
 export const PayrollListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { tenant } = useTenantTheme();
   const isAdmin = user?.role === 'admin';
 
   // State
@@ -54,6 +59,7 @@ export const PayrollListPage: React.FC = () => {
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +67,14 @@ export const PayrollListPage: React.FC = () => {
 
   // Restricted export modal state for user
   const [isExportRestrictedModalOpen, setIsExportRestrictedModalOpen] = useState(false);
+
+  // Status Change Modal (Turn Off / Re-activate)
+  const [statusTarget, setStatusTarget] = useState<PayrollItem | null>(null);
+  const [targetStatusAction, setTargetStatusAction] = useState<'off' | 'active'>('off');
+  const [resignDateInput, setResignDateInput] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<PayrollItem | null>(null);
@@ -75,6 +89,8 @@ export const PayrollListPage: React.FC = () => {
         province: selectedProvince,
         position: selectedPosition,
         period: selectedPeriod,
+        status: selectedStatus,
+        company: tenant.id,
         page,
         per_page: perPage,
         sort_by: 'id',
@@ -97,7 +113,7 @@ export const PayrollListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [search, selectedProvince, selectedPosition, selectedPeriod, page, perPage]);
+  }, [search, selectedProvince, selectedPosition, selectedPeriod, selectedStatus, page, perPage, tenant.id]);
 
   useEffect(() => {
     fetchData();
@@ -122,6 +138,7 @@ export const PayrollListPage: React.FC = () => {
         province: selectedProvince,
         position: selectedPosition,
         period: selectedPeriod,
+        status: selectedStatus,
       });
     } catch (err) {
       alert('Gagal mengekspor data: ' + err);
@@ -136,6 +153,35 @@ export const PayrollListPage: React.FC = () => {
       await payrollService.downloadSlipPdf(item.id, item.employee_name, item.period);
     } catch (err) {
       alert('Gagal mengunduh slip gaji: ' + err);
+    }
+  };
+
+  const handleOpenStatusModal = (
+    e: React.MouseEvent,
+    item: PayrollItem,
+    action: 'off' | 'active'
+  ) => {
+    e.stopPropagation();
+    setStatusTarget(item);
+    setTargetStatusAction(action);
+    setResignDateInput(item.resign_date || new Date().toISOString().split('T')[0]);
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusTarget) return;
+    setIsUpdatingStatus(true);
+    try {
+      await payrollService.updateStatus(
+        statusTarget.id,
+        targetStatusAction,
+        targetStatusAction === 'off' ? resignDateInput : undefined
+      );
+      setStatusTarget(null);
+      fetchData();
+    } catch (err) {
+      alert('Gagal memperbarui status karyawan: ' + err);
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -162,7 +208,7 @@ export const PayrollListPage: React.FC = () => {
             Data Penggajian Karyawan & Tenaga Kependidikan
           </h1>
           <p className="font-body-default text-body-default text-text-muted mt-1">
-            Data operasional resmi Sekolah Rakyat RBS Global (PT. Rimbun Buana Sejahtera).
+            Data operasional resmi Sekolah Rakyat {tenant.shortName} ({tenant.companyLegalName}).
           </p>
         </div>
 
@@ -239,11 +285,11 @@ export const PayrollListPage: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-surface-panel rounded-xl border border-border-subtle p-4 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
           {/* Search Input */}
           <form
             onSubmit={handleSearchSubmit}
-            className="md:col-span-4 relative flex items-center"
+            className="md:col-span-3 relative flex items-center"
           >
             <Search className="w-4 h-4 text-text-muted absolute left-3 pointer-events-none" />
             <input
@@ -259,8 +305,24 @@ export const PayrollListPage: React.FC = () => {
             />
           </form>
 
+          {/* Status Filter */}
+          <div className="md:col-span-2 relative flex items-center">
+            <select
+              value={selectedStatus}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
+            >
+              <option value="">Semua Status</option>
+              <option value="active">🟢 Karyawan Aktif</option>
+              <option value="off">🔴 Off / Keluar</option>
+            </select>
+          </div>
+
           {/* Province / Wilayah Filter */}
-          <div className="md:col-span-3 relative flex items-center">
+          <div className="md:col-span-2 relative flex items-center">
             <Filter className="w-4 h-4 text-text-muted absolute left-3 pointer-events-none" />
             <select
               value={selectedProvince}
@@ -268,7 +330,7 @@ export const PayrollListPage: React.FC = () => {
                 setSelectedProvince(e.target.value);
                 setPage(1);
               }}
-              className="w-full h-10 pl-9 pr-8 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none"
+              className="w-full h-10 pl-9 pr-8 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
             >
               <option value="">Semua Wilayah</option>
               {provinceOptions.map((prov) => (
@@ -288,7 +350,7 @@ export const PayrollListPage: React.FC = () => {
                 setSelectedPosition(e.target.value);
                 setPage(1);
               }}
-              className="w-full h-10 pl-9 pr-8 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none"
+              className="w-full h-10 pl-9 pr-8 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
             >
               <option value="">Semua Jabatan</option>
               {positionOptions.map((pos) => (
@@ -299,21 +361,20 @@ export const PayrollListPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Period Filter */}
+          {/* SP / Period Filter */}
           <div className="md:col-span-2 relative flex items-center">
-            <Calendar className="w-4 h-4 text-text-muted absolute left-3 pointer-events-none" />
             <select
               value={selectedPeriod}
               onChange={(e) => {
                 setSelectedPeriod(e.target.value);
                 setPage(1);
               }}
-              className="w-full h-10 pl-9 pr-8 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none"
+              className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
             >
-              <option value="">Semua Periode</option>
-              {periodOptions.map((per) => (
-                <option key={per} value={per}>
-                  Periode: {per}
+              <option value="">Semua SP / Periode</option>
+              {SP_PERIOD_LIST.map((sp) => (
+                <option key={sp.code} value={sp.code}>
+                  {sp.fullLabel}
                 </option>
               ))}
             </select>
@@ -324,12 +385,13 @@ export const PayrollListPage: React.FC = () => {
             <button
               onClick={() => {
                 setSearch('');
+                setSelectedStatus('');
                 setSelectedProvince('');
                 setSelectedPosition('');
                 setSelectedPeriod('');
                 setPage(1);
               }}
-              className="w-full h-10 flex items-center justify-center rounded-lg border border-border-subtle hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors"
+              className="w-full h-10 flex items-center justify-center rounded-lg border border-border-subtle hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors cursor-pointer"
               title="Reset Filter"
             >
               <RefreshCw className="w-4 h-4" />
@@ -338,38 +400,51 @@ export const PayrollListPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Payroll Table (Matching Exact contoh(1).xlsx Columns) */}
+      {/* Main Payroll Table */}
       <div className="bg-surface-panel rounded-xl border border-border-subtle shadow-sm overflow-hidden">
         {/* Subtle horizontal scroll tip for smaller screens */}
         <div className="px-4 py-2 bg-slate-50/70 border-b border-border-subtle flex items-center justify-between text-[11px] text-text-muted">
           <span>
             {isAdmin
-              ? 'Format data lengkap: Wilayah, Sekolah Rakyat, NIK, Nama, Jabatan, Tgl Masuk, Gaji, Rekening Bank, dan Aksi'
-              : 'Format data lengkap: Wilayah, Sekolah Rakyat, NIK, Nama, Jabatan, Tgl Masuk, dan Aksi'}
+              ? 'Format data lengkap: Wilayah, Sekolah Rakyat, NIK, Nama, Jabatan, Tgl Masuk, Status, Rincian Gaji & BPJS, Rekening, dan Aksi'
+              : 'Format data lengkap: Wilayah, Sekolah Rakyat, NIK, Nama, Jabatan, Tgl Masuk, Status, dan Aksi'}
           </span>
           <span className="hidden sm:inline-block text-slate-400">Geser tabel ke samping untuk melihat seluruh kolom →</span>
         </div>
 
         <div className="overflow-x-auto scrollbar-thin">
-          <table className={`w-full ${isAdmin ? 'min-w-[1440px]' : 'min-w-[1050px]'} text-left border-collapse`}>
+          <table className={`w-full ${isAdmin ? 'min-w-[1780px]' : 'min-w-[1100px]'} text-left border-collapse`}>
             <thead>
               <tr className="bg-surface-container-low border-b border-border-subtle text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                <th className="py-3.5 px-3 text-center w-14">No</th>
-                <th className="py-3.5 px-3 min-w-[130px] whitespace-nowrap">Wilayah</th>
-                <th className="py-3.5 px-3 min-w-[240px]">Sekolah Rakyat Permanen</th>
-                <th className="py-3.5 px-3 min-w-[140px] whitespace-nowrap">NIK</th>
-                <th className="py-3.5 px-3 min-w-[180px] whitespace-nowrap">Nama Lengkap</th>
-                <th className="py-3.5 px-3 min-w-[150px] whitespace-nowrap">Fungsi / Jabatan</th>
-                <th className="py-3.5 px-3 min-w-[130px] whitespace-nowrap">Tgl Masuk</th>
+                <th className="py-3.5 px-3 text-center w-12">No</th>
+                <th className="py-3.5 px-3 min-w-[120px] whitespace-nowrap">Wilayah</th>
+                <th className="py-3.5 px-3 min-w-[220px]">Sekolah Rakyat</th>
+                <th className="py-3.5 px-3 min-w-[130px] whitespace-nowrap">NIK</th>
+                <th className="py-3.5 px-3 min-w-[170px] whitespace-nowrap">Nama Lengkap</th>
+                <th className="py-3.5 px-3 min-w-[140px] whitespace-nowrap">Fungsi / Jabatan</th>
+                <th className="py-3.5 px-3 min-w-[110px] whitespace-nowrap">Tgl Masuk</th>
+                <th className="py-3.5 px-3 min-w-[120px] whitespace-nowrap text-center">Status</th>
                 {isAdmin && (
-                  <th className="py-3.5 px-3 text-right min-w-[140px] whitespace-nowrap font-bold text-primary">
-                    Gaji
-                  </th>
+                  <>
+                    <th className="py-3.5 px-3 text-right min-w-[140px] whitespace-nowrap font-medium text-slate-700">
+                      Harga Dasar Bersih
+                    </th>
+                    <th className="py-3.5 px-3 text-right min-w-[130px] whitespace-nowrap font-medium text-slate-700">
+                      BPJS Kes & TK
+                    </th>
+                    <th className="py-3.5 px-3 text-right min-w-[130px] whitespace-nowrap font-medium text-slate-700">
+                      Gaji Pokok
+                    </th>
+                    <th className="py-3.5 px-3 text-right min-w-[120px] whitespace-nowrap font-medium text-rose-600">
+                      Pot. Absensi
+                    </th>
+                    <th className="py-3.5 px-3 text-right min-w-[140px] whitespace-nowrap font-bold text-primary">
+                      Gaji Bersih (THP)
+                    </th>
+                    <th className="py-3.5 px-3 min-w-[160px] whitespace-nowrap">No Rekening & Bank</th>
+                  </>
                 )}
-                {isAdmin && (
-                  <th className="py-3.5 px-3 min-w-[180px] whitespace-nowrap">No Rekening & Bank</th>
-                )}
-                <th className="py-3.5 px-3 text-center min-w-[130px] whitespace-nowrap">
+                <th className="py-3.5 px-3 text-center min-w-[180px] whitespace-nowrap">
                   Aksi
                 </th>
               </tr>
@@ -400,19 +475,34 @@ export const PayrollListPage: React.FC = () => {
                     <td className="py-3.5 px-3">
                       <Skeleton className="h-4 w-20 rounded" />
                     </td>
+                    <td className="py-3.5 px-3 text-center">
+                      <Skeleton className="h-5 w-16 mx-auto rounded-full" />
+                    </td>
                     {isAdmin && (
-                      <td className="py-3.5 px-3 text-right">
-                        <Skeleton className="h-6 w-24 ml-auto rounded" />
-                      </td>
-                    )}
-                    {isAdmin && (
-                      <td className="py-3.5 px-3">
-                        <Skeleton className="h-4 w-28 rounded" />
-                      </td>
+                      <>
+                        <td className="py-3.5 px-3 text-right">
+                          <Skeleton className="h-5 w-20 ml-auto rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <Skeleton className="h-5 w-20 ml-auto rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <Skeleton className="h-5 w-20 ml-auto rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <Skeleton className="h-5 w-16 ml-auto rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <Skeleton className="h-6 w-24 ml-auto rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <Skeleton className="h-4 w-28 rounded" />
+                        </td>
+                      </>
                     )}
                     <td className="py-3.5 px-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <Skeleton className="h-7 w-16 rounded" />
+                        <Skeleton className="h-7 w-14 rounded" />
                         {isAdmin && <Skeleton className="h-7 w-12 rounded" />}
                       </div>
                     </td>
@@ -420,14 +510,14 @@ export const PayrollListPage: React.FC = () => {
                 ))
               ) : payrolls.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 10 : 8} className="py-12 text-center text-text-muted">
+                  <td colSpan={isAdmin ? 15 : 9} className="py-12 text-center text-text-muted">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileSpreadsheet className="w-8 h-8 text-slate-300" />
                       <span className="font-medium text-text-primary">
                         Tidak ada data yang ditemukan.
                       </span>
                       <span className="text-[12px]">
-                        Coba sesuaikan kata kunci pencarian atau filter wilayah/jabatan.
+                        Coba sesuaikan kata kunci pencarian atau filter status/wilayah/jabatan.
                       </span>
                     </div>
                   </td>
@@ -454,7 +544,7 @@ export const PayrollListPage: React.FC = () => {
                       {/* Sekolah Rakyat Permanen */}
                       <td className="py-3 px-3">
                         <div
-                          className="font-medium text-text-primary text-[12.5px] max-w-[260px] truncate"
+                          className="font-medium text-text-primary text-[12.5px] max-w-[240px] truncate"
                           title={item.school_unit || ''}
                         >
                           {item.school_unit || '-'}
@@ -487,28 +577,81 @@ export const PayrollListPage: React.FC = () => {
                         {item.join_date || '-'}
                       </td>
 
-                      {/* Gaji - Admin only */}
+                      {/* Status (Aktif / Off + Resign Date) */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <div className="flex flex-col items-center">
+                          <Badge variant={item.status === 'off' ? 'off' : 'active'} className="text-[10.5px]">
+                            {item.status === 'off' ? 'Off' : 'Aktif'}
+                          </Badge>
+                          {item.status === 'off' && item.resign_date && (
+                            <span className="text-[10px] text-rose-600 font-mono mt-0.5">
+                              Keluar: {item.resign_date}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Admin Detailed Financial Columns */}
                       {isAdmin && (
-                        <td className="py-3 px-3 text-right whitespace-nowrap">
-                          <span className="inline-flex items-center font-mono font-bold text-[13px] text-primary bg-blue-50/80 border border-blue-200/70 px-2.5 py-1 rounded-md tracking-tight shadow-2xs">
-                            {item.formatted_take_home_pay}
-                          </span>
-                        </td>
+                        <>
+                          {/* Harga Dasar Bersih (di potong PPh & Fee) */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap font-mono text-[12px] text-text-secondary">
+                            {item.formatted_net_base_price || '-'}
+                          </td>
+
+                          {/* BPJS Kes (5%) & TK (9.24%) */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <div className="font-mono text-[11.5px] text-text-secondary">
+                              Kes: {item.formatted_bpjs_kes || '0'}
+                            </div>
+                            <div className="font-mono text-[11px] text-text-muted">
+                              TK: {item.formatted_bpjs_tk || '0'}
+                            </div>
+                          </td>
+
+                          {/* Gaji Pokok (Col N - Q - T) */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap font-mono font-medium text-[12.5px] text-text-primary">
+                            {item.formatted_basic_salary}
+                          </td>
+
+                          {/* Potongan Absensi (multiplier x rate) */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            {item.absence_deduction && Number(item.absence_deduction) > 0 ? (
+                              <div>
+                                <span className="font-mono font-semibold text-[12px] text-rose-600">
+                                  -{item.formatted_absence_deduction}
+                                </span>
+                                {item.absence_count ? (
+                                  <div className="text-[10px] text-text-muted">
+                                    {item.absence_count}x pot.
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-text-muted text-[12px]">-</span>
+                            )}
+                          </td>
+
+                          {/* Gaji Bersih (Take Home Pay) */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <span className="inline-flex items-center font-mono font-bold text-[13px] text-primary bg-blue-50/80 border border-blue-200/70 px-2.5 py-1 rounded-md tracking-tight shadow-2xs">
+                              {item.formatted_take_home_pay}
+                            </span>
+                          </td>
+
+                          {/* No Rekening & Bank */}
+                          <td className="py-3 px-3 text-[12px] whitespace-nowrap">
+                            <div className="font-semibold text-text-primary">
+                              {item.bank_name || '-'}
+                            </div>
+                            <div className="font-mono text-[11px] text-text-muted">
+                              {item.bank_account || '-'}
+                            </div>
+                          </td>
+                        </>
                       )}
 
-                      {/* No Rekening & Bank - Admin only */}
-                      {isAdmin && (
-                        <td className="py-3 px-3 text-[12px] whitespace-nowrap">
-                          <div className="font-semibold text-text-primary">
-                            {item.bank_name || '-'}
-                          </div>
-                          <div className="font-mono text-[11px] text-text-muted">
-                            {item.bank_account || '-'}
-                          </div>
-                        </td>
-                      )}
-
-                      {/* Aksi - Clean Right Column with Prominent VIEW button */}
+                      {/* Aksi */}
                       <td className="py-3 px-3 text-center whitespace-nowrap">
                         <div
                           className="flex items-center justify-center gap-1.5"
@@ -517,12 +660,35 @@ export const PayrollListPage: React.FC = () => {
                           {/* Dedicated View Action Button */}
                           <button
                             onClick={() => navigate(`/payrolls/${item.id}`)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[11.5px] font-semibold bg-primary text-white hover:bg-primary-hover shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold bg-primary text-white hover:bg-primary-hover shadow-2xs transition-all active:scale-95 cursor-pointer"
                             title={isAdmin ? 'Lihat Detail & Slip Gaji' : 'Lihat Detail Karyawan'}
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>View</span>
                           </button>
+
+                          {/* Admin-only Button Off / Aktifkan */}
+                          {isAdmin && (
+                            item.status === 'off' ? (
+                              <button
+                                onClick={(e) => handleOpenStatusModal(e, item, 'active')}
+                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 transition-colors cursor-pointer"
+                                title="Aktifkan Kembali Karyawan"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>Aktifkan</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => handleOpenStatusModal(e, item, 'off')}
+                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 transition-colors cursor-pointer"
+                                title="Nonaktifkan Karyawan (Set Off)"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                                <span>Off</span>
+                              </button>
+                            )
+                          )}
 
                           {/* PDF Slip Download Button (Admin only) */}
                           {isAdmin && (
@@ -588,6 +754,74 @@ export const PayrollListPage: React.FC = () => {
         confirmLabel="Ya, Hapus Data"
         isLoading={isDeleting}
       />
+
+      {/* Status Modal (Set Off / Aktifkan) */}
+      <Modal
+        isOpen={!!statusTarget}
+        onClose={() => setStatusTarget(null)}
+        title={targetStatusAction === 'off' ? 'Nonaktifkan Karyawan (Set Off)' : 'Aktifkan Kembali Karyawan'}
+        maxWidth="sm"
+      >
+        <div className="space-y-4 py-1">
+          <div className="p-3.5 rounded-lg bg-surface-container-low border border-border-subtle text-[13px] space-y-1">
+            <div className="font-semibold text-text-primary text-[14px]">
+              {statusTarget?.employee_name}
+            </div>
+            <div className="text-text-muted text-[12px]">
+              {statusTarget?.position || '-'} • {statusTarget?.school_unit || statusTarget?.province}
+            </div>
+            {statusTarget?.nik && (
+              <div className="text-text-muted font-mono text-[11px]">
+                NIK: {statusTarget.nik}
+              </div>
+            )}
+          </div>
+
+          {targetStatusAction === 'off' ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[12px] font-semibold text-text-secondary mb-1">
+                  Tanggal Keluar (Resign Date) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={resignDateInput}
+                  onChange={(e) => setResignDateInput(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-border-subtle bg-surface text-text-primary text-[13px] outline-none focus:ring-2 focus:ring-primary"
+                  required
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[12px] leading-relaxed">
+                Karyawan ini akan dialihkan statusnya menjadi <strong>Off (Non-Aktif)</strong>. Jumlah karyawan yang off akan tercatat otomatis di kartu KPI ringkasan dashboard admin.
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12px] leading-relaxed">
+              Karyawan ini akan dikembalikan ke status <strong>Aktif</strong> dalam operasional dan laporan penggajian.
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border-row">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStatusTarget(null)}
+              disabled={isUpdatingStatus}
+            >
+              Batal
+            </Button>
+            <Button
+              variant={targetStatusAction === 'off' ? 'danger' : 'primary'}
+              size="sm"
+              onClick={handleConfirmStatusChange}
+              isLoading={isUpdatingStatus}
+            >
+              {targetStatusAction === 'off' ? 'Konfirmasi Set Off' : 'Konfirmasi Aktifkan'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal Only Admin For Export */}
       <Modal

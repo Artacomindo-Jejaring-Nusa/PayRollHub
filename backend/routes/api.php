@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Payroll Read & Export (Accessible by Admin and Viewer)
     Route::get('/payrolls', [PayrollController::class, 'index']);
     Route::get('/payrolls/export', [PayrollController::class, 'export']);
+    Route::get('/payrolls/template', [PayrollController::class, 'downloadTemplate']);
     Route::get('/payrolls/{payroll}/slip-pdf', [PayrollController::class, 'slipPdf']);
     Route::get('/payrolls/{payroll}', [PayrollController::class, 'show']);
 
@@ -31,7 +32,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Payroll Modifications
         Route::post('/payrolls', [PayrollController::class, 'store']);
         Route::put('/payrolls/{payroll}', [PayrollController::class, 'update']);
+        Route::patch('/payrolls/{payroll}/status', [PayrollController::class, 'updateStatus']);
         Route::delete('/payrolls/{payroll}', [PayrollController::class, 'destroy']);
+        Route::post('/payrolls/import/preview', [PayrollController::class, 'previewImport']);
         Route::post('/payrolls/import', [PayrollController::class, 'import']);
 
         // User Account Management

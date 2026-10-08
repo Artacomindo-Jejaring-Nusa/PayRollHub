@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../../store/authStore';
+import { useTenantTheme } from '../../../lib/theme';
 import { payrollService } from '../services/payrollService';
 import { PayrollItem } from '../../../types/payroll';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
-import { formatPeriod } from '../../../lib/utils';
+import { formatCurrency, formatPeriod } from '../../../lib/utils';
 import {
   ArrowLeft,
   Download,
@@ -16,12 +17,18 @@ import {
   Building2,
   Briefcase,
   CheckCircle2,
+  AlertCircle,
+  CalendarX,
+  CreditCard,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 
 export const PayrollDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { tenant } = useTenantTheme();
   const isAdmin = user?.role === 'admin';
 
   const [payroll, setPayroll] = useState<PayrollItem | null>(null);
@@ -84,6 +91,12 @@ export const PayrollDetailPage: React.FC = () => {
     );
   }
 
+  // Company display logic
+  const isRiama = payroll.company === 'rimamandiri' || tenant.id === 'rimamandiri';
+  const companyTitle = isRiama ? 'PT. Riama Mandiri Pratama' : 'PT. Rimbun Buana Sejahtera';
+  const brandName = isRiama ? 'Riama Mandiri Pratama' : 'RBS Global';
+  const domainName = isRiama ? 'riamamandiripratama.com' : 'rimbunbuanasejahtera.com';
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Top Bar (Actions, Back button) */}
@@ -117,15 +130,24 @@ export const PayrollDetailPage: React.FC = () => {
             Cetak
           </Button>
           {isAdmin && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleDownloadPdf}
-              isLoading={isDownloading}
-              leftIcon={<Download className="w-4 h-4" />}
-            >
-              Unduh Slip (PDF)
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/payrolls/${payroll.id}/edit`)}
+              >
+                Ubah Data
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleDownloadPdf}
+                isLoading={isDownloading}
+                leftIcon={<Download className="w-4 h-4" />}
+              >
+                Unduh Slip (PDF)
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -137,7 +159,7 @@ export const PayrollDetailPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-primary-container text-white flex items-center justify-center font-bold shadow-sm">
+                <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-bold shadow-sm">
                   <Wallet className="w-5 h-5" />
                 </div>
                 <div>
@@ -145,7 +167,7 @@ export const PayrollDetailPage: React.FC = () => {
                     HRD Mandiri
                   </h2>
                   <span className="text-[12px] text-text-muted font-medium">
-                    RBS Global • PT. Rimbun Buana Sejahtera
+                    {brandName} • {companyTitle}
                   </span>
                 </div>
               </div>
@@ -156,15 +178,16 @@ export const PayrollDetailPage: React.FC = () => {
             </div>
 
             <div className="sm:text-right space-y-1">
-              {isAdmin ? (
-                <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-200">
-                  Rahasia & Pribadi (Confidential)
-                </span>
-              ) : (
-                <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-blue-50 text-primary border border-blue-200">
-                  Data Resmi Terdaftar
-                </span>
-              )}
+              <div className="flex items-center sm:justify-end gap-2">
+                <Badge variant={payroll.status === 'off' ? 'off' : 'active'}>
+                  {payroll.status === 'off' ? 'Status: Off / Keluar' : 'Status: Karyawan Aktif'}
+                </Badge>
+                {isAdmin && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-200">
+                    Confidential
+                  </span>
+                )}
+              </div>
               <div className="font-title-card text-[15px] font-semibold text-text-primary pt-1">
                 {isAdmin ? 'SLIP GAJI TENAGA KEPENDIDIKAN' : 'DATA TENAGA KEPENDIDIKAN & PENEMPATAN'}
               </div>
@@ -192,6 +215,21 @@ export const PayrollDetailPage: React.FC = () => {
                 : {payroll.position ? <Badge variant="role">{payroll.position}</Badge> : '-'}
               </span>
             </div>
+            <div className="flex items-center text-[13px]">
+              <span className="w-40 text-text-muted">Status Keaktifan</span>
+              <span className="font-semibold flex items-center gap-1.5">
+                :{' '}
+                {payroll.status === 'off' ? (
+                  <span className="text-rose-700 inline-flex items-center gap-1">
+                    <UserX className="w-3.5 h-3.5" /> Off / Non-Aktif
+                  </span>
+                ) : (
+                  <span className="text-emerald-700 inline-flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5" /> Aktif
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -200,13 +238,19 @@ export const PayrollDetailPage: React.FC = () => {
               <span className="text-text-primary font-medium">: {payroll.province}</span>
             </div>
             <div className="flex items-center text-[13px]">
-              <span className="w-40 text-text-muted">Sekolah Rakyat Permanen</span>
+              <span className="w-40 text-text-muted">Sekolah Rakyat</span>
               <span className="text-text-primary font-medium">: {payroll.school_unit || '-'}</span>
             </div>
             <div className="flex items-center text-[13px]">
               <span className="w-40 text-text-muted">Tanggal Masuk</span>
               <span className="text-text-muted">: {payroll.join_date || '-'}</span>
             </div>
+            {payroll.status === 'off' && payroll.resign_date && (
+              <div className="flex items-center text-[13px]">
+                <span className="w-40 text-rose-600 font-semibold">Tanggal Keluar</span>
+                <span className="font-mono text-rose-600 font-semibold">: {payroll.resign_date}</span>
+              </div>
+            )}
             {isAdmin && (
               <div className="flex items-center text-[13px]">
                 <span className="w-40 text-text-muted">Rekening & Bank</span>
@@ -223,40 +267,122 @@ export const PayrollDetailPage: React.FC = () => {
           <>
             <div className="space-y-4 mb-6">
               <h3 className="font-title-card text-[15px] font-bold text-text-primary uppercase tracking-wide">
-                Rincian Komponen Gaji
+                Rincian Komponen Gaji Sesuai Formula Database
               </h3>
 
               <div className="border border-border-subtle rounded-xl overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-primary text-white text-[12px] font-semibold uppercase">
-                      <th className="py-3 px-4">Komponen Penghasilan</th>
+                      <th className="py-3 px-4">Komponen Gaji / Potongan</th>
+                      <th className="py-3 px-4 text-center">Dasar Rumus</th>
                       <th className="py-3 px-4 text-right">Nominal (IDR)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border-row text-[14px]">
-                    <tr>
-                      <td className="py-3 px-4 font-medium text-text-primary">
-                        Gaji Pokok / Hak Jasa Kependidikan
+                  <tbody className="divide-y divide-border-row text-[13.5px]">
+                    {/* Col N: Net Base Price */}
+                    {payroll.net_base_price !== null && payroll.net_base_price !== undefined && (
+                      <tr className="bg-slate-50/50">
+                        <td className="py-2.5 px-4 font-medium text-text-primary">
+                          Harga Dasar di potong PPh & Fee manajemen
+                        </td>
+                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
+                          Kolom N
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono text-slate-800">
+                          {payroll.formatted_net_base_price}
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* Col Q: BPJS Kes 5% */}
+                    {payroll.bpjs_kes !== null && payroll.bpjs_kes !== undefined && (
+                      <tr>
+                        <td className="py-2.5 px-4 font-medium text-text-secondary pl-6">
+                          ↳ BPJS Kesehatan (5%)
+                        </td>
+                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
+                          Kolom Q (5%)
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono text-slate-600">
+                          -{payroll.formatted_bpjs_kes}
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* Col T: BPJS TK 9.24% */}
+                    {payroll.bpjs_tk !== null && payroll.bpjs_tk !== undefined && (
+                      <tr>
+                        <td className="py-2.5 px-4 font-medium text-text-secondary pl-6">
+                          ↳ BPJS Ketenagakerjaan (9,24%)
+                        </td>
+                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
+                          Kolom T (9.24%)
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono text-slate-600">
+                          -{payroll.formatted_bpjs_tk}
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* Col U: Gaji Pokok */}
+                    <tr className="bg-blue-50/50 font-semibold">
+                      <td className="py-3 px-4 text-text-primary">
+                        Gaji Pokok Bersih (Hak Jasa Kependidikan)
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-800">
+                      <td className="py-3 px-4 text-center text-[12px] text-primary font-mono">
+                        Col N - Q - T
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-primary text-[14.5px]">
                         {payroll.formatted_basic_salary}
                       </td>
                     </tr>
+
+                    {/* Allowance */}
                     {payroll.allowance > 0 && (
                       <tr>
-                        <td className="py-3 px-4 font-medium text-text-primary">Tunjangan & Lembur</td>
-                        <td className="py-3 px-4 text-right font-mono text-emerald-600 font-medium">
+                        <td className="py-2.5 px-4 font-medium text-text-primary">
+                          Tunjangan Tambahan & Lembur
+                        </td>
+                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
+                          Penambahan
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono text-emerald-600 font-medium">
                           +{payroll.formatted_allowance}
                         </td>
                       </tr>
                     )}
+
+                    {/* Col V: Potongan Absensi */}
+                    {payroll.absence_deduction && Number(payroll.absence_deduction) > 0 ? (
+                      <tr className="bg-rose-50/40">
+                        <td className="py-2.5 px-4 font-medium text-rose-700">
+                          <div>Potongan Absensi ({payroll.absence_count || 0}x)</div>
+                          {payroll.absence_note && (
+                            <div className="text-[11px] text-rose-600 font-normal">
+                              Ket: {payroll.absence_note}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
+                          Kolom V ({payroll.absence_count}x @ {formatCurrency(payroll.absence_rate || 50000)})
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-semibold">
+                          -{payroll.formatted_absence_deduction}
+                        </td>
+                      </tr>
+                    ) : null}
+
+                    {/* General Deduction */}
                     {payroll.deduction > 0 && (
                       <tr>
-                        <td className="py-3 px-4 font-medium text-status-danger-text">
-                          Potongan (BPJS, Pajak, Absensi)
+                        <td className="py-2.5 px-4 font-medium text-status-danger-text">
+                          Potongan Lainnya
                         </td>
-                        <td className="py-3 px-4 text-right font-mono text-status-danger-text font-medium">
+                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
+                          Pengurangan
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono text-status-danger-text font-medium">
                           -{payroll.formatted_deduction}
                         </td>
                       </tr>
@@ -287,7 +413,10 @@ export const PayrollDetailPage: React.FC = () => {
           <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-3 mb-6">
             <div className="flex items-center gap-2 text-primary font-semibold text-[14px]">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <span>Status Penempatan Aktif</span>
+              <span>
+                Status Operasional:{' '}
+                {payroll.status === 'off' ? 'Off / Non-Aktif' : 'Penempatan Aktif'}
+              </span>
             </div>
             <p className="text-[12.5px] text-text-muted leading-relaxed">
               Tenaga kependidikan terdaftar resmi pada unit <strong>{payroll.school_unit || 'Sekolah Rakyat'}</strong> wilayah <strong>{payroll.province}</strong> dengan fungsi penugasan <strong>{payroll.position || 'Tenaga Kependidikan'}</strong> untuk periode <strong>{payroll.period}</strong>.
@@ -298,7 +427,7 @@ export const PayrollDetailPage: React.FC = () => {
         {/* Footer & Signature */}
         <div className="pt-10 flex justify-between items-end border-t border-border-row mt-8 text-[12px]">
           <div className="text-text-muted space-y-1">
-            <p>Dicetak otomatis melalui sistem HRD Mandiri — RBS Global.</p>
+            <p>Dicetak otomatis melalui sistem HRD Mandiri — {brandName}.</p>
             <p>ID Transaksi: #{payroll.id} • Dibuat: {payroll.created_at?.slice(0, 10)}</p>
           </div>
 
@@ -307,7 +436,7 @@ export const PayrollDetailPage: React.FC = () => {
               {isAdmin ? 'Disahkan oleh HR & Finance,' : 'Pencatatan Resmi HRD,'}
             </div>
             <div className="border-t border-slate-400 font-bold text-text-primary pt-1">
-              RBS Global (PT. Rimbun Buana Sejahtera)
+              {brandName} ({companyTitle})
             </div>
           </div>
         </div>

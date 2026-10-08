@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
 
@@ -36,6 +37,7 @@ export const Modal: React.FC<ModalProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
   const maxWidths = {
     sm: 'max-w-sm',
@@ -45,15 +47,23 @@ export const Modal: React.FC<ModalProps> = ({
     '2xl': 'max-w-2xl',
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+  const modalNode = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/65 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div
         className={cn(
-          'w-full bg-surface-panel rounded-xl shadow-2xl border border-border-subtle overflow-hidden flex flex-col max-h-[90vh] transition-all transform animate-in zoom-in-95 duration-150',
+          'w-full bg-surface-panel rounded-2xl shadow-2xl border border-border-subtle overflow-hidden flex flex-col max-h-[90vh] my-auto transition-all transform animate-in zoom-in-95 duration-150',
           maxWidths[maxWidth]
         )}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border-row">
+        <div className="flex items-center justify-between px-6 py-4.5 border-b border-border-row shrink-0 bg-surface-panel">
           <div>
             <h3 className="font-title-card text-title-card text-text-primary">{title}</h3>
             {description && (
@@ -63,16 +73,19 @@ export const Modal: React.FC<ModalProps> = ({
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container transition-colors"
+            className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container transition-colors"
             aria-label="Tutup"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">{children}</div>
+        <div className="p-6 overflow-y-auto flex-1 bg-surface-panel">{children}</div>
       </div>
     </div>
   );
+
+  return createPortal(modalNode, document.body);
 };

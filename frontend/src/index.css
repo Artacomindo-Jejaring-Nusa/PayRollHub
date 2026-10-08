@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Default Theme: PT. Rimbun Buana Sejahtera (RBS Global - Sapphire Corporate Navy/Blue) */
+:root {
+  --color-primary: #004ac6;
+  --color-primary-container: #2563eb;
+  --color-primary-fixed: #dbe1ff;
+  --color-surface-container-low: #eff4ff;
+  --color-badge-province-bg: #eff6ff;
+  --color-badge-province-text: #1d4ed8;
+  --color-accent-hover: #1d4ed8;
+}
+
+/* Alternate Domain Theme: PT. Riama Mandiri (Executive Deep Spruce Emerald & Mint) */
+[data-theme="rimamandiri"] {
+  --color-primary: #065f46;
+  --color-primary-container: #059669;
+  --color-primary-fixed: #d1fae5;
+  --color-surface-container-low: #f0fdf4;
+  --color-badge-province-bg: #ecfdf5;
+  --color-badge-province-text: #065f46;
+  --color-accent-hover: #047857;
+}
+
 @layer base {
   html, body {
     margin: 0;
@@ -14,6 +36,7 @@
     color: #0b1c30;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease;
   }
   main > :first-child {
     margin-top: 0 !important;

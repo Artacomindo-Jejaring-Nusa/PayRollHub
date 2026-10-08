@@ -14,10 +14,13 @@ import {
   UserCheck,
   KeyRound,
 } from 'lucide-react';
+import { useTenantTheme } from '../../../lib/theme';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuthStore();
+  const { tenant } = useTenantTheme();
+  const isRima = tenant.id === 'rimamandiri';
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -65,20 +68,39 @@ export const LoginPage: React.FC = () => {
             <div
               className="lg:col-span-6 p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden text-surface-panel border-r border-white/5"
               style={{
-                background:
-                  'radial-gradient(circle, rgb(39, 33, 102) 0%, rgb(26, 21, 72) 55%, rgb(19, 15, 56) 100%)',
+                background: isRima
+                  ? 'radial-gradient(circle, rgb(6, 78, 59) 0%, rgb(4, 47, 46) 55%, rgb(2, 44, 34) 100%)'
+                  : 'radial-gradient(circle, rgb(39, 33, 102) 0%, rgb(26, 21, 72) 55%, rgb(19, 15, 56) 100%)',
               }}
             >
               {/* Ambient background glow elements */}
-              <div className="absolute -top-32 -left-20 w-96 h-96 rounded-full bg-primary-container/20 blur-3xl pointer-events-none" />
-              <div className="absolute top-1/2 -right-28 w-80 h-80 rounded-full bg-indigo-600/15 blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-24 left-1/4 w-72 h-72 rounded-full bg-primary/25 blur-3xl pointer-events-none" />
+              <div
+                className={`absolute -top-32 -left-20 w-96 h-96 rounded-full blur-3xl pointer-events-none ${
+                  isRima ? 'bg-emerald-500/20' : 'bg-primary-container/20'
+                }`}
+              />
+              <div
+                className={`absolute top-1/2 -right-28 w-80 h-80 rounded-full blur-3xl pointer-events-none ${
+                  isRima ? 'bg-teal-600/15' : 'bg-indigo-600/15'
+                }`}
+              />
+              <div
+                className={`absolute -bottom-24 left-1/4 w-72 h-72 rounded-full blur-3xl pointer-events-none ${
+                  isRima ? 'bg-emerald-600/25' : 'bg-primary/25'
+                }`}
+              />
 
               {/* Brand Header */}
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-container to-blue-700 flex items-center justify-center text-white shadow-lg shadow-primary-container/30 ring-1 ring-white/20">
+                    <div
+                      className={`w-11 h-11 rounded-xl bg-gradient-to-br ${
+                        isRima
+                          ? 'from-emerald-500 to-teal-700 shadow-emerald-900/30'
+                          : 'from-primary-container to-blue-700 shadow-primary-container/30'
+                      } flex items-center justify-center text-white shadow-lg ring-1 ring-white/20`}
+                    >
                       <Wallet className="w-6 h-6" />
                     </div>
                     <div>
@@ -86,12 +108,12 @@ export const LoginPage: React.FC = () => {
                         <span className="font-headline-page text-[22px] font-semibold text-white tracking-tight">
                           HRD Mandiri
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-primary-fixed border border-white/15 tracking-wide uppercase">
-                          RBS Global
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white border border-white/15 tracking-wide uppercase">
+                          {tenant.badgeText}
                         </span>
                       </div>
                       <span className="block text-[12px] text-slate-300 font-medium tracking-normal">
-                        Sistem Rekapitulasi Gaji Karyawan
+                        {tenant.tagline}
                       </span>
                     </div>
                   </div>
@@ -102,12 +124,11 @@ export const LoginPage: React.FC = () => {
               <div className="relative z-10 my-6 flex flex-col items-center justify-center">
                 <div className="relative w-full flex items-center justify-center">
                   <img
-                    alt="Ilustrasi Keamanan HRD Mandiri RBS Global"
+                    alt={`Ilustrasi Keamanan HRD Mandiri ${tenant.shortName}`}
                     className="w-auto max-h-[340px] object-contain drop-shadow-2xl transition-transform duration-300 hover:scale-[1.02] rounded-2xl"
                     style={{ mixBlendMode: 'lighten' }}
                     src="/assets/auth-hero.jpg"
                     onError={(e) => {
-                      // Fallback if image fails
                       (e.target as HTMLElement).style.display = 'none';
                     }}
                   />
@@ -122,9 +143,7 @@ export const LoginPage: React.FC = () => {
                     <span className="font-medium text-slate-100">
                       Enkripsi End-to-End AES-256 & Laravel Sanctum
                     </span>
-                    
                   </div>
-                  
                 </div>
               </div>
             </div>
@@ -135,8 +154,14 @@ export const LoginPage: React.FC = () => {
                 {/* Header Info */}
                 <div className="mb-6">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-caption-medium font-caption-medium bg-badge-province-bg text-badge-province-text border border-blue-200/50">
-                      RBS Global • PT. Rimbun Buana Sejahtera
+                    <span
+                      className={`px-2 py-0.5 rounded text-caption-medium font-caption-medium ${
+                        isRima
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-badge-province-bg text-badge-province-text border border-blue-200/50'
+                      } border`}
+                    >
+                      {tenant.shortName} • {tenant.companyLegalName}
                     </span>
                   </div>
                   <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
@@ -144,7 +169,7 @@ export const LoginPage: React.FC = () => {
                   </h1>
                   <p className="font-body-default text-body-default text-text-muted mt-2">
                     Masukkan akun dinas atau NIK karyawan terdaftar untuk mengakses
-                    administrasi payroll.
+                    administrasi payroll {tenant.shortName}.
                   </p>
                 </div>
 

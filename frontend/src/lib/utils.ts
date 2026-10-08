@@ -19,14 +19,21 @@ export function formatCurrency(amount: number | string | undefined | null): stri
 }
 
 export function formatPeriod(period: string | undefined): string {
-  if (!period || !/^\d{4}-\d{2}$/.test(period)) {
-    return period || '-';
+  if (!period) {
+    return '-';
   }
-  const [year, month] = period.split('-');
-  const monthNames = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-  ];
-  const mIndex = parseInt(month, 10) - 1;
-  return `${monthNames[mIndex] || month} ${year}`;
+  const clean = period.trim();
+  if (/^SP\s*\d+/i.test(clean)) {
+    return clean;
+  }
+  if (/^\d{4}-\d{2}$/.test(clean)) {
+    const [year, month] = clean.split('-');
+    const monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+    const mIndex = parseInt(month, 10) - 1;
+    return `${monthNames[mIndex] || month} ${year}`;
+  }
+  return clean;
 }

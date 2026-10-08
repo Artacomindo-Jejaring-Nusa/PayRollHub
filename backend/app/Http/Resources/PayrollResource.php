@@ -14,6 +14,9 @@ class PayrollResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $isAdmin = $user && $user->role === 'admin';
+
         return [
             'id' => $this->id,
             'row_no' => $this->row_no,
@@ -24,16 +27,16 @@ class PayrollResource extends JsonResource
             'position' => $this->position,
             'join_date' => $this->formatJoinDate($this->join_date),
             'period' => $this->period,
-            'basic_salary' => (float) $this->basic_salary,
-            'allowance' => (float) $this->allowance,
-            'deduction' => (float) $this->deduction,
-            'take_home_pay' => (float) $this->take_home_pay,
-            'bank_account' => $this->bank_account,
-            'bank_name' => $this->bank_name,
-            'formatted_basic_salary' => 'Rp ' . number_format((float) $this->basic_salary, 0, ',', '.'),
-            'formatted_allowance' => 'Rp ' . number_format((float) $this->allowance, 0, ',', '.'),
-            'formatted_deduction' => 'Rp ' . number_format((float) $this->deduction, 0, ',', '.'),
-            'formatted_take_home_pay' => 'Rp ' . number_format((float) $this->take_home_pay, 0, ',', '.'),
+            'basic_salary' => $isAdmin ? (float) $this->basic_salary : 0,
+            'allowance' => $isAdmin ? (float) $this->allowance : 0,
+            'deduction' => $isAdmin ? (float) $this->deduction : 0,
+            'take_home_pay' => $isAdmin ? (float) $this->take_home_pay : 0,
+            'bank_account' => $isAdmin ? $this->bank_account : null,
+            'bank_name' => $isAdmin ? $this->bank_name : null,
+            'formatted_basic_salary' => $isAdmin ? ('Rp ' . number_format((float) $this->basic_salary, 0, ',', '.')) : '-',
+            'formatted_allowance' => $isAdmin ? ('Rp ' . number_format((float) $this->allowance, 0, ',', '.')) : '-',
+            'formatted_deduction' => $isAdmin ? ('Rp ' . number_format((float) $this->deduction, 0, ',', '.')) : '-',
+            'formatted_take_home_pay' => $isAdmin ? ('Rp ' . number_format((float) $this->take_home_pay, 0, ',', '.')) : '-',
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

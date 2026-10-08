@@ -9,6 +9,7 @@ import {
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
 import { Skeleton } from '../../../components/ui/Skeleton';
+import { Modal } from '../../../components/ui/Modal';
 import { Pagination } from '../../../components/shared/Pagination';
 import { ConfirmDialog } from '../../../components/shared/ConfirmDialog';
 import {
@@ -26,6 +27,7 @@ import {
   RefreshCw,
   Loader2,
   Download,
+  Lock,
 } from 'lucide-react';
 
 export const PayrollListPage: React.FC = () => {
@@ -56,6 +58,9 @@ export const PayrollListPage: React.FC = () => {
   const [perPage, setPerPage] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+
+  // Restricted export modal state for user
+  const [isExportRestrictedModalOpen, setIsExportRestrictedModalOpen] = useState(false);
 
   // Delete modal state
   const [deleteTarget, setDeleteTarget] = useState<PayrollItem | null>(null);
@@ -105,6 +110,11 @@ export const PayrollListPage: React.FC = () => {
   };
 
   const handleExport = async (format: 'xlsx' | 'csv' | 'pdf') => {
+    if (!isAdmin) {
+      setIsExportRestrictedModalOpen(true);
+      return;
+    }
+
     setIsExporting(format);
     try {
       await payrollService.exportFile(format, {
@@ -238,7 +248,11 @@ export const PayrollListPage: React.FC = () => {
             <Search className="w-4 h-4 text-text-muted absolute left-3 pointer-events-none" />
             <input
               type="text"
-              placeholder="Cari Nama, NIK, Sekolah, No Rekening..."
+              placeholder={
+                isAdmin
+                  ? 'Cari Nama, NIK, Sekolah, No Rekening...'
+                  : 'Cari Nama, NIK, Sekolah Rakyat, Wilayah...'
+              }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-10 pl-9 pr-4 bg-surface-panel rounded-lg text-body-default text-text-primary placeholder:text-text-muted border border-border-subtle outline-none focus:ring-2 focus:ring-primary focus:border-primary text-[13px]"
@@ -328,12 +342,16 @@ export const PayrollListPage: React.FC = () => {
       <div className="bg-surface-panel rounded-xl border border-border-subtle shadow-sm overflow-hidden">
         {/* Subtle horizontal scroll tip for smaller screens */}
         <div className="px-4 py-2 bg-slate-50/70 border-b border-border-subtle flex items-center justify-between text-[11px] text-text-muted">
-          <span>Format data lengkap: Wilayah, Sekolah Rakyat, NIK, Nama, Jabatan, Tgl Masuk, Gaji, Rekening Bank, dan Aksi</span>
+          <span>
+            {isAdmin
+              ? 'Format data lengkap: Wilayah, Sekolah Rakyat, NIK, Nama, Jabatan, Tgl Masuk, Gaji, Rekening Bank, dan Aksi'
+              : 'Format data lengkap: Wilayah, Sekolah Rakyat, NIK, Nama, Jabatan, Tgl Masuk, dan Aksi'}
+          </span>
           <span className="hidden sm:inline-block text-slate-400">Geser tabel ke samping untuk melihat seluruh kolom →</span>
         </div>
 
         <div className="overflow-x-auto scrollbar-thin">
-          <table className="w-full min-w-[1440px] text-left border-collapse">
+          <table className={`w-full ${isAdmin ? 'min-w-[1440px]' : 'min-w-[1050px]'} text-left border-collapse`}>
             <thead>
               <tr className="bg-surface-container-low border-b border-border-subtle text-[11px] font-semibold text-text-muted uppercase tracking-wider">
                 <th className="py-3.5 px-3 text-center w-14">No</th>
@@ -343,11 +361,15 @@ export const PayrollListPage: React.FC = () => {
                 <th className="py-3.5 px-3 min-w-[180px] whitespace-nowrap">Nama Lengkap</th>
                 <th className="py-3.5 px-3 min-w-[150px] whitespace-nowrap">Fungsi / Jabatan</th>
                 <th className="py-3.5 px-3 min-w-[130px] whitespace-nowrap">Tgl Masuk</th>
-                <th className="py-3.5 px-3 text-right min-w-[140px] whitespace-nowrap font-bold text-primary">
-                  Gaji
-                </th>
-                <th className="py-3.5 px-3 min-w-[180px] whitespace-nowrap">No Rekening & Bank</th>
-                <th className="py-3.5 px-3 text-center min-w-[180px] whitespace-nowrap">
+                {isAdmin && (
+                  <th className="py-3.5 px-3 text-right min-w-[140px] whitespace-nowrap font-bold text-primary">
+                    Gaji
+                  </th>
+                )}
+                {isAdmin && (
+                  <th className="py-3.5 px-3 min-w-[180px] whitespace-nowrap">No Rekening & Bank</th>
+                )}
+                <th className="py-3.5 px-3 text-center min-w-[130px] whitespace-nowrap">
                   Aksi
                 </th>
               </tr>
@@ -378,23 +400,27 @@ export const PayrollListPage: React.FC = () => {
                     <td className="py-3.5 px-3">
                       <Skeleton className="h-4 w-20 rounded" />
                     </td>
-                    <td className="py-3.5 px-3 text-right">
-                      <Skeleton className="h-6 w-24 ml-auto rounded" />
-                    </td>
-                    <td className="py-3.5 px-3">
-                      <Skeleton className="h-4 w-28 rounded" />
-                    </td>
+                    {isAdmin && (
+                      <td className="py-3.5 px-3 text-right">
+                        <Skeleton className="h-6 w-24 ml-auto rounded" />
+                      </td>
+                    )}
+                    {isAdmin && (
+                      <td className="py-3.5 px-3">
+                        <Skeleton className="h-4 w-28 rounded" />
+                      </td>
+                    )}
                     <td className="py-3.5 px-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <Skeleton className="h-7 w-16 rounded" />
-                        <Skeleton className="h-7 w-12 rounded" />
+                        {isAdmin && <Skeleton className="h-7 w-12 rounded" />}
                       </div>
                     </td>
                   </tr>
                 ))
               ) : payrolls.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-text-muted">
+                  <td colSpan={isAdmin ? 10 : 8} className="py-12 text-center text-text-muted">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileSpreadsheet className="w-8 h-8 text-slate-300" />
                       <span className="font-medium text-text-primary">
@@ -461,22 +487,26 @@ export const PayrollListPage: React.FC = () => {
                         {item.join_date || '-'}
                       </td>
 
-                      {/* Gaji - Professional styled currency pill */}
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
-                        <span className="inline-flex items-center font-mono font-bold text-[13px] text-primary bg-blue-50/80 border border-blue-200/70 px-2.5 py-1 rounded-md tracking-tight shadow-2xs">
-                          {item.formatted_take_home_pay}
-                        </span>
-                      </td>
+                      {/* Gaji - Admin only */}
+                      {isAdmin && (
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <span className="inline-flex items-center font-mono font-bold text-[13px] text-primary bg-blue-50/80 border border-blue-200/70 px-2.5 py-1 rounded-md tracking-tight shadow-2xs">
+                            {item.formatted_take_home_pay}
+                          </span>
+                        </td>
+                      )}
 
-                      {/* No Rekening & Bank */}
-                      <td className="py-3 px-3 text-[12px] whitespace-nowrap">
-                        <div className="font-semibold text-text-primary">
-                          {item.bank_name || '-'}
-                        </div>
-                        <div className="font-mono text-[11px] text-text-muted">
-                          {item.bank_account || '-'}
-                        </div>
-                      </td>
+                      {/* No Rekening & Bank - Admin only */}
+                      {isAdmin && (
+                        <td className="py-3 px-3 text-[12px] whitespace-nowrap">
+                          <div className="font-semibold text-text-primary">
+                            {item.bank_name || '-'}
+                          </div>
+                          <div className="font-mono text-[11px] text-text-muted">
+                            {item.bank_account || '-'}
+                          </div>
+                        </td>
+                      )}
 
                       {/* Aksi - Clean Right Column with Prominent VIEW button */}
                       <td className="py-3 px-3 text-center whitespace-nowrap">
@@ -488,21 +518,23 @@ export const PayrollListPage: React.FC = () => {
                           <button
                             onClick={() => navigate(`/payrolls/${item.id}`)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-[11.5px] font-semibold bg-primary text-white hover:bg-primary-hover shadow-2xs transition-all active:scale-95 cursor-pointer"
-                            title="Lihat Detail & Slip Gaji"
+                            title={isAdmin ? 'Lihat Detail & Slip Gaji' : 'Lihat Detail Karyawan'}
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>View</span>
                           </button>
 
-                          {/* PDF Slip Download Button */}
-                          <button
-                            onClick={(e) => handleDownloadSlip(e, item)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11.5px] font-medium border border-border-subtle bg-surface hover:bg-emerald-50 hover:border-emerald-300 text-text-primary hover:text-emerald-700 transition-colors cursor-pointer"
-                            title="Unduh Slip Gaji (PDF)"
-                          >
-                            <Download className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>PDF</span>
-                          </button>
+                          {/* PDF Slip Download Button (Admin only) */}
+                          {isAdmin && (
+                            <button
+                              onClick={(e) => handleDownloadSlip(e, item)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11.5px] font-medium border border-border-subtle bg-surface hover:bg-emerald-50 hover:border-emerald-300 text-text-primary hover:text-emerald-700 transition-colors cursor-pointer"
+                              title="Unduh Slip Gaji (PDF)"
+                            >
+                              <Download className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>PDF</span>
+                            </button>
+                          )}
 
                           {/* Admin Edit & Delete Actions */}
                           {isAdmin && (
@@ -556,6 +588,40 @@ export const PayrollListPage: React.FC = () => {
         confirmLabel="Ya, Hapus Data"
         isLoading={isDeleting}
       />
+
+      {/* Modal Only Admin For Export */}
+      <Modal
+        isOpen={isExportRestrictedModalOpen}
+        onClose={() => setIsExportRestrictedModalOpen(false)}
+        title="Akses Dibatasi: Only Admin"
+        maxWidth="sm"
+      >
+        <div className="space-y-4 py-2 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-sm">
+            <Lock className="w-7 h-7" />
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="font-title-card text-[16px] font-bold text-text-primary">
+              Only Admin for Export
+            </h4>
+            <p className="font-body-default text-[13px] text-text-muted leading-relaxed">
+              Mohon maaf, fitur ekspor rekapan data (Excel, CSV, dan PDF) hanya dapat diakses oleh akun dengan peran <strong>Administrator</strong>.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full justify-center"
+              onClick={() => setIsExportRestrictedModalOpen(false)}
+            >
+              Saya Mengerti
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

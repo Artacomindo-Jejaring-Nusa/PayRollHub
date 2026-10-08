@@ -103,22 +103,23 @@ export const DashboardOverviewPage: React.FC = () => {
       const prev = map.get(p.province) || { count: 0, totalTHP: 0 };
       map.set(p.province, {
         count: prev.count + 1,
-        totalTHP: prev.totalTHP + Number(p.take_home_pay),
+        totalTHP: prev.totalTHP + Number(p.take_home_pay || 0),
       });
     });
+
+    const totalStaff = metrics.total_employees > 0 ? metrics.total_employees : allPayrollsForStats.length;
 
     const list = Array.from(map.entries()).map(([province, stat]) => ({
       province,
       count: stat.count,
       totalTHP: stat.totalTHP,
-      percentage:
-        metrics.total_take_home_pay > 0
-          ? ((stat.totalTHP / metrics.total_take_home_pay) * 100).toFixed(1)
-          : '0',
+      percentage: totalStaff > 0
+        ? ((stat.count / totalStaff) * 100).toFixed(1)
+        : '0',
     }));
 
-    return list.sort((a, b) => b.totalTHP - a.totalTHP);
-  }, [allPayrollsForStats, metrics.total_take_home_pay]);
+    return list.sort((a, b) => b.count - a.count);
+  }, [allPayrollsForStats, metrics.total_employees]);
 
   // Financial percentages calculation
   const totalGross = metrics.total_basic_salary + metrics.total_allowance;
@@ -145,7 +146,7 @@ export const DashboardOverviewPage: React.FC = () => {
             </span>
           </div>
           <p className="font-body-default text-body-default text-text-muted mt-1">
-            Ringkasan eksekutif dan distribusi kompensasi karyawan RBS Global (PT. Rimbun Buana Sejahtera).
+            Ringkasan operasional dan sebaran penempatan karyawan RBS Global (PT. Rimbun Buana Sejahtera).
           </p>
         </div>
 
@@ -198,183 +199,79 @@ export const DashboardOverviewPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 5 KPI Summary Cards (with Skeleton effect) */}
-      <SummaryCards metrics={metrics} isLoading={isLoading} />
+      {/* KPI Summary Cards */}
+      <SummaryCards metrics={metrics} isLoading={isLoading} isAdmin={isAdmin} />
 
-      {/* Middle Grid: Cost Composition & Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Cost Composition Card */}
-        <Card className="lg:col-span-2 p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-border-row">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <Percent className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="font-body-semibold text-[15px] text-text-primary">
-                  Komposisi Beban Penggajian
-                </h2>
-                <p className="text-[11px] text-text-muted">
-                  Rasio alokasi Gaji Pokok, Tunjangan, dan Potongan operasional
-                </p>
-              </div>
-            </div>
-            <span className="font-mono text-[12px] text-text-muted">
-              Gross: {formatCurrency(totalGross)}
-            </span>
-          </div>
-
-          {isLoading ? (
-            <div className="space-y-4 py-2">
-              <Skeleton className="h-4 w-full rounded-full" />
-              <div className="grid grid-cols-3 gap-4">
-                <Skeleton className="h-16 rounded-lg" />
-                <Skeleton className="h-16 rounded-lg" />
-                <Skeleton className="h-16 rounded-lg" />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Proportional Multi-color Progress Bar */}
-              <div className="space-y-1.5">
-                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
-                  <div
-                    style={{ width: `${basicSalaryPercent}%` }}
-                    className="bg-indigo-600 transition-all duration-500"
-                    title={`Gaji Pokok: ${basicSalaryPercent}%`}
-                  />
-                  <div
-                    style={{ width: `${allowancePercent}%` }}
-                    className="bg-emerald-500 transition-all duration-500"
-                    title={`Tunjangan: ${allowancePercent}%`}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-text-muted px-0.5">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-indigo-600" /> Gaji Pokok ({basicSalaryPercent}%)
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> Tunjangan ({allowancePercent}%)
-                  </span>
-                  <span className="flex items-center gap-1 text-red-600">
-                    <span className="w-2 h-2 rounded-full bg-red-500" /> Potongan Efektif ({deductionRate}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* 3 Metric Mini Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                <div className="p-3 rounded-lg bg-indigo-50/60 border border-indigo-100/80">
-                  <span className="text-[11px] font-medium text-indigo-700">Akumulasi Pokok</span>
-                  <div className="font-mono text-[16px] font-bold text-indigo-950 mt-1">
-                    {formatCurrency(metrics.total_basic_salary)}
-                  </div>
-                  <span className="text-[10px] text-indigo-600">Porsi dasar terikat kontrak</span>
-                </div>
-
-                <div className="p-3 rounded-lg bg-emerald-50/60 border border-emerald-100/80">
-                  <span className="text-[11px] font-medium text-emerald-700">Tunjangan & Bonus</span>
-                  <div className="font-mono text-[16px] font-bold text-emerald-950 mt-1">
-                    +{formatCurrency(metrics.total_allowance)}
-                  </div>
-                  <span className="text-[10px] text-emerald-600">Insentif & fasilitas</span>
-                </div>
-
-                <div className="p-3 rounded-lg bg-red-50/60 border border-red-100/80">
-                  <span className="text-[11px] font-medium text-red-700">Total Pemotongan</span>
-                  <div className="font-mono text-[16px] font-bold text-red-950 mt-1">
-                    -{formatCurrency(metrics.total_deduction)}
-                  </div>
-                  <span className="text-[10px] text-red-600">BPJS, PPh21 & absensi</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </Card>
-
-        {/* Quick Actions & Navigation Card */}
-        <Card className="p-5 flex flex-col justify-between space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-border-row">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-primary">
-              <TrendingUp className="w-4 h-4" />
+      {/* Quick Actions Action Strip */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button
+          onClick={() => navigate('/payrolls')}
+          className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-105 transition-transform">
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-body-semibold text-[15px] text-text-primary">
-                Aksi Cepat
-              </h2>
-              <p className="text-[11px] text-text-muted">
-                Pintasan navigasi dan operasional payroll
-              </p>
+              <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
+                {isAdmin ? 'Lihat Data Penggajian' : 'Lihat Data Karyawan'}
+              </div>
+              <div className="text-[12px] text-text-muted">
+                {isAdmin ? 'Buka tabel lengkap dan cetak slip' : 'Buka tabel data karyawan dan penempatan'}
+              </div>
             </div>
           </div>
+          <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
+        </button>
 
-          <div className="space-y-2 flex-1">
+        {isAdmin ? (
+          <>
             <button
-              onClick={() => navigate('/payrolls')}
-              className="w-full flex items-center justify-between p-3 rounded-lg border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left"
+              onClick={() => navigate('/payrolls/create')}
+              className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
             >
-              <div className="flex items-center gap-2.5">
-                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary group-hover:scale-105 transition-transform">
+                  <Plus className="w-5 h-5" />
+                </div>
                 <div>
-                  <div className="text-[13px] font-semibold text-text-primary group-hover:text-primary transition-colors">
-                    Lihat Data Penggajian
+                  <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
+                    Tambah Data Gaji Baru
                   </div>
-                  <div className="text-[11px] text-text-muted">
-                    Buka tabel lengkap dan cetak slip
+                  <div className="text-[12px] text-text-muted">
+                    Input manual slip gaji karyawan
                   </div>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
             </button>
 
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => navigate('/payrolls/create')}
-                  className="w-full flex items-center justify-between p-3 rounded-lg border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Plus className="w-4 h-4 text-primary" />
-                    <div>
-                      <div className="text-[13px] font-semibold text-text-primary group-hover:text-primary transition-colors">
-                        Tambah Data Gaji Baru
-                      </div>
-                      <div className="text-[11px] text-text-muted">
-                        Input manual slip gaji karyawan
-                      </div>
-                    </div>
+            <button
+              onClick={() => navigate('/payrolls/import')}
+              className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left shadow-sm hover:shadow"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-105 transition-transform">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-[14px] font-semibold text-text-primary group-hover:text-primary transition-colors">
+                    Import Excel Masal
                   </div>
-                  <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                </button>
-
-                <button
-                  onClick={() => navigate('/payrolls/import')}
-                  className="w-full flex items-center justify-between p-3 rounded-lg border border-border-subtle bg-surface hover:bg-surface-container transition-all group text-left"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Upload className="w-4 h-4 text-indigo-600" />
-                    <div>
-                      <div className="text-[13px] font-semibold text-text-primary group-hover:text-primary transition-colors">
-                        Import Excel Masal
-                      </div>
-                      <div className="text-[11px] text-text-muted">
-                        Upload format .xlsx / .csv
-                      </div>
-                    </div>
+                  <div className="text-[12px] text-text-muted">
+                    Upload format .xlsx / .csv
                   </div>
-                  <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                </button>
-              </>
-            )}
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-text-muted group-hover:text-primary group-hover:translate-x-1 transition-all" />
+            </button>
+          </>
+        ) : (
+          <div className="md:col-span-2 flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface-container/50 text-[13px] text-text-muted">
+            <span>Status Hak Akses: Mode Pemantau (Viewer) — Data Read-Only</span>
+            <span className="font-mono text-[11px]">v1.0.0</span>
           </div>
-
-          <div className="pt-2 border-t border-border-row">
-            <div className="flex items-center justify-between text-[11px] text-text-muted">
-              <span>Status Sistem: Aktif</span>
-              <span className="font-mono">v1.0.0</span>
-            </div>
-          </div>
-        </Card>
+        )}
       </div>
 
       {/* Bottom Grid: Provincial Distribution & Recent Activity */}
@@ -389,10 +286,10 @@ export const DashboardOverviewPage: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="font-body-semibold text-[15px] text-text-primary">
-                    Sebaran Penggajian per Wilayah
+                    Sebaran Karyawan per Wilayah
                   </h2>
                   <p className="text-[11px] text-text-muted">
-                    Beban Take Home Pay dan proporsi per cabang provinsi
+                    Jumlah penempatan karyawan dan proporsi per cabang provinsi
                   </p>
                 </div>
               </div>
@@ -449,10 +346,11 @@ export const DashboardOverviewPage: React.FC = () => {
                   ? provinceStats.slice(0, 5)
                   : provinceStats
                 ).map((item, idx) => {
-                  const maxTHP = provinceStats[0]?.totalTHP || 1;
+                  const maxVal = provinceStats[0]?.count || 1;
+                  const currVal = item.count;
                   const relativePercent = Math.min(
                     100,
-                    Math.max(4, Math.round((item.totalTHP / maxTHP) * 100))
+                    Math.max(4, Math.round((currVal / maxVal) * 100))
                   );
 
                   return (
@@ -492,15 +390,11 @@ export const DashboardOverviewPage: React.FC = () => {
                           >
                             {item.province}
                           </Badge>
-                          <span className="text-[11px] text-text-muted flex items-center gap-1 shrink-0">
-                            <Users className="w-3 h-3" />
-                            {item.count} staf
-                          </span>
                         </div>
 
                         <div className="text-right shrink-0">
-                          <span className="font-mono text-[12.5px] font-bold text-text-primary">
-                            {formatCurrency(item.totalTHP)}
+                          <span className="font-body-semibold text-[13px] font-bold text-text-primary">
+                            {item.count} Orang
                           </span>
                           <span className="text-[11px] text-text-muted ml-1.5 font-medium">
                             ({item.percentage}%)
@@ -560,7 +454,7 @@ export const DashboardOverviewPage: React.FC = () => {
           )}
         </Card>
 
-        {/* Recent Payroll Records Card */}
+        {/* Recent Activity Card */}
         <Card className="p-5 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-border-row">
             <div className="flex items-center gap-2">
@@ -569,10 +463,10 @@ export const DashboardOverviewPage: React.FC = () => {
               </div>
               <div>
                 <h2 className="font-body-semibold text-[15px] text-text-primary">
-                  Penggajian Terkini
+                  Data Karyawan Terkini
                 </h2>
                 <p className="text-[11px] text-text-muted">
-                  Catatan transaksi gaji terbaru dalam sistem
+                  Catatan penempatan karyawan terbaru dalam sistem
                 </p>
               </div>
             </div>
@@ -602,7 +496,7 @@ export const DashboardOverviewPage: React.FC = () => {
             </div>
           ) : recentPayrolls.length === 0 ? (
             <div className="py-8 text-center text-text-muted text-[13px]">
-              Belum ada data penggajian.
+              Belum ada data penempatan karyawan.
             </div>
           ) : (
             <div className="divide-y divide-border-row">
@@ -628,10 +522,12 @@ export const DashboardOverviewPage: React.FC = () => {
 
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <div className="font-mono text-[13px] font-bold text-primary">
-                        {item.formatted_take_home_pay}
+                      <Badge variant="province" className="text-[11px]">
+                        {item.province}
+                      </Badge>
+                      <div className="text-[10px] text-text-muted mt-0.5">
+                        {item.join_date ? `Masuk: ${item.join_date}` : 'Aktif'}
                       </div>
-                      <span className="text-[10px] text-text-muted">Net Disbursed</span>
                     </div>
                     <Eye className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
                   </div>

@@ -23,6 +23,10 @@ return [
         $raw = env('ALLOWED_ORIGINS', env('FRONTEND_URL', ''));
         $list = array_map('trim', explode(',', (string) $raw));
         $list = array_merge($list, [
+            'https://rimbunbuanasejahtera.com',
+            'https://www.rimbunbuanasejahtera.com',
+            'https://riamamandiripratama.com',
+            'https://www.riamamandiripratama.com',
             'http://localhost:5173',
             'http://127.0.0.1:5173',
         ]);

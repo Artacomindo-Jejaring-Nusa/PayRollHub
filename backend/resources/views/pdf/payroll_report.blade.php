@@ -82,6 +82,9 @@
         <strong>Total Karyawan:</strong> {{ count($payrolls) }} orang
     </div>
 
+    @php
+        $hideSalary = $hideSalary ?? false;
+    @endphp
     <table>
         <thead>
             <tr>
@@ -90,10 +93,12 @@
                 <th>NIK</th>
                 <th>Provinsi</th>
                 <th class="text-center">Periode</th>
-                <th class="text-right">Gaji Pokok</th>
-                <th class="text-right">Tunjangan</th>
-                <th class="text-right">Potongan</th>
-                <th class="text-right">Take Home Pay</th>
+                @if(!$hideSalary)
+                    <th class="text-right">Gaji Pokok</th>
+                    <th class="text-right">Tunjangan</th>
+                    <th class="text-right">Potongan</th>
+                    <th class="text-right">Take Home Pay</th>
+                @endif
             </tr>
         </thead>
         <tbody>
@@ -116,17 +121,19 @@
                     <td>{{ $item->nik }}</td>
                     <td>{{ $item->province }}</td>
                     <td class="text-center">{{ $item->period }}</td>
-                    <td class="text-right">Rp {{ number_format($item->basic_salary, 0, ',', '.') }}</td>
-                    <td class="text-right">Rp {{ number_format($item->allowance, 0, ',', '.') }}</td>
-                    <td class="text-right">Rp {{ number_format($item->deduction, 0, ',', '.') }}</td>
-                    <td class="text-right" style="color: #004ac6; font-weight: bold;">Rp {{ number_format($item->take_home_pay, 0, ',', '.') }}</td>
+                    @if(!$hideSalary)
+                        <td class="text-right">Rp {{ number_format($item->basic_salary, 0, ',', '.') }}</td>
+                        <td class="text-right">Rp {{ number_format($item->allowance, 0, ',', '.') }}</td>
+                        <td class="text-right">Rp {{ number_format($item->deduction, 0, ',', '.') }}</td>
+                        <td class="text-right" style="color: #004ac6; font-weight: bold;">Rp {{ number_format($item->take_home_pay, 0, ',', '.') }}</td>
+                    @endif
                 </tr>
             @empty
                 <tr>
-                    <td colspan="9" class="text-center">Tidak ada data penggajian.</td>
+                    <td colspan="{{ $hideSalary ? 5 : 9 }}" class="text-center">Tidak ada data karyawan.</td>
                 </tr>
             @endforelse
-            @if(count($payrolls) > 0)
+            @if(count($payrolls) > 0 && !$hideSalary)
                 <tr class="total-row">
                     <td colspan="5" class="text-center">TOTAL KESELURUHAN</td>
                     <td class="text-right">Rp {{ number_format($totalBasic, 0, ',', '.') }}</td>

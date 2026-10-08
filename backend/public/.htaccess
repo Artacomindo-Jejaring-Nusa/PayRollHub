@@ -5,6 +5,11 @@
 
     RewriteEngine On
 
+    # --- CORS Preflight (OPTIONS) ---
+    # Return 204 with CORS headers for preflight requests
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ $1 [R=204,L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -22,4 +27,14 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+# --- CORS Headers ---
+<IfModule mod_headers.c>
+    # Always set CORS headers for API requests
+    SetEnvIf Origin "https://(rimbunbuanasejahtera\.com|riamamandiripratama\.com|www\.rimbunbuanasejahtera\.com|www\.riamamandiripratama\.com)$" CORS_ORIGIN=$0
+    Header always set Access-Control-Allow-Origin "%{CORS_ORIGIN}e" env=CORS_ORIGIN
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" env=CORS_ORIGIN
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin" env=CORS_ORIGIN
+    Header always set Access-Control-Max-Age "86400" env=CORS_ORIGIN
 </IfModule>

@@ -37,6 +37,8 @@ export interface PayrollMetrics {
   total_allowance: number;
   total_deduction: number;
   total_take_home_pay: number;
+  total_provinces?: number;
+  total_locations?: number;
 }
 
 export interface PayrollFilterOptions {

@@ -69,6 +69,8 @@ class PayrollService
 
         $metrics = $query->selectRaw('
             COUNT(id) as total_employees,
+            COUNT(DISTINCT NULLIF(TRIM(province), "")) as total_provinces,
+            COUNT(DISTINCT NULLIF(TRIM(school_unit), "")) as total_locations,
             COALESCE(SUM(basic_salary), 0) as total_basic_salary,
             COALESCE(SUM(allowance), 0) as total_allowance,
             COALESCE(SUM(deduction), 0) as total_deduction,
@@ -77,6 +79,8 @@ class PayrollService
 
         return [
             'total_employees' => (int) ($metrics->total_employees ?? 0),
+            'total_provinces' => (int) ($metrics->total_provinces ?? 0),
+            'total_locations' => (int) ($metrics->total_locations ?? 0),
             'total_basic_salary' => (float) ($metrics->total_basic_salary ?? 0),
             'total_allowance' => (float) ($metrics->total_allowance ?? 0),
             'total_deduction' => (float) ($metrics->total_deduction ?? 0),

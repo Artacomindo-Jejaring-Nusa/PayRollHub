@@ -3,14 +3,18 @@ import { Card } from '../ui/Card';
 import { Skeleton } from '../ui/Skeleton';
 import { formatCurrency } from '../../lib/utils';
 import { PayrollMetrics } from '../../types/payroll';
-import { Users, DollarSign, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { Users, DollarSign, Wallet, MapPin, Building2 } from 'lucide-react';
 
 export interface SummaryCardsProps {
   metrics: PayrollMetrics;
   isLoading?: boolean;
+  isAdmin?: boolean;
 }
 
-export const SummaryCards: React.FC<SummaryCardsProps> = ({ metrics, isLoading }) => {
+export const SummaryCards: React.FC<SummaryCardsProps> = ({
+  metrics,
+  isLoading,
+}) => {
   const cards = [
     {
       title: 'Total Karyawan',
@@ -20,38 +24,24 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ metrics, isLoading }
       description: 'Dalam periode/filter aktif',
     },
     {
-      title: 'Total Gaji Pokok',
-      value: formatCurrency(metrics.total_basic_salary),
-      icon: <DollarSign className="w-5 h-5 text-indigo-600" />,
-      bgIcon: 'bg-indigo-50',
-      description: 'Akumulasi dasar',
-    },
-    {
-      title: 'Total Tunjangan',
-      value: formatCurrency(metrics.total_allowance),
-      icon: <TrendingUp className="w-5 h-5 text-emerald-600" />,
+      title: 'Total Provinsi',
+      value: `${metrics.total_provinces ?? 0} Provinsi`,
+      icon: <MapPin className="w-5 h-5 text-emerald-600" />,
       bgIcon: 'bg-emerald-50',
-      description: 'Tunjangan & lembur',
+      description: 'Cakupan wilayah aktif',
     },
     {
-      title: 'Total Potongan',
-      value: formatCurrency(metrics.total_deduction),
-      icon: <TrendingDown className="w-5 h-5 text-red-600" />,
-      bgIcon: 'bg-red-50',
-      description: 'BPJS, PPh21, absensi',
-    },
-    {
-      title: 'Total Take Home Pay',
-      value: formatCurrency(metrics.total_take_home_pay),
-      icon: <Wallet className="w-5 h-5 text-primary" />,
+      title: 'Total Lokasi',
+      value: `${metrics.total_locations ?? 0} Lokasi`,
+      icon: <Building2 className="w-5 h-5 text-primary" />,
       bgIcon: 'bg-primary-fixed',
       highlight: true,
-      description: 'Total dana dicairkan',
+      description: 'Unit Sekolah Rakyat terdaftar',
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {cards.map((card, idx) => (
         <Card
           key={idx}

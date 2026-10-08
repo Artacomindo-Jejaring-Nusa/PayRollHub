@@ -299,6 +299,79 @@ class PayrollHubApiTest extends TestCase
         ])->assertStatus(429);
     }
 
+    public function test_user_cannot_view_salary_and_bank_account_in_payroll_list_and_detail(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        $payroll = Payroll::factory()->create([
+            'employee_name' => 'Karyawan Rahasia',
+            'basic_salary' => 8000000,
+            'allowance' => 1000000,
+            'deduction' => 500000,
+            'take_home_pay' => 8500000,
+            'bank_account' => '1234567890',
+            'bank_name' => 'BCA',
+        ]);
+
+        // In list
+        $response = $this->actingAs($user, 'sanctum')->getJson('/api/payrolls');
+        $response->assertStatus(200);
+        $item = $response->json('data.0');
+
+        $this->assertEquals(0, $item['basic_salary']);
+        $this->assertEquals(0, $item['take_home_pay']);
+        $this->assertNull($item['bank_account']);
+        $this->assertNull($item['bank_name']);
+        $this->assertEquals('-', $item['formatted_take_home_pay']);
+
+        // Check metrics: financial values are 0 for non-admin
+        $this->assertEquals(0, $response->json('metrics.total_basic_salary'));
+        $this->assertEquals(0, $response->json('metrics.total_take_home_pay'));
+        $this->assertEquals(1, $response->json('metrics.total_employees'));
+        $this->assertArrayHasKey('total_provinces', $response->json('metrics'));
+        $this->assertArrayHasKey('total_locations', $response->json('metrics'));
+
+        // In detail (show)
+        $detailResponse = $this->actingAs($user, 'sanctum')->getJson("/api/payrolls/{$payroll->id}");
+        $detailResponse->assertStatus(200);
+        $detailItem = $detailResponse->json('data');
+        $this->assertEquals(0, $detailItem['basic_salary']);
+        $this->assertEquals(0, $detailItem['take_home_pay']);
+        $this->assertNull($detailItem['bank_account']);
+        $this->assertNull($detailItem['bank_name']);
+
+        // Cannot download slip PDF
+        $slipResponse = $this->actingAs($user, 'sanctum')->getJson("/api/payrolls/{$payroll->id}/slip-pdf");
+        $slipResponse->assertStatus(403);
+
+        // Cannot export reports
+        $exportResponse = $this->actingAs($user, 'sanctum')->get('/api/payrolls/export?format=xlsx');
+        $exportResponse->assertStatus(403);
+    }
+
+    public function test_admin_can_view_salary_and_bank_account(): void
+    {
+        $payroll = Payroll::factory()->create([
+            'employee_name' => 'Admin Test Karyawan',
+            'basic_salary' => 5000000,
+            'allowance' => 0,
+            'deduction' => 0,
+            'take_home_pay' => 5000000,
+            'bank_account' => '9876543210',
+            'bank_name' => 'BNI',
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')->getJson("/api/payrolls?search={$payroll->employee_name}");
+        $response->assertStatus(200);
+        $item = $response->json('data.0');
+
+        $this->assertEquals(5000000, $item['basic_salary']);
+        $this->assertEquals(5000000, $item['take_home_pay']);
+        $this->assertEquals('9876543210', $item['bank_account']);
+        $this->assertEquals('BNI', $item['bank_name']);
+        $this->assertStringContainsString('5.000.000', $item['formatted_take_home_pay']);
+        $this->assertGreaterThan(0, $response->json('metrics.total_take_home_pay'));
+    }
+
     public function test_security_headers_are_present(): void
     {
         $response = $this->getJson('/up');

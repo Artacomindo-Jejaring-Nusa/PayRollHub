@@ -33,15 +33,24 @@ class AuthController extends Controller
             ], 429);
         }
 
-        // 1. Try finding user directly by email
-        $user = User::where('email', $identifier)->first();
+        // 1. Try finding user directly by email or NIK
+        $user = User::where('email', $identifier)
+            ->orWhere('nik', $identifier)
+            ->first();
 
-        // 2. If not found by email and looks like NIK, try to find user by linked employee name or fallback
-        if (!$user && preg_match('/^\d+$/', $identifier)) {
-            $payroll = Payroll::where('nik', $identifier)->first();
-            if ($payroll) {
-                // If payroll exists, match by name or fallback user
-                $user = User::where('name', 'like', "%{$payroll->employee_name}%")->first();
+        // 2. If not found in users, check if valid employee NIK in payrolls (Auto-provisioning karyawan)
+        if (!$user && preg_match('/^[A-Za-z0-9\-]+$/', $identifier)) {
+            $payroll = Payroll::where('nik', $identifier)->latest('period')->first();
+            if ($payroll && $password === $identifier) {
+                // Auto create account for employee with default password = NIK
+                $user = User::create([
+                    'name' => $payroll->employee_name,
+                    'email' => $payroll->nik . '@karyawan.local',
+                    'nik' => $payroll->nik,
+                    'company' => $payroll->company ?? 'rbs',
+                    'role' => 'karyawan',
+                    'password' => Hash::make($password),
+                ]);
             }
         }
 

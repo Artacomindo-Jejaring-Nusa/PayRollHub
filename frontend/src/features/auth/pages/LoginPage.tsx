@@ -42,7 +42,11 @@ export const LoginPage: React.FC = () => {
       });
 
       login(response.data.user, response.data.token);
-      navigate('/dashboard');
+      if (response.data.role === 'karyawan') {
+        navigate('/employee/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||
@@ -124,10 +128,9 @@ export const LoginPage: React.FC = () => {
               <div className="relative z-10 my-6 flex flex-col items-center justify-center">
                 <div className="relative w-full flex items-center justify-center">
                   <img
-                    alt={`Ilustrasi Keamanan HRD Mandiri ${tenant.shortName}`}
-                    className="w-auto max-h-[340px] object-contain drop-shadow-2xl transition-transform duration-300 hover:scale-[1.02] rounded-2xl"
-                    style={{ mixBlendMode: 'lighten' }}
-                    src="/assets/auth-hero.jpg"
+                    alt={`Ilustrasi Autentikasi HRD Mandiri ${tenant.shortName}`}
+                    className="w-auto max-h-[350px] object-contain drop-shadow-xl transition-transform duration-300 hover:scale-[1.02]"
+                    src="/assets/auth-hero-wavy.png"
                     onError={(e) => {
                       (e.target as HTMLElement).style.display = 'none';
                     }}
@@ -135,17 +138,6 @@ export const LoginPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Value Proposition Feature Badges */}
-              <div className="relative z-10 pt-2 space-y-2.5">
-                <div className="grid grid-cols-1 gap-2">
-                  <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-white/[0.05] backdrop-blur-sm border border-white/10 text-slate-200 text-[12px]">
-                    <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                    <span className="font-medium text-slate-100">
-                      Enkripsi End-to-End AES-256 & Laravel Sanctum
-                    </span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Right Form Column */}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { DashboardLayout } from './layouts/DashboardLayout';
+import { EmployeeLayout } from './layouts/EmployeeLayout';
 import { LoginPage } from './features/auth/pages/LoginPage';
 import { DashboardOverviewPage } from './features/dashboard/pages/DashboardOverviewPage';
 import { PayrollListPage } from './features/payroll/pages/PayrollListPage';
@@ -9,12 +10,39 @@ import { PayrollFormPage } from './features/payroll/pages/PayrollFormPage';
 import { PayrollDetailPage } from './features/payroll/pages/PayrollDetailPage';
 import { PayrollImportPage } from './features/payroll/pages/PayrollImportPage';
 import { UserListPage } from './features/users/pages/UserListPage';
+import { EmployeeDashboardPage } from './features/employee/pages/EmployeeDashboardPage';
+import { EmployeePayrollsPage } from './features/employee/pages/EmployeePayrollsPage';
+import { EmployeeReportsPage } from './features/employee/pages/EmployeeReportsPage';
+import { EmployeeAnnouncementsPage } from './features/employee/pages/EmployeeAnnouncementsPage';
+import { EmployeeProfilePage } from './features/employee/pages/EmployeeProfilePage';
+import { AnnouncementManagePage } from './features/announcements/pages/AnnouncementManagePage';
+import { AdminWorkReportsPage } from './features/reports/pages/AdminWorkReportsPage';
+import { EmployeeAttendancePage } from './features/attendance/pages/EmployeeAttendancePage';
+import { AdminAttendancePage } from './features/attendance/pages/AdminAttendancePage';
 
 // Guard: Must be authenticated
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+// Guard: Staff / HR / Admin only (non-karyawan)
+const StaffRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user } = useAuthStore();
+  if (user?.role === 'karyawan') {
+    return <Navigate to="/employee/dashboard" replace />;
+  }
+  return children;
+};
+
+// Guard: Employee only
+const EmployeeRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user } = useAuthStore();
+  if (user?.role !== 'karyawan') {
+    return <Navigate to="/dashboard" replace />;
   }
   return children;
 };
@@ -30,14 +58,19 @@ const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) =>
 
 // Guard: Public only (e.g. login page)
 const PublicRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   if (isAuthenticated) {
+    if (user?.role === 'karyawan') {
+      return <Navigate to="/employee/dashboard" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
   return children;
 };
 
 export const AppRouter: React.FC = () => {
+  const { user } = useAuthStore();
+
   return (
     <Routes>
       {/* Public Authentication Route */}
@@ -50,11 +83,37 @@ export const AppRouter: React.FC = () => {
         }
       />
 
-      {/* Protected Routes Wrapped in DashboardLayout */}
+      {/* ======================================================== */}
+      {/* EMPLOYEE SELF-SERVICE PORTAL ROUTES                      */}
+      {/* ======================================================== */}
+      <Route
+        path="/employee"
+        element={
+          <ProtectedRoute>
+            <EmployeeRoute>
+              <EmployeeLayout />
+            </EmployeeRoute>
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<EmployeeDashboardPage />} />
+        <Route path="dashboard" element={<EmployeeDashboardPage />} />
+        <Route path="attendance" element={<EmployeeAttendancePage />} />
+        <Route path="payrolls" element={<EmployeePayrollsPage />} />
+        <Route path="reports" element={<EmployeeReportsPage />} />
+        <Route path="announcements" element={<EmployeeAnnouncementsPage />} />
+        <Route path="profile" element={<EmployeeProfilePage />} />
+      </Route>
+
+      {/* ======================================================== */}
+      {/* ADMIN & HR STAFF ROUTES (DashboardLayout)               */}
+      {/* ======================================================== */}
       <Route
         element={
           <ProtectedRoute>
-            <DashboardLayout />
+            <StaffRoute>
+              <DashboardLayout />
+            </StaffRoute>
           </ProtectedRoute>
         }
       >
@@ -62,9 +121,16 @@ export const AppRouter: React.FC = () => {
         <Route path="/" element={<DashboardOverviewPage />} />
         <Route path="/dashboard" element={<DashboardOverviewPage />} />
 
+        {/* Manajemen Absensi Geofencing Radius */}
+        <Route path="/attendances" element={<AdminAttendancePage />} />
+
         {/* Data Penggajian */}
         <Route path="/payrolls" element={<PayrollListPage />} />
         <Route path="/payrolls/:id" element={<PayrollDetailPage />} />
+
+        {/* Laporan Kerja Review & Papan Pengumuman */}
+        <Route path="/work-reports" element={<AdminWorkReportsPage />} />
+        <Route path="/announcements" element={<AnnouncementManagePage />} />
 
         {/* Admin Restricted Routes */}
         <Route
@@ -102,7 +168,15 @@ export const AppRouter: React.FC = () => {
       </Route>
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to={user?.role === 'karyawan' ? '/employee/dashboard' : '/dashboard'}
+            replace
+          />
+        }
+      />
     </Routes>
   );
 };

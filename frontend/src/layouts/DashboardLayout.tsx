@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../features/auth/services/authService';
@@ -14,6 +14,10 @@ import {
   Building2,
   FileSpreadsheet,
   LayoutDashboard,
+  ClipboardList,
+  Bell,
+  Clock,
+  ChevronDown,
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
@@ -23,6 +27,18 @@ export const DashboardLayout: React.FC = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const isTopNavLayout = tenantId === 'rimamandiri';
 
@@ -33,17 +49,38 @@ export const DashboardLayout: React.FC = () => {
     navigate('/login');
   };
 
+  const isWorkReportUnlocked = typeof window !== 'undefined' && localStorage.getItem('dev_unlocked_work_reports') === 'true';
+
   const navItems = [
     {
-      label: 'Dashboard Overview',
+      label: 'Dashboard',
       path: '/dashboard',
       icon: <LayoutDashboard className="w-4 h-4" />,
       adminOnly: false,
     },
     {
+      label: 'Absensi',
+      path: '/attendances',
+      icon: <Clock className="w-4 h-4" />,
+      adminOnly: true,
+    },
+    {
       label: 'Data Penggajian',
       path: '/payrolls',
       icon: <FileSpreadsheet className="w-4 h-4" />,
+      adminOnly: false,
+    },
+    {
+      label: 'Laporan Kerja',
+      path: '/work-reports',
+      icon: <ClipboardList className="w-4 h-4" />,
+      adminOnly: false,
+      badge: isWorkReportUnlocked ? undefined : '🔒',
+    },
+    {
+      label: 'Pengumuman',
+      path: '/announcements',
+      icon: <Bell className="w-4 h-4" />,
       adminOnly: false,
     },
     {
@@ -74,36 +111,36 @@ export const DashboardLayout: React.FC = () => {
       <div className="min-h-screen bg-surface flex flex-col text-on-surface">
         {/* Top Navbar Sticky */}
         <header className="bg-surface-panel border-b border-border-subtle sticky top-0 z-30 shadow-xs">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
             {/* Brand Logo & Title */}
-            <div className="flex items-center space-x-3 flex-shrink-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20">
-                <Wallet className="w-5 h-5" />
+            <div className="flex items-center space-x-2.5 sm:space-x-3 flex-shrink-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
+                <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-headline-page text-[17px] sm:text-[18px] font-bold text-text-primary tracking-tight">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="font-headline-page text-[16px] sm:text-[17px] font-bold text-text-primary tracking-tight whitespace-nowrap">
                     HRD Mandiri
                   </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wide">
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wide whitespace-nowrap">
                     {tenant.badgeText}
                   </span>
                 </div>
-                <span className="block text-[11px] text-text-muted font-medium truncate max-w-[180px] sm:max-w-none">
+                <span className="hidden 2xl:block text-[11px] text-text-muted font-medium truncate max-w-[180px]">
                   {tenant.companyLegalName}
                 </span>
               </div>
             </div>
 
             {/* Desktop Horizontal Navigation Links (Menu di atas) */}
-            <nav className="hidden md:flex items-center gap-1.5 mx-4">
+            <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 mx-1.5 xl:mx-3 flex-shrink-0">
               {visibleNavItems.map((item) => {
                 const active = isItemActive(item.path);
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                    className={`flex items-center gap-1.5 px-2.5 xl:px-3 py-1.5 rounded-lg text-[12.5px] xl:text-[13px] font-medium transition-all whitespace-nowrap ${
                       active
                         ? 'bg-primary text-white shadow-xs font-semibold'
                         : 'text-text-primary hover:bg-surface-container hover:text-primary'
@@ -113,50 +150,90 @@ export const DashboardLayout: React.FC = () => {
                       {item.icon}
                     </span>
                     <span>{item.label}</span>
+                    {item.badge && <span className="text-[10px] ml-0.5">{item.badge}</span>}
                   </Link>
                 );
               })}
             </nav>
 
             {/* Right Controls */}
-            <div className="flex items-center gap-2 sm:gap-3.5 flex-shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0 ml-auto">
               <TenantSwitcher variant="compact" />
 
-              <div className="hidden lg:block h-6 w-px bg-border-subtle" />
+              <div className="hidden sm:block h-5 w-px bg-border-subtle" />
 
-              {/* User Profile Info */}
-              <div className="hidden lg:flex items-center gap-2.5">
-                <div className="text-right">
-                  <div className="font-body-semibold text-[13px] text-text-primary leading-tight">
-                    {user?.name}
+              {/* User Profile Dropdown (Menggantikan tombol logout terpisah agar tidak offside) */}
+              <div className="relative" ref={profileRef}>
+                <button
+                  type="button"
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="flex items-center gap-2 py-1 px-1.5 sm:px-2 rounded-xl hover:bg-surface-container border border-transparent hover:border-border-subtle transition-all cursor-pointer"
+                  title="Menu Profil & Akun"
+                >
+                  <div className="text-right hidden xl:block">
+                    <div className="font-semibold text-[12.5px] text-text-primary leading-tight truncate max-w-[120px]">
+                      {user?.name}
+                    </div>
+                    <div className="text-[10.5px] text-text-muted leading-tight">
+                      {user?.role === 'admin' ? 'Admin' : 'Staf'}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-text-muted">
-                    {user?.role === 'admin' ? 'Super Administrator' : 'Staf User (Read-Only)'}
+                  <div
+                    className="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-2 ring-emerald-100 shrink-0"
+                  >
+                    {user?.name?.charAt(0).toUpperCase() || 'U'}
                   </div>
-                </div>
-                <div className="w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white">
-                  {user?.name?.charAt(0).toUpperCase() || 'U'}
-                </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-text-muted transition-transform duration-150 ${
+                      profileDropdownOpen ? 'rotate-180 text-primary' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Dropdown Menu */}
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-surface-panel border border-border-subtle shadow-xl z-50 py-1 divide-y divide-border-row animate-in fade-in zoom-in-95 duration-100">
+                    {/* User Header Info */}
+                    <div className="px-3.5 py-2.5">
+                      <div className="font-semibold text-[13px] text-text-primary leading-tight truncate">
+                        {user?.name}
+                      </div>
+                      <div className="text-[11px] text-text-muted truncate mt-0.5">
+                        {user?.email || '-'}
+                      </div>
+                      <div className="mt-1.5">
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          {user?.role === 'admin' ? 'Super Administrator' : 'Staf User'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Items */}
+                    <div className="p-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileDropdownOpen(false);
+                          handleLogout();
+                        }}
+                        disabled={isLoggingOut}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[12.5px] font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50 text-left"
+                      >
+                        <LogOut className="w-4 h-4 text-rose-500 shrink-0" />
+                        <span>Keluar (Logout)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {/* Logout Button */}
-              <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium text-status-danger-text hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200"
-                title="Keluar Akun"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden md:inline">Keluar</span>
-              </button>
 
               {/* Mobile Menu Toggle Button */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container transition-colors"
+                className="lg:hidden p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container transition-colors shrink-0"
                 aria-label="Toggle navigation"
               >
-                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
             </div>
           </div>
@@ -184,6 +261,7 @@ export const DashboardLayout: React.FC = () => {
                       {item.icon}
                     </span>
                     <span>{item.label}</span>
+                    {item.badge && <span className="text-[10px] ml-0.5">{item.badge}</span>}
                   </Link>
                 );
               })}
@@ -194,10 +272,11 @@ export const DashboardLayout: React.FC = () => {
                   <div className="text-[11px] text-text-muted">{user?.email}</div>
                 </div>
                 <button
+                  type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-status-danger-text hover:bg-red-50 rounded-lg"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium text-rose-600 hover:text-rose-700 bg-rose-50/70 hover:bg-rose-100/80 border border-rose-200/80 rounded-lg transition-all shadow-2xs"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-3.5 h-3.5 text-rose-500" />
                   <span>Keluar</span>
                 </button>
               </div>
@@ -301,6 +380,7 @@ export const DashboardLayout: React.FC = () => {
                   {item.icon}
                 </span>
                 <span>{item.label}</span>
+                {item.badge && <span className="text-[10px] ml-auto">{item.badge}</span>}
               </Link>
             );
           })}
@@ -323,11 +403,12 @@ export const DashboardLayout: React.FC = () => {
           </div>
 
           <button
+            type="button"
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-medium text-status-danger-text hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-medium text-rose-600 hover:text-rose-700 bg-rose-50/70 hover:bg-rose-100/80 rounded-lg transition-all border border-rose-200/80 hover:border-rose-300 shadow-2xs cursor-pointer disabled:opacity-50"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-4 h-4 text-rose-500" />
             <span>Keluar Akun</span>
           </button>
         </div>
@@ -355,19 +436,62 @@ export const DashboardLayout: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <TenantSwitcher />
             <div className="h-6 w-px bg-border-subtle" />
-            <div className="text-right">
-              <div className="font-body-semibold text-[13px] text-text-primary">
-                {user?.name}
-              </div>
-              <div className="text-[11px] text-text-muted">
-                {user?.role === 'admin' ? 'Super Administrator' : 'Staf User (View & Search)'}
-              </div>
-            </div>
-            <div className="w-9 h-9 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white">
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
+            
+            {/* User Profile Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                className="flex items-center gap-2.5 py-1 px-2 rounded-xl hover:bg-surface-container border border-transparent hover:border-border-subtle transition-all cursor-pointer"
+              >
+                <div className="text-right">
+                  <div className="font-semibold text-[13px] text-text-primary">
+                    {user?.name}
+                  </div>
+                  <div className="text-[11px] text-text-muted">
+                    {user?.role === 'admin' ? 'Super Administrator' : 'Staf User'}
+                  </div>
+                </div>
+                <div className="w-9 h-9 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white shrink-0">
+                  {user?.name?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-text-muted transition-transform duration-150 ${profileDropdownOpen ? 'rotate-180 text-primary' : ''}`} />
+              </button>
+
+              {profileDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-xl bg-surface-panel border border-border-subtle shadow-xl z-50 py-1 divide-y divide-border-row animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3.5 py-2.5">
+                    <div className="font-semibold text-[13px] text-text-primary leading-tight truncate">
+                      {user?.name}
+                    </div>
+                    <div className="text-[11px] text-text-muted truncate mt-0.5">
+                      {user?.email || '-'}
+                    </div>
+                    <div className="mt-1.5">
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                        {user?.role === 'admin' ? 'Super Administrator' : 'Staf User'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      disabled={isLoggingOut}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[12.5px] font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50 text-left"
+                    >
+                      <LogOut className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span>Keluar (Logout)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

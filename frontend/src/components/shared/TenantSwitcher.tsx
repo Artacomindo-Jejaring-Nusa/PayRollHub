@@ -60,8 +60,8 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ variant = 'full'
           }`}
         />
         <div className="flex flex-col text-left">
-          <span className="font-semibold text-text-primary leading-tight">
-            {tenant.shortName}
+          <span className="font-semibold text-text-primary leading-tight whitespace-nowrap">
+            {variant === 'compact' ? tenant.badgeText || tenant.shortName : tenant.shortName}
           </span>
           {variant === 'full' && (
             <span className="text-[10.5px] text-text-muted leading-none font-mono">
@@ -91,8 +91,8 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ variant = 'full'
           }`}
         />
         <div className="flex flex-col text-left">
-          <span className="font-semibold text-text-primary leading-tight flex items-center gap-1.5">
-            {tenant.shortName}
+          <span className="font-semibold text-text-primary leading-tight flex items-center gap-1.5 whitespace-nowrap">
+            {variant === 'compact' ? tenant.badgeText || tenant.shortName : tenant.shortName}
           </span>
           {variant === 'full' && (
             <span className="text-[10.5px] text-text-muted leading-none font-mono">

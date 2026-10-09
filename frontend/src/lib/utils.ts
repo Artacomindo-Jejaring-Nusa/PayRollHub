@@ -37,3 +37,20 @@ export function formatPeriod(period: string | undefined): string {
   }
   return clean;
 }
+
+/**
+ * Build absolute storage URL pointing to the API host
+ */
+export function getStorageUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  const rootHost = apiBase.replace(/\/api\/?$/, '');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/storage/')) {
+    return `${rootHost}${cleanPath}`;
+  }
+  return `${rootHost}/storage${cleanPath}`;
+}

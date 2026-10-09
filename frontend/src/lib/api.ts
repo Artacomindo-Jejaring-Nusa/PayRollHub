@@ -11,12 +11,16 @@ export const api = axios.create({
   },
 });
 
-// Request interceptor to attach Bearer token
+// Request interceptor to attach Bearer token & Developer Access Key
 api.interceptors.request.use(
   (config) => {
     const token = useAuthStore.getState().token;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    const devKey = localStorage.getItem('dev_report_key');
+    if (devKey) {
+      config.headers['X-Dev-Key'] = devKey;
     }
     return config;
   },

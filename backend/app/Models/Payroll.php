@@ -222,5 +222,13 @@ class Payroll extends Model
 
         return $query->where('company', $company);
     }
+
+    /**
+     * Get linked user account if exists.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'nik', 'nik');
+    }
 }
 

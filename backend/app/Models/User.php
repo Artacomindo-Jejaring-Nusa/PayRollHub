@@ -20,6 +20,13 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'nik',
+        'phone',
+        'company',
+        'bank_name',
+        'bank_account',
+        'address',
+        'avatar',
         'password',
         'role',
     ];
@@ -56,18 +63,42 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user is standard user (view & search).
+     * Check if user is standard user (HR / Staff view & search).
      */
     public function isUser(): bool
     {
-        return in_array($this->role, ['user', 'viewer'], true);
+        return $this->role === 'user' || $this->role === 'viewer';
     }
 
     /**
-     * Check if user is karyawan.
+     * Check if user is employee.
      */
-    public function isKaryawan(): bool
+    public function isEmployee(): bool
     {
         return $this->role === 'karyawan';
+    }
+
+    /**
+     * Payroll records linked to this employee by NIK.
+     */
+    public function payrolls()
+    {
+        return $this->hasMany(Payroll::class, 'nik', 'nik')->latest('period');
+    }
+
+    /**
+     * Work reports submitted by this user.
+     */
+    public function workReports()
+    {
+        return $this->hasMany(WorkReport::class)->latest('report_date');
+    }
+
+    /**
+     * Announcements authored by this user.
+     */
+    public function announcements()
+    {
+        return $this->hasMany(Announcement::class, 'author_id');
     }
 }

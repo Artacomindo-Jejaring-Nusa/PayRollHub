@@ -214,8 +214,20 @@ export const UserListPage: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 font-mono text-slate-600">{item.email}</td>
                     <td className="py-3.5 px-4 text-center">
-                      <Badge variant={item.role === 'admin' ? 'admin' : 'viewer'}>
-                        {item.role === 'admin' ? 'Admin (Full Akses)' : 'User (View & Search)'}
+                      <Badge
+                        variant={
+                          item.role === 'admin'
+                            ? 'admin'
+                            : item.role === 'karyawan'
+                            ? 'karyawan'
+                            : 'viewer'
+                        }
+                      >
+                        {item.role === 'admin'
+                          ? 'Admin (Full Akses)'
+                          : item.role === 'karyawan'
+                          ? 'Karyawan (Portal)'
+                          : 'User (View & Search)'}
                       </Badge>
                     </td>
                     <td className="py-3.5 px-4 text-center text-text-muted text-[12px]">
@@ -301,6 +313,7 @@ export const UserListPage: React.FC = () => {
             options={[
               { label: 'Admin (Full Akses: Tambah, Ubah, Hapus, Import)', value: 'admin' },
               { label: 'User (Hanya View & Search Data Penggajian)', value: 'user' },
+              { label: 'Karyawan (Portal Mandiri: Slip Gaji, Laporan, Profil)', value: 'karyawan' },
             ]}
             error={formErrors.role}
           />

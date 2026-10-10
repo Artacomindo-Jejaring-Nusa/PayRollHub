@@ -134,7 +134,7 @@ export const EmployeeProfilePage: React.FC = () => {
 
             <div className="p-3 bg-surface rounded-lg border border-border-subtle">
               <span className="text-text-muted text-[11px] block">Unit Penempatan / Wilayah</span>
-              <span className="font-semibold text-text-primary">{job?.school_unit || job?.province || '-'}</span>
+              <span className="font-semibold text-text-primary">{job?.school_unit || u?.school_unit || job?.province || '-'}</span>
             </div>
 
             <div className="p-3 bg-surface rounded-lg border border-border-subtle">

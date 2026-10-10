@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\Payroll;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class PayrollService
 {
@@ -166,24 +169,101 @@ class PayrollService
     }
 
     /**
-     * Create a new payroll record.
+     * Create a new payroll record and auto-provision employee login.
      */
     public function create(array $data): Payroll
     {
         return DB::transaction(function () use ($data) {
-            return Payroll::create($data);
+            $payroll = Payroll::create($data);
+            self::syncEmployeeAccount($payroll);
+            return $payroll;
         });
     }
 
     /**
-     * Update an existing payroll record.
+     * Update an existing payroll record and keep employee account in sync.
      */
     public function update(Payroll $payroll, array $data): Payroll
     {
         return DB::transaction(function () use ($payroll, $data) {
             $payroll->update($data);
-            return $payroll->fresh();
+            $fresh = $payroll->fresh();
+            self::syncEmployeeAccount($fresh);
+            return $fresh;
         });
+    }
+
+    /**
+     * Automatically ensure employee has a user login and is connected to their school unit.
+     */
+    public static function syncEmployeeAccount(Payroll $payroll): ?User
+    {
+        try {
+            $name = trim($payroll->employee_name ?? '');
+            $nik = trim($payroll->nik ?? '');
+            $schoolUnit = trim($payroll->school_unit ?? '');
+            $company = in_array(strtolower($payroll->company ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
+
+            if (empty($name) && empty($nik)) {
+                return null;
+            }
+
+            // 1. Cari user yang sudah ada berdasarkan NIK
+            $user = null;
+            if (!empty($nik)) {
+                $user = User::where('nik', $nik)->first();
+            }
+
+            // 2. Jika belum ada NIK, coba cari berdasarkan email default
+            $defaultDomain = $company === 'rimamandiri' ? 'riamamandiripratama.com' : 'rimbunbuanasejahtera.com';
+            $defaultEmail = !empty($nik)
+                ? "{$nik}@{$defaultDomain}"
+                : Str::slug($name) . '@karyawan.local';
+
+            if (!$user) {
+                $user = User::where('email', $defaultEmail)->first();
+            }
+
+            if ($user) {
+                // Update unit sekolah dan informasi pendukung agar selalu sinkron dan terkoneksi
+                $updates = [];
+                if (!empty($schoolUnit) && $user->school_unit !== $schoolUnit) {
+                    $updates['school_unit'] = $schoolUnit;
+                }
+                if (!empty($company) && $user->company !== $company) {
+                    $updates['company'] = $company;
+                }
+                if (!empty($payroll->bank_name) && empty($user->bank_name)) {
+                    $updates['bank_name'] = $payroll->bank_name;
+                }
+                if (!empty($payroll->bank_account) && empty($user->bank_account)) {
+                    $updates['bank_account'] = $payroll->bank_account;
+                }
+                if (!empty($updates)) {
+                    $user->update($updates);
+                }
+                return $user;
+            }
+
+            // 3. Jika belum ada akun sama sekali: Buatkan akun login baru otomatis!
+            // Default password: NIK (atau 'password123' jika NIK kosong)
+            $defaultPassword = !empty($nik) ? $nik : 'password123';
+
+            return User::create([
+                'name' => $name,
+                'email' => $defaultEmail,
+                'nik' => !empty($nik) ? $nik : null,
+                'school_unit' => !empty($schoolUnit) ? $schoolUnit : null,
+                'company' => $company,
+                'role' => 'karyawan',
+                'bank_name' => $payroll->bank_name,
+                'bank_account' => $payroll->bank_account,
+                'password' => Hash::make($defaultPassword),
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Gagal auto-provision user untuk karyawan {$payroll->employee_name}: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**

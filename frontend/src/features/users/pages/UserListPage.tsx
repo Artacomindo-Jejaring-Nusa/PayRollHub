@@ -32,6 +32,8 @@ export const UserListPage: React.FC = () => {
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('viewer');
   const [formCompany, setFormCompany] = useState<'rbs' | 'rimamandiri'>('rbs');
+  const [formNik, setFormNik] = useState('');
+  const [formSchoolUnit, setFormSchoolUnit] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -62,6 +64,8 @@ export const UserListPage: React.FC = () => {
     setFormPassword('');
     setFormRole('admin');
     setFormCompany('rbs');
+    setFormNik('');
+    setFormSchoolUnit('');
     setFormErrors({});
     setModalOpen(true);
   };
@@ -73,6 +77,8 @@ export const UserListPage: React.FC = () => {
     setFormPassword('');
     setFormRole(user.role);
     setFormCompany((user.company as any) || 'rbs');
+    setFormNik(user.nik || '');
+    setFormSchoolUnit(user.school_unit || '');
     setFormErrors({});
     setModalOpen(true);
   };
@@ -87,6 +93,8 @@ export const UserListPage: React.FC = () => {
       email: formEmail.trim(),
       role: formRole,
       company: formRole === 'super_admin' ? null : formCompany,
+      nik: formNik.trim() || null,
+      school_unit: formSchoolUnit.trim() || null,
       ...(formPassword.trim() ? { password: formPassword.trim() } : {}),
     };
 
@@ -210,13 +218,25 @@ export const UserListPage: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-text-primary">{item.name}</div>
+                      {item.school_unit && (
+                        <div className="text-[11px] text-emerald-800 font-medium flex items-center gap-1 mt-0.5">
+                          <span>🏫 {item.school_unit}</span>
+                        </div>
+                      )}
                       {currentUser?.id === item.id && (
                         <span className="text-[10px] text-primary font-medium">
                           (Akun Anda Saat Ini)
                         </span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-600">{item.email}</td>
+                    <td className="py-3.5 px-4 text-slate-600">
+                      <div className="font-mono text-[12px]">{item.email}</div>
+                      {item.nik && (
+                        <div className="text-[11px] text-text-muted mt-0.5">
+                          NIK: <span className="font-mono font-medium text-slate-700">{item.nik}</span>
+                        </div>
+                      )}
+                    </td>
                     <td className="py-3.5 px-4 text-center">
                       <Badge
                         variant={
@@ -339,6 +359,27 @@ export const UserListPage: React.FC = () => {
               ]}
               error={formErrors.company}
             />
+          )}
+
+          {formRole === 'karyawan' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100">
+              <Input
+                label="NIK Karyawan"
+                placeholder="Contoh: 320123456789"
+                value={formNik}
+                onChange={(e) => setFormNik(e.target.value)}
+                error={formErrors.nik}
+                helperText="Digunakan sebagai ID login cepat & sandi default"
+              />
+              <Input
+                label="Unit Sekolah / Lokasi"
+                placeholder="Contoh: SD IT Rabbani"
+                value={formSchoolUnit}
+                onChange={(e) => setFormSchoolUnit(e.target.value)}
+                error={formErrors.school_unit}
+                helperText="Terisi otomatis saat import/input gaji"
+              />
+            </div>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-border-row">

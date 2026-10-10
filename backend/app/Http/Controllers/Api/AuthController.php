@@ -41,16 +41,8 @@ class AuthController extends Controller
         // 2. If not found in users, check if valid employee NIK in payrolls (Auto-provisioning karyawan)
         if (!$user && preg_match('/^[A-Za-z0-9\-]+$/', $identifier)) {
             $payroll = Payroll::where('nik', $identifier)->latest('period')->first();
-            if ($payroll && $password === $identifier) {
-                // Auto create account for employee with default password = NIK
-                $user = User::create([
-                    'name' => $payroll->employee_name,
-                    'email' => $payroll->nik . '@karyawan.local',
-                    'nik' => $payroll->nik,
-                    'company' => $payroll->company ?? 'rbs',
-                    'role' => 'karyawan',
-                    'password' => Hash::make($password),
-                ]);
+            if ($payroll) {
+                $user = \App\Services\PayrollService::syncEmployeeAccount($payroll);
             }
         }
 

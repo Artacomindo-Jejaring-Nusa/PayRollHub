@@ -112,7 +112,7 @@ export const EmployeeDashboardPage: React.FC = () => {
             <span>•</span>
             <span>{latest?.position || 'Staf Lapangan'}</span>
             <span>•</span>
-            <span>{latest?.school_unit || latest?.province || tenant.companyLegalName}</span>
+            <span>{latest?.school_unit || user?.school_unit || latest?.province || tenant.companyLegalName}</span>
           </p>
         </div>
 

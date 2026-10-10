@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\Payroll;
+use App\Services\PayrollService;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -278,9 +279,11 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             } else {
                 if ($existing) {
                     $existing->update($payrollData);
+                    PayrollService::syncEmployeeAccount($existing);
                     $this->updatedCount++;
                 } else {
-                    Payroll::create($payrollData);
+                    $newRecord = Payroll::create($payrollData);
+                    PayrollService::syncEmployeeAccount($newRecord);
                     $this->importedCount++;
                 }
             }

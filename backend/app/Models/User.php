@@ -23,6 +23,7 @@ class User extends Authenticatable
         'nik',
         'phone',
         'company',
+        'school_unit',
         'bank_name',
         'bank_account',
         'address',

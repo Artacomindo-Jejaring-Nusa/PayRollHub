@@ -17,4 +17,6 @@ export interface UserFormData {
   password?: string;
   role: UserRole;
   company?: string | null;
+  nik?: string | null;
+  school_unit?: string | null;
 }

@@ -7,6 +7,7 @@ export interface User {
   nik?: string;
   phone?: string;
   company?: string;
+  school_unit?: string | null;
   bank_name?: string;
   bank_account?: string;
   address?: string;

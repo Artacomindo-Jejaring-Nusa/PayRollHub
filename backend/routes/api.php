@@ -88,13 +88,19 @@ Route::middleware('auth:sanctum')->group(function () {
         // Payroll Modifications
         Route::post('/payrolls', [PayrollController::class, 'store']);
         Route::put('/payrolls/{payroll}', [PayrollController::class, 'update']);
-        Route::patch('/payrolls/{payroll}/status', [PayrollController::class, 'updateStatus']);
+        Route::match(['patch', 'post', 'put'], '/payrolls/{payroll}/status', [PayrollController::class, 'updateStatus']);
         Route::delete('/payrolls/{payroll}', [PayrollController::class, 'destroy']);
         Route::post('/payrolls/import/preview', [PayrollController::class, 'previewImport']);
         Route::post('/payrolls/import', [PayrollController::class, 'import']);
 
         // User Account Management
         Route::apiResource('users', UserController::class);
+    });
+
+    // Super Admin Only Operations (Audit Trail / Activity Logs)
+    Route::middleware('super_admin')->group(function () {
+        Route::get('/admin/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
+        Route::get('/admin/activity-logs/stats', [\App\Http\Controllers\Api\ActivityLogController::class, 'stats']);
     });
 });
 

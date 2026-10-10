@@ -26,7 +26,7 @@ class UserController extends Controller
                 $q->where('name', 'like', "%{$s}%")
                   ->orWhere('email', 'like', "%{$s}%")
             )
-            ->when($role && in_array($role, ['admin', 'viewer', 'user', 'karyawan']), fn ($q) => 
+            ->when($role && in_array($role, ['super_admin', 'admin', 'viewer', 'user', 'karyawan']), fn ($q) => 
                 $q->where('role', $role)
             )
             ->latest('id');
@@ -66,6 +66,20 @@ class UserController extends Controller
 
         $user = User::create($data);
 
+        \App\Models\ActivityLog::record(
+            action: 'CREATE_USER',
+            module: 'user',
+            description: "Membuat akun pengguna baru: {$user->name} ({$user->email}, Role: {$user->role})",
+            details: [
+                'target_user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'company' => $user->company,
+            ],
+            company: $user->company
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Pengguna baru berhasil ditambahkan.',
@@ -88,6 +102,20 @@ class UserController extends Controller
 
         $user->update($data);
 
+        \App\Models\ActivityLog::record(
+            action: 'UPDATE_USER',
+            module: 'user',
+            description: "Mengubah data akun pengguna: {$user->name} ({$user->email}, Role: {$user->role})",
+            details: [
+                'target_user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'company' => $user->company,
+            ],
+            company: $user->company
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Data pengguna berhasil diperbarui.',
@@ -106,6 +134,20 @@ class UserController extends Controller
                 'message' => 'Anda tidak dapat menghapus akun Anda sendiri.',
             ], 422);
         }
+
+        \App\Models\ActivityLog::record(
+            action: 'DELETE_USER',
+            module: 'user',
+            description: "MENGHAPUS akun pengguna: {$user->name} ({$user->email}, Role: {$user->role})",
+            details: [
+                'target_user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'company' => $user->company,
+            ],
+            company: $user->company
+        );
 
         $user->delete();
 

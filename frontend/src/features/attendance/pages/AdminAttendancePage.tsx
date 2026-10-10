@@ -287,10 +287,10 @@ export const AdminAttendancePage: React.FC = () => {
 
           {/* Table List */}
           <div className="bg-surface-panel border border-border-subtle rounded-2xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full min-w-[850px] text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-border-subtle bg-surface-container/40 text-text-muted font-semibold">
+                  <tr className="border-b border-border-subtle bg-surface-container/40 text-text-muted font-semibold whitespace-nowrap">
                     <th className="py-3 px-4">Karyawan</th>
                     <th className="py-3 px-3">Jabatan</th>
                     <th className="py-3 px-3">Tanggal</th>

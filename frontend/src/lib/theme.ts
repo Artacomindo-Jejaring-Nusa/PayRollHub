@@ -69,14 +69,14 @@ export const isLockedDomain = (): TenantId | null => {
 };
 
 export const detectInitialTenant = (): TenantId => {
-  // 1. Strictly lock by domain hostname first
-  const locked = isLockedDomain();
-  if (locked) {
-    return locked;
-  }
-
-  // 2. Check URL query param (e.g. ?tenant=riamamandiripratama or ?tenant=rimamandiri)
   if (typeof window !== 'undefined') {
+    // 1. Prioritize explicit selection if saved
+    const stored = localStorage.getItem('payrollhub_active_tenant');
+    if (stored === 'rbs' || stored === 'rimamandiri') {
+      return stored;
+    }
+
+    // 2. Check URL query param (e.g. ?tenant=riamamandiripratama or ?tenant=rimamandiri)
     const urlParams = new URLSearchParams(window.location.search);
     const tenantParam = (urlParams.get('tenant') || urlParams.get('theme') || '').toLowerCase();
     if (
@@ -90,12 +90,12 @@ export const detectInitialTenant = (): TenantId => {
     if (tenantParam === 'rbs' || tenantParam === 'rimbunbuanasejahtera') {
       return 'rbs';
     }
+  }
 
-    // 3. Local storage only on localhost
-    const stored = localStorage.getItem('payrollhub_active_tenant');
-    if (stored === 'rbs' || stored === 'rimamandiri') {
-      return stored;
-    }
+  // 3. Fallback strictly to domain hostname
+  const locked = isLockedDomain();
+  if (locked) {
+    return locked;
   }
 
   return 'rbs';
@@ -117,15 +117,20 @@ export const useTenantTheme = () => {
 
   useEffect(() => {
     const handleStorage = () => {
+      const current = (localStorage.getItem('payrollhub_active_tenant') as TenantId);
+      if (current === 'rbs' || current === 'rimamandiri') {
+        setTenantId(current);
+        applyTenantThemeToDom(current);
+        return;
+      }
       const locked = isLockedDomain();
       if (locked) {
         setTenantId(locked);
         applyTenantThemeToDom(locked);
         return;
       }
-      const current = (localStorage.getItem('payrollhub_active_tenant') as TenantId) || 'rbs';
-      setTenantId(current);
-      applyTenantThemeToDom(current);
+      setTenantId('rbs');
+      applyTenantThemeToDom('rbs');
     };
 
     window.addEventListener('storage', handleStorage);

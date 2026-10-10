@@ -4,7 +4,7 @@ import { useTenantTheme } from '../../../lib/theme';
 import { payrollService } from '../services/payrollService';
 import { INDONESIAN_PROVINCES } from '../../../lib/constants';
 import { formatCurrency } from '../../../lib/utils';
-import { SP_PERIOD_LIST } from '../../../lib/period';
+import { SP_PERIOD_LIST, normalizePeriodToSP } from '../../../lib/period';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
@@ -152,7 +152,7 @@ export const PayrollFormPage: React.FC = () => {
           setSchoolUnit(data.school_unit || '');
           setPosition(data.position || 'Wali Asuh');
           setJoinDate(data.join_date || '');
-          setPeriod(data.period);
+          setPeriod(normalizePeriodToSP(data.period));
           setCompany(data.company === 'rimamandiri' ? 'rimamandiri' : 'rbs');
           setStatus(data.status || 'active');
           setResignDate(data.resign_date || '');
@@ -493,17 +493,28 @@ export const PayrollFormPage: React.FC = () => {
               )}
 
               {/* Surat Pesanan (SP) / Periode */}
-              <Select
-                label="Surat Pesanan (SP) / Periode *"
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                options={SP_PERIOD_LIST.map((sp) => ({
+              {(() => {
+                const spOptions = SP_PERIOD_LIST.map((sp) => ({
                   label: sp.fullLabel,
                   value: sp.code,
-                }))}
-                error={errors.period}
-                required
-              />
+                }));
+                if (period && !spOptions.some((opt) => opt.value === period)) {
+                  spOptions.unshift({
+                    label: `${period} (Periode/SP)`,
+                    value: period,
+                  });
+                }
+                return (
+                  <Select
+                    label="Surat Pesanan (SP) / Periode *"
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    options={spOptions}
+                    error={errors.period}
+                    required
+                  />
+                );
+              })()}
 
               {/* Bank & Nomor Rekening */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">

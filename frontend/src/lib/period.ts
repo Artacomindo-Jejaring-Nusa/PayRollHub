@@ -16,16 +16,53 @@ export const SP_PERIOD_LIST: SPPeriodItem[] = [
   { code: 'SP 8', name: 'Surat Pesanan 8', fullLabel: 'SP 8 (Surat Pesanan 8)' },
   { code: 'SP 9', name: 'Surat Pesanan 9', fullLabel: 'SP 9 (Surat Pesanan 9)' },
   { code: 'SP 10', name: 'Surat Pesanan 10', fullLabel: 'SP 10 (Surat Pesanan 10 — Sekarang)', isCurrent: true },
+  { code: 'SP 11', name: 'Surat Pesanan 11', fullLabel: 'SP 11 (Surat Pesanan 11)' },
+  { code: 'SP 12', name: 'Surat Pesanan 12', fullLabel: 'SP 12 (Surat Pesanan 12)' },
 ];
+
+export const normalizePeriodToSP = (period?: string | null): string => {
+  if (!period) return 'SP 1';
+  const clean = period.trim();
+
+  // Jika sudah format SP, e.g. "SP 1", "SP1", "sp 2"
+  const spMatch = clean.match(/^SP\s*(\d+)$/i);
+  if (spMatch) {
+    return `SP ${spMatch[1]}`;
+  }
+
+  // Format tanggal YYYY-MM lama dari import awal e.g. "2026-08", "2026-03", "2026-09", "2026-01" -> SP 1
+  if (/^2026-(08|03|09|01)$/.test(clean)) {
+    return 'SP 1';
+  }
+
+  // Format tanggal bulan lainnya: "2026-02" -> "SP 2", dst.
+  const ymMatch = clean.match(/^\d{4}-(\d{2})$/);
+  if (ymMatch) {
+    const monthNum = parseInt(ymMatch[1], 10);
+    return `SP ${monthNum}`;
+  }
+
+  // Jika formatnya "Surat Pesanan X"
+  const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
+  if (suratPesananMatch) {
+    return `SP ${suratPesananMatch[1]}`;
+  }
+
+  const found = SP_PERIOD_LIST.find((item) => item.code.toLowerCase() === clean.toLowerCase());
+  if (found) return found.code;
+
+  return clean;
+};
 
 export const formatPeriodDisplay = (period?: string | null): string => {
   if (!period) return '-';
   const clean = period.trim();
+
+  // Cek apakah format SP
+  const spCode = normalizePeriodToSP(clean);
   const match = SP_PERIOD_LIST.find(
-    (item) =>
-      item.code.toLowerCase() === clean.toLowerCase() ||
-      item.code.replace(' ', '').toLowerCase() === clean.toLowerCase() ||
-      clean.toUpperCase().startsWith(item.code.toUpperCase())
+    (item) => item.code.toLowerCase() === spCode.toLowerCase()
   );
+
   return match ? match.fullLabel : clean;
 };

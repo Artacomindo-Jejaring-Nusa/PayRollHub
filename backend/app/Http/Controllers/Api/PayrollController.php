@@ -85,6 +85,20 @@ class PayrollController extends Controller
     {
         $payroll = $this->payrollService->create($request->validated());
 
+        \App\Models\ActivityLog::record(
+            action: 'CREATE_PAYROLL',
+            module: 'payroll',
+            description: "Menambahkan data gaji karyawan: {$payroll->employee_name} ({$payroll->period}) - Wilayah: {$payroll->province}, THP: Rp " . number_format((float) $payroll->take_home_pay, 0, ',', '.'),
+            details: [
+                'payroll_id' => $payroll->id,
+                'employee_name' => $payroll->employee_name,
+                'nik' => $payroll->nik,
+                'period' => $payroll->period,
+                'take_home_pay' => (float) $payroll->take_home_pay,
+            ],
+            company: $payroll->company
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Data penggajian berhasil ditambahkan.',
@@ -99,6 +113,20 @@ class PayrollController extends Controller
     {
         $updated = $this->payrollService->update($payroll, $request->validated());
 
+        \App\Models\ActivityLog::record(
+            action: 'UPDATE_PAYROLL',
+            module: 'payroll',
+            description: "Mengubah data gaji karyawan: {$updated->employee_name} ({$updated->period}) - THP: Rp " . number_format((float) $updated->take_home_pay, 0, ',', '.'),
+            details: [
+                'payroll_id' => $updated->id,
+                'employee_name' => $updated->employee_name,
+                'nik' => $updated->nik,
+                'period' => $updated->period,
+                'take_home_pay' => (float) $updated->take_home_pay,
+            ],
+            company: $updated->company
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Data penggajian berhasil diperbarui.',
@@ -111,6 +139,19 @@ class PayrollController extends Controller
      */
     public function destroy(Payroll $payroll): JsonResponse
     {
+        \App\Models\ActivityLog::record(
+            action: 'DELETE_PAYROLL',
+            module: 'payroll',
+            description: "MENGHAPUS data gaji karyawan: {$payroll->employee_name} (NIK: {$payroll->nik}, Periode: {$payroll->period})",
+            details: [
+                'payroll_id' => $payroll->id,
+                'employee_name' => $payroll->employee_name,
+                'nik' => $payroll->nik,
+                'period' => $payroll->period,
+            ],
+            company: $payroll->company
+        );
+
         $this->payrollService->delete($payroll);
 
         return response()->json([
@@ -135,6 +176,19 @@ class PayrollController extends Controller
             $validated['resign_date'] ?? null
         );
 
+        \App\Models\ActivityLog::record(
+            action: 'UPDATE_STATUS',
+            module: 'payroll',
+            description: "Mengubah status karyawan {$updated->employee_name} menjadi " . ($validated['status'] === 'off' ? 'OFF / NON-AKTIF' : 'AKTIF') . (!empty($validated['resign_date']) ? " (Tgl Keluar: {$validated['resign_date']})" : ''),
+            details: [
+                'payroll_id' => $updated->id,
+                'employee_name' => $updated->employee_name,
+                'status' => $validated['status'],
+                'resign_date' => $validated['resign_date'] ?? null,
+            ],
+            company: $updated->company
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => $validated['status'] === 'off'
@@ -150,7 +204,7 @@ class PayrollController extends Controller
     public function export(Request $request): Response
     {
         $user = $request->user();
-        $isAdmin = $user && $user->role === 'admin';
+        $isAdmin = $user && $user->isAdmin();
 
         if (!$isAdmin) {
             abort(403, 'Akses ditolak. Fitur ekspor laporan hanya dapat diakses oleh Administrator.');
@@ -158,6 +212,18 @@ class PayrollController extends Controller
 
         $format = strtolower($request->input('format', 'xlsx'));
         $filename = 'rekap_payroll_' . date('Ymd_His');
+
+        \App\Models\ActivityLog::record(
+            action: 'EXPORT_DATA',
+            module: 'payroll',
+            description: "Mengekspor data penggajian format " . strtoupper($format),
+            details: [
+                'format' => $format,
+                'period' => $request->input('period'),
+                'company' => $request->input('company'),
+            ],
+            company: $request->input('company')
+        );
 
         $baseQuery = Payroll::query()
             ->search($request->input('search'))
@@ -510,6 +576,20 @@ class PayrollController extends Controller
         $targetSheet = $this->resolveTargetSheet($request->file('file'), $period);
         $import = new PayrollImport($period, isPreview: false, targetSheet: $targetSheet, defaultCompany: $company);
         Excel::import($import, $request->file('file'));
+
+        \App\Models\ActivityLog::record(
+            action: 'IMPORT_EXCEL',
+            module: 'payroll',
+            description: "Mengimpor data penggajian Excel periode {$period} (Entitas: " . strtoupper($company) . ") - Baru: {$import->getImportedCount()} baris, Diperbarui: {$import->getUpdatedCount()} baris.",
+            details: [
+                'period' => $period,
+                'company' => $company,
+                'imported_count' => $import->getImportedCount(),
+                'updated_count' => $import->getUpdatedCount(),
+                'file_name' => $request->file('file')?->getClientOriginalName(),
+            ],
+            company: $company
+        );
 
         return response()->json([
             'status' => 'success',

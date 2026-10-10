@@ -22,6 +22,19 @@ api.interceptors.request.use(
     if (devKey) {
       config.headers['X-Dev-Key'] = devKey;
     }
+
+    // Attach active tenant as safe query parameter (avoids CORS preflight header blockage)
+    const isAuthRoute = config.url?.includes('/login') || config.url?.includes('/register');
+    if (!isAuthRoute) {
+      const activeTenant = localStorage.getItem('payrollhub_active_tenant');
+      if (activeTenant) {
+        config.params = {
+          ...config.params,
+          company: activeTenant,
+        };
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

@@ -124,10 +124,18 @@ class AdminAttendanceController extends Controller
         $setting = AttendanceSetting::getActiveSetting();
         $setting->update($validated);
 
+        \App\Models\ActivityLog::record(
+            action: 'UPDATE_ATTENDANCE_SETTING',
+            module: 'attendance',
+            description: "Memperbarui konfigurasi lokasi kantor '{$setting->office_name}' (Radius: {$setting->radius_meters}m, Jam Kerja: {$setting->work_start_time} - {$setting->work_end_time})",
+            details: $validated,
+            company: $setting->tenant_id
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Pengaturan lokasi kantor & radius absensi berhasil disimpan.',
-            'data' => $setting,
+            'data' => $setting->fresh(),
         ]);
     }
 

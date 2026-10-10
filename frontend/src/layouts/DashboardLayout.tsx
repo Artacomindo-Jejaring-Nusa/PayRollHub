@@ -18,6 +18,7 @@ import {
   Bell,
   Clock,
   ChevronDown,
+  ShieldAlert,
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
@@ -88,12 +89,29 @@ export const DashboardLayout: React.FC = () => {
       path: '/users',
       icon: <Users className="w-4 h-4" />,
       adminOnly: true,
+      superAdminOnly: false,
+    },
+    {
+      label: 'Log Aktivitas',
+      path: '/activity-logs',
+      icon: <ShieldAlert className="w-4 h-4" />,
+      adminOnly: true,
+      superAdminOnly: true,
     },
   ];
 
-  const visibleNavItems = navItems.filter(
-    (item) => !item.adminOnly || user?.role === 'admin'
-  );
+  const isSuperAdmin = user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || isSuperAdmin;
+
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.superAdminOnly) {
+      return isSuperAdmin;
+    }
+    if (item.adminOnly) {
+      return isAdmin;
+    }
+    return true;
+  });
 
   const isItemActive = (path: string) => {
     return path === '/dashboard'
@@ -108,39 +126,39 @@ export const DashboardLayout: React.FC = () => {
   // ==============================================================
   if (isTopNavLayout) {
     return (
-      <div className="min-h-screen bg-surface flex flex-col text-on-surface">
+      <div className="min-h-screen bg-surface flex flex-col text-on-surface w-full overflow-x-hidden">
         {/* Top Navbar Sticky */}
         <header className="bg-surface-panel border-b border-border-subtle sticky top-0 z-30 shadow-xs">
-          <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="w-full px-3 sm:px-4 lg:px-6 h-16 flex items-center justify-between gap-2">
             {/* Brand Logo & Title */}
-            <div className="flex items-center space-x-2.5 sm:space-x-3 flex-shrink-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
+            <div className="flex items-center space-x-2 sm:space-x-2.5 flex-shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
                 <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <span className="font-headline-page text-[16px] sm:text-[17px] font-bold text-text-primary tracking-tight whitespace-nowrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-headline-page text-[15px] sm:text-[16px] font-bold text-text-primary tracking-tight whitespace-nowrap">
                     HRD Mandiri
                   </span>
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wide whitespace-nowrap">
+                  <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wide whitespace-nowrap">
                     {tenant.badgeText}
                   </span>
                 </div>
-                <span className="hidden 2xl:block text-[11px] text-text-muted font-medium truncate max-w-[180px]">
+                <span className="hidden 2xl:block text-[10.5px] text-text-muted font-medium truncate max-w-[160px]">
                   {tenant.companyLegalName}
                 </span>
               </div>
             </div>
 
             {/* Desktop Horizontal Navigation Links (Menu di atas) */}
-            <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 mx-1.5 xl:mx-3 flex-shrink-0">
+            <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 2xl:gap-1.5 mx-1 flex-1 min-w-0 justify-center overflow-x-auto no-scrollbar scrollbar-none py-1">
               {visibleNavItems.map((item) => {
                 const active = isItemActive(item.path);
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-1.5 px-2.5 xl:px-3 py-1.5 rounded-lg text-[12.5px] xl:text-[13px] font-medium transition-all whitespace-nowrap ${
+                    className={`flex items-center gap-1.5 px-2 xl:px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] 2xl:text-[13px] font-medium transition-all whitespace-nowrap ${
                       active
                         ? 'bg-primary text-white shadow-xs font-semibold'
                         : 'text-text-primary hover:bg-surface-container hover:text-primary'
@@ -149,7 +167,31 @@ export const DashboardLayout: React.FC = () => {
                     <span className={active ? 'text-white' : 'text-text-muted'}>
                       {item.icon}
                     </span>
-                    <span>{item.label}</span>
+                    <span>
+                      {item.label === 'Data Penggajian' ? (
+                        <>
+                          <span className="hidden 2xl:inline">Data </span>
+                          <span>Penggajian</span>
+                        </>
+                      ) : item.label === 'Laporan Kerja' ? (
+                        <>
+                          <span className="hidden 2xl:inline">Laporan </span>
+                          <span>Kerja</span>
+                        </>
+                      ) : item.label === 'Manajemen Pengguna' ? (
+                        <>
+                          <span className="hidden 2xl:inline">Manajemen </span>
+                          <span>Pengguna</span>
+                        </>
+                      ) : item.label === 'Log Aktivitas' ? (
+                        <>
+                          <span className="hidden 2xl:inline">Log </span>
+                          <span>Aktivitas</span>
+                        </>
+                      ) : (
+                        item.label
+                      )}
+                    </span>
                     {item.badge && <span className="text-[10px] ml-0.5">{item.badge}</span>}
                   </Link>
                 );
@@ -157,25 +199,25 @@ export const DashboardLayout: React.FC = () => {
             </nav>
 
             {/* Right Controls */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0 ml-auto">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto">
               <TenantSwitcher variant="compact" />
 
               <div className="hidden sm:block h-5 w-px bg-border-subtle" />
 
-              {/* User Profile Dropdown (Menggantikan tombol logout terpisah agar tidak offside) */}
+              {/* User Profile Dropdown */}
               <div className="relative" ref={profileRef}>
                 <button
                   type="button"
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="flex items-center gap-2 py-1 px-1.5 sm:px-2 rounded-xl hover:bg-surface-container border border-transparent hover:border-border-subtle transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 sm:gap-2 py-1 px-1.5 sm:px-2 rounded-xl hover:bg-surface-container border border-transparent hover:border-border-subtle transition-all cursor-pointer"
                   title="Menu Profil & Akun"
                 >
-                  <div className="text-right hidden xl:block">
+                  <div className="text-right hidden 2xl:block">
                     <div className="font-semibold text-[12.5px] text-text-primary leading-tight truncate max-w-[120px]">
                       {user?.name}
                     </div>
                     <div className="text-[10.5px] text-text-muted leading-tight">
-                      {user?.role === 'admin' ? 'Admin' : 'Staf'}
+                      {isSuperAdmin ? 'Super Admin' : (isAdmin ? 'Admin' : 'Staf')}
                     </div>
                   </div>
                   <div
@@ -202,8 +244,14 @@ export const DashboardLayout: React.FC = () => {
                         {user?.email || '-'}
                       </div>
                       <div className="mt-1.5">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          {user?.role === 'admin' ? 'Super Administrator' : 'Staf User'}
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          isSuperAdmin
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : (isAdmin
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200')
+                        }`}>
+                          {isSuperAdmin ? '⭐ Super Administrator' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
                         </span>
                       </div>
                     </div>
@@ -285,7 +333,7 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-5 lg:p-6 max-w-7xl w-full mx-auto overflow-x-hidden">
           <Outlet />
         </main>
       </div>
@@ -297,7 +345,7 @@ export const DashboardLayout: React.FC = () => {
   //    Sidebar tetap di samping kiri
   // ==============================================================
   return (
-    <div className="min-h-screen bg-surface flex flex-col lg:flex-row text-on-surface">
+    <div className="min-h-screen bg-surface flex flex-col lg:flex-row text-on-surface w-full overflow-x-hidden">
       {/* Mobile Header Bar */}
       <div className="lg:hidden bg-surface-panel border-b border-border-subtle px-4 py-3 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center space-x-2.5">
@@ -397,8 +445,8 @@ export const DashboardLayout: React.FC = () => {
                 {user?.email || '-'}
               </div>
             </div>
-            <Badge variant={user?.role === 'admin' ? 'admin' : 'user'}>
-              {user?.role === 'admin' ? 'Admin' : 'User'}
+            <Badge variant={isSuperAdmin ? 'super_admin' : (isAdmin ? 'admin' : 'user')}>
+              {isSuperAdmin ? '⭐ Super Admin' : (isAdmin ? 'Admin' : 'User')}
             </Badge>
           </div>
 
@@ -452,7 +500,7 @@ export const DashboardLayout: React.FC = () => {
                     {user?.name}
                   </div>
                   <div className="text-[11px] text-text-muted">
-                    {user?.role === 'admin' ? 'Super Administrator' : 'Staf User'}
+                    {isSuperAdmin ? 'Super Admin' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
                   </div>
                 </div>
                 <div className="w-9 h-9 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white shrink-0">
@@ -471,8 +519,14 @@ export const DashboardLayout: React.FC = () => {
                       {user?.email || '-'}
                     </div>
                     <div className="mt-1.5">
-                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
-                        {user?.role === 'admin' ? 'Super Administrator' : 'Staf User'}
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        isSuperAdmin
+                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                          : (isAdmin
+                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                            : 'bg-slate-100 text-slate-700 border border-slate-200')
+                      }`}>
+                        {isSuperAdmin ? '⭐ Super Administrator' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
                       </span>
                     </div>
                   </div>
@@ -497,7 +551,7 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-5 lg:p-6 max-w-7xl w-full mx-auto overflow-x-hidden">
           <Outlet />
         </main>
       </div>

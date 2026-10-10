@@ -31,6 +31,7 @@ export const UserListPage: React.FC = () => {
   const [formEmail, setFormEmail] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('viewer');
+  const [formCompany, setFormCompany] = useState<'rbs' | 'rimamandiri'>('rbs');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,7 +60,8 @@ export const UserListPage: React.FC = () => {
     setFormName('');
     setFormEmail('');
     setFormPassword('');
-    setFormRole('user');
+    setFormRole('admin');
+    setFormCompany('rbs');
     setFormErrors({});
     setModalOpen(true);
   };
@@ -70,6 +72,7 @@ export const UserListPage: React.FC = () => {
     setFormEmail(user.email);
     setFormPassword('');
     setFormRole(user.role);
+    setFormCompany((user.company as any) || 'rbs');
     setFormErrors({});
     setModalOpen(true);
   };
@@ -83,6 +86,7 @@ export const UserListPage: React.FC = () => {
       name: formName.trim(),
       email: formEmail.trim(),
       role: formRole,
+      company: formRole === 'super_admin' ? null : formCompany,
       ...(formPassword.trim() ? { password: formPassword.trim() } : {}),
     };
 
@@ -216,15 +220,19 @@ export const UserListPage: React.FC = () => {
                     <td className="py-3.5 px-4 text-center">
                       <Badge
                         variant={
-                          item.role === 'admin'
+                          item.role === 'super_admin'
+                            ? 'super_admin'
+                            : item.role === 'admin'
                             ? 'admin'
                             : item.role === 'karyawan'
                             ? 'karyawan'
                             : 'viewer'
                         }
                       >
-                        {item.role === 'admin'
-                          ? 'Admin (Full Akses)'
+                        {item.role === 'super_admin'
+                          ? '⭐ Super Admin'
+                          : item.role === 'admin'
+                          ? `Admin (${item.company?.toUpperCase() || 'RBS'})`
                           : item.role === 'karyawan'
                           ? 'Karyawan (Portal)'
                           : 'User (View & Search)'}
@@ -311,12 +319,27 @@ export const UserListPage: React.FC = () => {
             value={formRole}
             onChange={(e) => setFormRole(e.target.value as UserRole)}
             options={[
-              { label: 'Admin (Full Akses: Tambah, Ubah, Hapus, Import)', value: 'admin' },
-              { label: 'User (Hanya View & Search Data Penggajian)', value: 'user' },
-              { label: 'Karyawan (Portal Mandiri: Slip Gaji, Laporan, Profil)', value: 'karyawan' },
+              { label: '⭐ Super Admin (Akses Kedua Dashboard & Melihat Audit Log)', value: 'super_admin' },
+              { label: '🛡️ Admin Perusahaan (Akses Penuh Kelola Data Gaji & Absensi)', value: 'admin' },
+              { label: '👤 User (Hanya View & Search Data Penggajian)', value: 'user' },
+              { label: '📱 Karyawan (Portal Mandiri: Slip Gaji, Laporan, Profil)', value: 'karyawan' },
             ]}
             error={formErrors.role}
           />
+
+          {formRole !== 'super_admin' && (
+            <Select
+              label="Entitas Perusahaan"
+              required
+              value={formCompany}
+              onChange={(e) => setFormCompany(e.target.value as 'rbs' | 'rimamandiri')}
+              options={[
+                { label: 'PT Rimbun Buana Sejahtera (RBS)', value: 'rbs' },
+                { label: 'PT Riama Mandiri Pratama (RIMA)', value: 'rimamandiri' },
+              ]}
+              error={formErrors.company}
+            />
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-border-row">
             <Button

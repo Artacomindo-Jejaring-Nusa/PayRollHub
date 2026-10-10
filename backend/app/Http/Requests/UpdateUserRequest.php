@@ -25,7 +25,8 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users', 'email')->ignore($userId),
             ],
             'password' => ['nullable', 'string', 'min:6'],
-            'role' => ['required', 'in:admin,user,viewer,karyawan'],
+            'role' => ['required', 'in:super_admin,admin,user,viewer,karyawan'],
+            'company' => ['nullable', 'string', 'in:rbs,rimamandiri'],
         ];
     }
 

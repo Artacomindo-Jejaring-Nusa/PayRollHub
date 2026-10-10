@@ -14,25 +14,35 @@ class PayrollService
      */
     public function resolveCompany(Request $request): ?string
     {
-        $company = $request->input('company');
-        if (empty($company)) {
-            $company = $request->header('X-Tenant-ID');
-        }
+        $user = $request->user();
 
-        if (empty($company)) {
+        // 1. Super Admin: Bebas berpindah dan mengakses kedua Dashboard
+        if ($user && $user->isSuperAdmin()) {
+            $company = $request->input('company') ?: $request->header('X-Tenant-ID');
+            if (!empty($company) && in_array(strtolower($company), ['rbs', 'rimamandiri', 'all'])) {
+                return $company === 'all' ? null : strtolower($company);
+            }
+            // Fallback ke domain origin yang sedang dibuka
             $origin = $request->header('Origin') ?: $request->header('Referer') ?: $request->getHost();
             if ($origin) {
                 $originLower = strtolower($origin);
                 if (str_contains($originLower, 'riama') || str_contains($originLower, 'rimamandiri')) {
-                    $company = 'rimamandiri';
+                    return 'rimamandiri';
                 } elseif (str_contains($originLower, 'rimbun')) {
-                    $company = 'rbs';
+                    return 'rbs';
                 }
             }
+            return null;
         }
 
-        $user = $request->user();
-        if ($user && $user->role !== 'admin') {
+        // 2. Admin biasa & User: Terkunci ketat ke perusahaannya masing-masing
+        if ($user && !empty($user->company)) {
+            return strtolower($user->company);
+        }
+
+        // 3. Fallback untuk request publik / guest
+        $company = $request->input('company') ?: $request->header('X-Tenant-ID');
+        if (empty($company)) {
             $origin = $request->header('Origin') ?: $request->header('Referer') ?: $request->getHost();
             if ($origin) {
                 $originLower = strtolower($origin);

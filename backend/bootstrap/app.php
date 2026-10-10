@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureIsAdmin;
+use App\Http\Middleware\EnsureIsSuperAdmin;
 use App\Http\Middleware\SecurityHeadersMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeadersMiddleware::class);
         $middleware->alias([
             'admin' => EnsureIsAdmin::class,
+            'super_admin' => EnsureIsSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

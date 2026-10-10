@@ -69,6 +69,16 @@ class AuthController extends Controller
         $tokenName = $request->boolean('remember_me') ? 'auth_token_remembered' : 'auth_token';
         $token = $user->createToken($tokenName)->plainTextToken;
 
+        // Catat activity log login
+        \App\Models\ActivityLog::record(
+            action: 'LOGIN',
+            module: 'auth',
+            description: "Pengguna {$user->name} ({$user->role}) berhasil masuk ke sistem.",
+            details: ['email' => $user->email, 'role' => $user->role],
+            company: $user->company,
+            user: $user
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Login berhasil.',

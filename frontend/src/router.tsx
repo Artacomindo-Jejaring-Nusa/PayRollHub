@@ -19,6 +19,7 @@ import { AnnouncementManagePage } from './features/announcements/pages/Announcem
 import { AdminWorkReportsPage } from './features/reports/pages/AdminWorkReportsPage';
 import { EmployeeAttendancePage } from './features/attendance/pages/EmployeeAttendancePage';
 import { AdminAttendancePage } from './features/attendance/pages/AdminAttendancePage';
+import { ActivityLogsPage } from './features/activityLogs/pages/ActivityLogsPage';
 
 // Guard: Must be authenticated
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -47,10 +48,19 @@ const EmployeeRoute: React.FC<{ children: React.ReactElement }> = ({ children })
   return children;
 };
 
-// Guard: Must be Admin
+// Guard: Must be Admin or Super Admin
 const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { user } = useAuthStore();
-  if (user?.role !== 'admin') {
+  if (user?.role !== 'admin' && user?.role !== 'super_admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
+// Guard: Must be Super Admin
+const SuperAdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user } = useAuthStore();
+  if (user?.role !== 'super_admin') {
     return <Navigate to="/dashboard" replace />;
   }
   return children;
@@ -163,6 +173,14 @@ export const AppRouter: React.FC = () => {
             <AdminRoute>
               <UserListPage />
             </AdminRoute>
+          }
+        />
+        <Route
+          path="/activity-logs"
+          element={
+            <SuperAdminRoute>
+              <ActivityLogsPage />
+            </SuperAdminRoute>
           }
         />
       </Route>

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTenantTheme, TENANT_CONFIGS, TenantId } from '../../lib/theme';
 import { useAuthStore } from '../../store/authStore';
-import { Building2, ChevronDown, Check, Globe } from 'lucide-react';
+import { Building2, ChevronDown, Check, Globe, ExternalLink } from 'lucide-react';
 
 interface TenantSwitcherProps {
   variant?: 'compact' | 'full';
@@ -10,7 +10,7 @@ interface TenantSwitcherProps {
 export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ variant = 'full' }) => {
   const { tenant, tenantId, switchTenant } = useTenantTheme();
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'admin';
+  const isSuperAdmin = user?.role === 'super_admin';
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -25,26 +25,15 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ variant = 'full'
   }, []);
 
   const handleSelect = (id: TenantId) => {
-    if (typeof window !== 'undefined') {
-      const host = window.location.hostname.toLowerCase();
-      const isProduction = host.includes('riamamandiripratama') || host.includes('rimbunbuanasejahtera');
-      if (isProduction) {
-        if (id === 'rimamandiri' && !host.includes('riamamandiripratama')) {
-          window.location.href = 'https://riamamandiripratama.com/payrolls';
-          return;
-        }
-        if (id === 'rbs' && !host.includes('rimbunbuanasejahtera')) {
-          window.location.href = 'https://rimbunbuanasejahtera.com/payrolls';
-          return;
-        }
-      }
-    }
     switchTenant(id);
+    localStorage.setItem('payrollhub_active_tenant', id);
     setIsOpen(false);
+    window.location.reload();
   };
 
-  // Level user/staff: Kunci dan jangan tampilkan menu beralih tenant
-  if (!isAdmin) {
+  // Level admin biasa & user/staff: Kunci dan jangan tampilkan menu beralih tenant
+  // Hanya Super Admin yang bisa masuk dan beralih ke kedua Dashboard
+  if (!isSuperAdmin) {
     return (
       <div
         className={`flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-panel shadow-2xs select-none ${
@@ -141,6 +130,30 @@ export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ variant = 'full'
                 </button>
               );
             })}
+          </div>
+
+          <div className="p-2 border-t border-border-row space-y-1 bg-surface-container/30">
+            <div className="px-2 py-0.5 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+              Buka Domain Langsung
+            </div>
+            <a
+              href="https://rimbunbuanasejahtera.com/dashboard"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[11.5px] text-blue-700 hover:bg-blue-50/80 transition-colors"
+            >
+              <span>🌐 rimbunbuanasejahtera.com</span>
+              <ExternalLink className="w-3 h-3 text-blue-500" />
+            </a>
+            <a
+              href="https://riamamandiripratama.com/dashboard"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-[11.5px] text-emerald-700 hover:bg-emerald-50/80 transition-colors"
+            >
+              <span>🌐 riamamandiripratama.com</span>
+              <ExternalLink className="w-3 h-3 text-emerald-500" />
+            </a>
           </div>
         </div>
       )}

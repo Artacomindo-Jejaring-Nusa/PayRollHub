@@ -14,13 +14,25 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Admin User (Full Access)
+        // 0. Super Admin (Akses Kedua Dashboard & Melihat Log Aktivitas)
+        User::updateOrCreate(
+            ['email' => 'superadmin@payrollhub.com'],
+            [
+                'name' => 'Super Administrator',
+                'password' => 'password123',
+                'role' => 'super_admin',
+                'company' => null,
+            ]
+        );
+
+        // 1. Admin User (Full Access Satu Entitas)
         User::updateOrCreate(
             ['email' => 'admin@payrollhub.com'],
             [
                 'name' => 'Administrator HR',
                 'password' => 'password123',
                 'role' => 'admin',
+                'company' => 'rbs',
             ]
         );
 

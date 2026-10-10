@@ -34,7 +34,7 @@
     # Always set CORS headers for API requests
     SetEnvIf Origin "https://(rimbunbuanasejahtera\.com|riamamandiripratama\.com|www\.rimbunbuanasejahtera\.com|www\.riamamandiripratama\.com)$" CORS_ORIGIN=$0
     Header always set Access-Control-Allow-Origin "%{CORS_ORIGIN}e" env=CORS_ORIGIN
-    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" env=CORS_ORIGIN
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin" env=CORS_ORIGIN
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" env=CORS_ORIGIN
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Dev-Key, X-Tenant-ID, x-tenant-id" env=CORS_ORIGIN
     Header always set Access-Control-Max-Age "86400" env=CORS_ORIGIN
 </IfModule>

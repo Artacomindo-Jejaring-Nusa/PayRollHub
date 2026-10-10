@@ -32,7 +32,7 @@ class UpdatePayrollRequest extends FormRequest
             'resign_date' => ['nullable', 'string', 'max:50'],
             'status' => ['nullable', 'string', 'in:active,off'],
             'company' => ['nullable', 'string', 'max:50'],
-            'period' => ['required', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+            'period' => ['required', 'string', 'max:50'],
             'net_base_price' => ['nullable', 'numeric', 'min:0'],
             'bpjs_kes' => ['nullable', 'numeric', 'min:0'],
             'bpjs_tk' => ['nullable', 'numeric', 'min:0'],
@@ -102,8 +102,7 @@ class UpdatePayrollRequest extends FormRequest
         return [
             'employee_name.required' => 'Nama lengkap karyawan wajib diisi.',
             'province.required' => 'Wilayah / Provinsi wajib dipilih.',
-            'period.required' => 'Periode gaji wajib diisi.',
-            'period.regex' => 'Format periode harus YYYY-MM (contoh: 2026-03).',
+            'period.required' => 'Surat Pesanan (SP) / Periode wajib diisi.',
             'basic_salary.required' => 'Gaji pokok / Take Home Pay wajib diisi.',
             'basic_salary.min' => 'Gaji pokok tidak boleh bernilai negatif.',
         ];

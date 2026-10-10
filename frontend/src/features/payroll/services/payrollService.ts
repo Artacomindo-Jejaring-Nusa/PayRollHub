@@ -50,7 +50,7 @@ export const payrollService = {
     status: 'active' | 'off',
     resignDate?: string | null
   ): Promise<PayrollItem> => {
-    const response = await api.patch<{ status: string; data: PayrollItem }>(
+    const response = await api.put<{ status: string; data: PayrollItem }>(
       `/payrolls/${id}/status`,
       { status, resign_date: resignDate }
     );

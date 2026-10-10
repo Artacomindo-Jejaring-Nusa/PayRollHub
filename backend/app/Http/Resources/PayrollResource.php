@@ -15,7 +15,7 @@ class PayrollResource extends JsonResource
     public function toArray(Request $request): array
     {
         $user = $request->user();
-        $isAdmin = $user && $user->role === 'admin';
+        $isAdmin = $user && $user->isAdmin();
 
         return [
             'id' => $this->id,

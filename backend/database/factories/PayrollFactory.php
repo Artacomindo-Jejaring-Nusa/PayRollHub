@@ -43,6 +43,7 @@ class PayrollFactory extends Factory
             'allowance' => $allowance,
             'deduction' => $deduction,
             'take_home_pay' => $takeHomePay,
+            'company' => 'rbs',
         ];
     }
 }

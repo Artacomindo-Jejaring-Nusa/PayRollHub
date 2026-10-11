@@ -18,11 +18,17 @@ class AdminWorkReportController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $currentUser = $request->user();
         $status = $request->input('status');
         $search = $request->input('search');
         $date = $request->input('date');
 
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
+            : ($currentUser->company ?: 'rbs');
+
         $reports = WorkReport::with(['user:id,name,nik,company,phone', 'reviewer:id,name'])
+            ->when($targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $targetCompany)))
             ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
             ->when($date, fn ($q) => $q->whereDate('report_date', $date))
             ->when($search, function ($q, $s) {
@@ -56,6 +62,14 @@ class AdminWorkReportController extends Controller
      */
     public function updateStatus(Request $request, WorkReport $workReport): JsonResponse
     {
+        $currentUser = $request->user();
+        $workReport->load('user');
+        if (!$currentUser->isSuperAdmin()) {
+            if ($workReport->user && $workReport->user->company !== $currentUser->company) {
+                abort(403, 'Akses ditolak. Anda tidak memiliki izin memeriksa laporan kerja perusahaan lain.');
+            }
+        }
+
         $validated = $request->validate([
             'status' => ['required', 'string', 'in:approved,rejected,pending'],
             'feedback' => ['nullable', 'string', 'max:1000'],
@@ -64,7 +78,7 @@ class AdminWorkReportController extends Controller
         $workReport->update([
             'status' => $validated['status'],
             'feedback' => $validated['feedback'] ?? $workReport->feedback,
-            'reviewed_by' => $request->user()->id,
+            'reviewed_by' => $currentUser->id,
             'reviewed_at' => now(),
         ]);
 
@@ -80,6 +94,11 @@ class AdminWorkReportController extends Controller
      */
     public function export(Request $request)
     {
+        $currentUser = $request->user();
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
+            : ($currentUser->company ?: 'rbs');
+
         $format = strtolower($request->input('format', 'xlsx'));
         $filename = 'rekap_laporan_kerja_' . date('Ymd_His');
 
@@ -89,6 +108,7 @@ class AdminWorkReportController extends Controller
 
         if ($format === 'pdf') {
             $reports = WorkReport::with(['user', 'reviewer'])
+                ->when($targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $targetCompany)))
                 ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
                 ->when($date, fn ($q) => $q->whereDate('report_date', $date))
                 ->when($search, function ($q, $s) {
@@ -123,7 +143,14 @@ class AdminWorkReportController extends Controller
      */
     public function downloadSinglePdf(WorkReport $workReport)
     {
+        $currentUser = request()->user();
         $workReport->load(['user', 'reviewer']);
+
+        if ($currentUser && !$currentUser->isSuperAdmin()) {
+            if ($workReport->user && $workReport->user->company !== $currentUser->company) {
+                abort(403, 'Akses ditolak. Anda tidak memiliki izin mengunduh laporan kerja perusahaan lain.');
+            }
+        }
 
         $photos = [
             'absen' => $this->convertPhotoToBase64($workReport->photo_absen),

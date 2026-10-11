@@ -26,6 +26,7 @@ class LoginRequest extends FormRequest
             'email' => ['required_without:identifier', 'string'],
             'password' => ['required', 'string'],
             'remember_me' => ['nullable', 'boolean'],
+            'company' => ['nullable', 'string', 'max:50'],
         ];
     }
 

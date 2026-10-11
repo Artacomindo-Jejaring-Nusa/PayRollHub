@@ -70,8 +70,10 @@ class PayrollController extends Controller
     /**
      * Display the specified payroll record.
      */
-    public function show(Payroll $payroll): JsonResponse
+    public function show(Request $request, Payroll $payroll): JsonResponse
     {
+        $this->authorizePayrollCompany($payroll, $request);
+
         return response()->json([
             'status' => 'success',
             'data' => new PayrollResource($payroll),
@@ -83,7 +85,15 @@ class PayrollController extends Controller
      */
     public function store(StorePayrollRequest $request): JsonResponse
     {
-        $payroll = $this->payrollService->create($request->validated());
+        $data = $request->validated();
+        $company = $this->payrollService->resolveCompany($request);
+
+        // Non-superadmin cannot create payroll for another company
+        if (!$request->user()->isSuperAdmin() || empty($data['company'])) {
+            $data['company'] = $company;
+        }
+
+        $payroll = $this->payrollService->create($data);
 
         \App\Models\ActivityLog::record(
             action: 'CREATE_PAYROLL',
@@ -111,7 +121,14 @@ class PayrollController extends Controller
      */
     public function update(UpdatePayrollRequest $request, Payroll $payroll): JsonResponse
     {
-        $updated = $this->payrollService->update($payroll, $request->validated());
+        $this->authorizePayrollCompany($payroll, $request);
+
+        $data = $request->validated();
+        if (!$request->user()->isSuperAdmin()) {
+            unset($data['company']); // Cannot switch payroll to another company
+        }
+
+        $updated = $this->payrollService->update($payroll, $data);
 
         \App\Models\ActivityLog::record(
             action: 'UPDATE_PAYROLL',
@@ -137,8 +154,10 @@ class PayrollController extends Controller
     /**
      * Remove the specified payroll record from storage. (Admin only)
      */
-    public function destroy(Payroll $payroll): JsonResponse
+    public function destroy(Request $request, Payroll $payroll): JsonResponse
     {
+        $this->authorizePayrollCompany($payroll, $request);
+
         \App\Models\ActivityLog::record(
             action: 'DELETE_PAYROLL',
             module: 'payroll',
@@ -204,6 +223,8 @@ class PayrollController extends Controller
      */
     public function updateStatus(Request $request, Payroll $payroll): JsonResponse
     {
+        $this->authorizePayrollCompany($payroll, $request);
+
         $validated = $request->validate([
             'status' => ['required', 'string', 'in:active,off'],
             'resign_date' => ['nullable', 'string', 'max:50'],
@@ -252,6 +273,8 @@ class PayrollController extends Controller
         $format = strtolower($request->input('format', 'xlsx'));
         $filename = 'rekap_payroll_' . date('Ymd_His');
 
+        $resolvedCompany = $this->payrollService->resolveCompany($request);
+
         \App\Models\ActivityLog::record(
             action: 'EXPORT_DATA',
             module: 'payroll',
@@ -259,9 +282,9 @@ class PayrollController extends Controller
             details: [
                 'format' => $format,
                 'period' => $request->input('period'),
-                'company' => $request->input('company'),
+                'company' => $resolvedCompany,
             ],
-            company: $request->input('company')
+            company: $resolvedCompany
         );
 
         $baseQuery = Payroll::query()
@@ -270,7 +293,7 @@ class PayrollController extends Controller
             ->byPosition($request->input('position'))
             ->byPeriod($request->input('period'))
             ->byStatus($request->input('status'))
-            ->byCompany($this->payrollService->resolveCompany($request));
+            ->byCompany($resolvedCompany);
 
         if ($format === 'pdf') {
             $payrolls = (clone $baseQuery)->orderBy('id', 'desc')->get();
@@ -512,9 +535,11 @@ class PayrollController extends Controller
     public function slipPdf(Request $request, Payroll $payroll): Response
     {
         $user = $request->user();
-        if (!$user || $user->role !== 'admin') {
+        if (!$user || !$user->isAdmin()) {
             abort(403, 'Akses ditolak. Pengunduhan slip gaji hanya dapat diakses oleh Administrator.');
         }
+
+        $this->authorizePayrollCompany($payroll, $request);
 
         $pdf = Pdf::loadView('pdf.payroll_slip', [
             'payroll' => $payroll,
@@ -522,6 +547,21 @@ class PayrollController extends Controller
 
         $cleanName = preg_replace('/[^a-zA-Z0-9_-]/', '_', $payroll->employee_name);
         return $pdf->download("slip_gaji_{$cleanName}_{$payroll->period}.pdf");
+    }
+
+    /**
+     * Authorize that the current user has access to this payroll record's company.
+     */
+    protected function authorizePayrollCompany(Payroll $payroll, Request $request): void
+    {
+        $user = $request->user();
+        if ($user && !$user->isSuperAdmin()) {
+            $userCompany = $this->payrollService->resolveCompany($request);
+            $payrollCompany = in_array(strtolower($payroll->company ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
+            if ($payrollCompany !== $userCompany) {
+                abort(403, 'Akses ditolak. Anda tidak memiliki izin untuk mengelola data perusahaan lain.');
+            }
+        }
     }
 
     /**

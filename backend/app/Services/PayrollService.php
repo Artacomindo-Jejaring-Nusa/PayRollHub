@@ -39,8 +39,9 @@ class PayrollService
         }
 
         // 2. Admin biasa & User: Terkunci ketat ke perusahaannya masing-masing
-        if ($user && !empty($user->company)) {
-            return strtolower($user->company);
+        if ($user) {
+            $userCompany = $user->company ? strtolower($user->company) : 'rbs';
+            return in_array($userCompany, ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
         }
 
         // 3. Fallback untuk request publik / guest
@@ -208,20 +209,20 @@ class PayrollService
                 return null;
             }
 
-            // 1. Cari user yang sudah ada berdasarkan NIK
+            // 1. Cari user yang sudah ada berdasarkan NIK di perusahaan yang sama
             $user = null;
             if (!empty($nik)) {
-                $user = User::where('nik', $nik)->first();
+                $user = User::where('nik', $nik)->where('company', $company)->first();
             }
 
-            // 2. Jika belum ada NIK, coba cari berdasarkan email default
+            // 2. Jika belum ada NIK, coba cari berdasarkan email default di perusahaan yang sama
             $defaultDomain = $company === 'rimamandiri' ? 'riamamandiripratama.com' : 'rimbunbuanasejahtera.com';
             $defaultEmail = !empty($nik)
                 ? "{$nik}@{$defaultDomain}"
                 : Str::slug($name) . '@karyawan.local';
 
             if (!$user) {
-                $user = User::where('email', $defaultEmail)->first();
+                $user = User::where('email', $defaultEmail)->where('company', $company)->first();
             }
 
             if ($user) {

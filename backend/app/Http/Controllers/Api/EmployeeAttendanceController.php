@@ -18,7 +18,7 @@ class EmployeeAttendanceController extends Controller
     {
         $user = $request->user();
         $today = Carbon::today('Asia/Jakarta')->toDateString();
-        $setting = AttendanceSetting::getActiveSetting();
+        $setting = AttendanceSetting::getActiveSetting($user->company ?: 'rbs');
 
         $attendance = Attendance::where('user_id', $user->id)
             ->where('date', $today)
@@ -73,7 +73,7 @@ class EmployeeAttendanceController extends Controller
         }
 
         // Ambil konfigurasi lokasi kantor
-        $setting = AttendanceSetting::getActiveSetting();
+        $setting = AttendanceSetting::getActiveSetting($user->company ?: 'rbs');
 
         // Hitung jarak real-time dari posisi pengguna ke kantor
         $distance = AttendanceSetting::calculateDistanceInMeters(
@@ -160,7 +160,7 @@ class EmployeeAttendanceController extends Controller
         }
 
         // Ambil konfigurasi lokasi kantor
-        $setting = AttendanceSetting::getActiveSetting();
+        $setting = AttendanceSetting::getActiveSetting($user->company ?: 'rbs');
 
         // Hitung jarak real-time dari posisi pengguna ke kantor
         $distance = AttendanceSetting::calculateDistanceInMeters(

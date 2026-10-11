@@ -33,6 +33,7 @@ export interface LoginPayload {
   identifier: string;
   password: string;
   remember_me?: boolean;
+  company?: string;
 }
 
 export interface Announcement {

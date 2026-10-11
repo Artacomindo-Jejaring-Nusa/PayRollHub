@@ -26,11 +26,15 @@ api.interceptors.request.use(
     // Attach active tenant as safe query parameter (avoids CORS preflight header blockage)
     const isAuthRoute = config.url?.includes('/login') || config.url?.includes('/register');
     if (!isAuthRoute) {
-      const activeTenant = localStorage.getItem('payrollhub_active_tenant');
-      if (activeTenant) {
+      const user = useAuthStore.getState().user;
+      let activeCompany = localStorage.getItem('payrollhub_active_tenant');
+      if (user && user.role !== 'super_admin' && user.company) {
+        activeCompany = user.company.toLowerCase().includes('riama') ? 'rimamandiri' : 'rbs';
+      }
+      if (activeCompany) {
         config.params = {
           ...config.params,
-          company: activeTenant,
+          company: activeCompany,
         };
       }
     }

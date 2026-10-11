@@ -70,13 +70,30 @@ export const isLockedDomain = (): TenantId | null => {
 
 export const detectInitialTenant = (): TenantId => {
   if (typeof window !== 'undefined') {
-    // 1. Prioritize explicit selection if saved
-    const stored = localStorage.getItem('payrollhub_active_tenant');
-    if (stored === 'rbs' || stored === 'rimamandiri') {
-      return stored;
+    // 1. PRIORITAS #1: Domain Hostname!
+    // Domain riamamandiripratama.com WAJIB 100% rimamandiri!
+    // Domain rimbunbuanasejahtera.com WAJIB 100% rbs!
+    const locked = isLockedDomain();
+    if (locked) {
+      localStorage.setItem('payrollhub_active_tenant', locked);
+      return locked;
     }
 
-    // 2. Check URL query param (e.g. ?tenant=riamamandiripratama or ?tenant=rimamandiri)
+    // 2. Akun user yang sedang login jika bukan super_admin
+    try {
+      const userStr = localStorage.getItem('payrollhub_user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u && u.role !== 'super_admin' && u.company) {
+          const comp = u.company.toLowerCase();
+          const lockedTenant: TenantId = comp.includes('riama') || comp.includes('rimamandiri') ? 'rimamandiri' : 'rbs';
+          localStorage.setItem('payrollhub_active_tenant', lockedTenant);
+          return lockedTenant;
+        }
+      }
+    } catch {}
+
+    // 3. URL query param (misal di localhost: ?tenant=rimamandiri atau ?tenant=rbs)
     const urlParams = new URLSearchParams(window.location.search);
     const tenantParam = (urlParams.get('tenant') || urlParams.get('theme') || '').toLowerCase();
     if (
@@ -85,17 +102,19 @@ export const detectInitialTenant = (): TenantId => {
       tenantParam === 'rimamandiripratama' ||
       tenantParam === 'rima'
     ) {
+      localStorage.setItem('payrollhub_active_tenant', 'rimamandiri');
       return 'rimamandiri';
     }
-    if (tenantParam === 'rbs' || tenantParam === 'rimbunbuanasejahtera') {
+    if (tenantParam === 'rbs' || tenantParam === 'rimbunbuanasejahtera' || tenantParam === 'rimbun') {
+      localStorage.setItem('payrollhub_active_tenant', 'rbs');
       return 'rbs';
     }
-  }
 
-  // 3. Fallback strictly to domain hostname
-  const locked = isLockedDomain();
-  if (locked) {
-    return locked;
+    // 4. Stored selection (hanya berlaku jika di localhost tanpa domain locking)
+    const stored = localStorage.getItem('payrollhub_active_tenant');
+    if (stored === 'rbs' || stored === 'rimamandiri') {
+      return stored;
+    }
   }
 
   return 'rbs';
@@ -105,6 +124,10 @@ export const applyTenantThemeToDom = (tenantId: TenantId) => {
   if (typeof document !== 'undefined') {
     document.documentElement.setAttribute('data-theme', tenantId);
     localStorage.setItem('payrollhub_active_tenant', tenantId);
+    const config = TENANT_CONFIGS[tenantId];
+    if (config) {
+      document.title = `${config.portalTitle} — HRD Mandiri`;
+    }
   }
 };
 
@@ -116,19 +139,45 @@ export const useTenantTheme = () => {
   });
 
   useEffect(() => {
+    // Pastikan jika berada di domain terkunci, langsung sinkronkan tema
+    const locked = isLockedDomain();
+    if (locked && locked !== tenantId) {
+      setTenantId(locked);
+      applyTenantThemeToDom(locked);
+    }
+
     const handleStorage = () => {
+      // Prioritas 1: Domain Terkunci
+      const lockedDomain = isLockedDomain();
+      if (lockedDomain) {
+        setTenantId(lockedDomain);
+        applyTenantThemeToDom(lockedDomain);
+        return;
+      }
+
+      // Prioritas 2: User login non-superadmin
+      try {
+        const userStr = localStorage.getItem('payrollhub_user');
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          if (u && u.role !== 'super_admin' && u.company) {
+            const comp = u.company.toLowerCase();
+            const lockedTenant: TenantId = comp.includes('riama') || comp.includes('rimamandiri') ? 'rimamandiri' : 'rbs';
+            setTenantId(lockedTenant);
+            applyTenantThemeToDom(lockedTenant);
+            return;
+          }
+        }
+      } catch {}
+
+      // Prioritas 3: Stored selection di localhost
       const current = (localStorage.getItem('payrollhub_active_tenant') as TenantId);
       if (current === 'rbs' || current === 'rimamandiri') {
         setTenantId(current);
         applyTenantThemeToDom(current);
         return;
       }
-      const locked = isLockedDomain();
-      if (locked) {
-        setTenantId(locked);
-        applyTenantThemeToDom(locked);
-        return;
-      }
+
       setTenantId('rbs');
       applyTenantThemeToDom('rbs');
     };
@@ -139,9 +188,20 @@ export const useTenantTheme = () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('payrollhub_tenant_changed', handleStorage);
     };
-  }, []);
+  }, [tenantId]);
 
   const switchTenant = (newTenant: TenantId) => {
+    // Hanya Super Admin yang berhak memindahkan tenant secara aktif
+    try {
+      const userStr = localStorage.getItem('payrollhub_user');
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        if (u && u.role !== 'super_admin') {
+          return; // Blocked for normal admin / employee
+        }
+      }
+    } catch {}
+
     setTenantId(newTenant);
     applyTenantThemeToDom(newTenant);
     window.dispatchEvent(new Event('payrollhub_tenant_changed'));

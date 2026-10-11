@@ -579,8 +579,10 @@ class PayrollHubApiTest extends TestCase
         Payroll::factory()->count(5)->create(['company' => 'rimamandiri']);
         Payroll::factory()->count(3)->create(['company' => 'rbs']);
 
-        $response = $this->actingAs($this->admin, 'sanctum')
-            ->deleteJson('/api/payrolls/clear/all?company=rimamandiri');
+        $riamaAdmin = User::factory()->admin()->create(['company' => 'rimamandiri']);
+
+        $response = $this->actingAs($riamaAdmin, 'sanctum')
+            ->deleteJson('/api/payrolls/clear/all');
 
         $response->assertStatus(200)
             ->assertJson([
@@ -633,6 +635,95 @@ class PayrollHubApiTest extends TestCase
         $this->assertEquals('Febri Hidayat', $employeeUser->name);
         $this->assertEquals('3171012304910001', $employeeUser->nik);
         $this->assertEquals('Salemba (Pusat)', $employeeUser->school_unit);
+    }
+
+    public function test_cross_company_login_is_blocked_for_normal_users_but_allowed_for_super_admin(): void
+    {
+        $riamaUser = User::factory()->create([
+            'email' => 'riama.staff@test.com',
+            'company' => 'rimamandiri',
+            'role' => 'admin',
+            'password' => bcrypt('secret123'),
+        ]);
+
+        $superAdmin = User::factory()->create([
+            'email' => 'superadmin@test.com',
+            'company' => 'rbs',
+            'role' => 'super_admin',
+            'password' => bcrypt('secret123'),
+        ]);
+
+        // 1. Riama staff tries to login to RBS portal -> Rejected 403
+        $blockedResponse = $this->postJson('/api/login', [
+            'identifier' => 'riama.staff@test.com',
+            'password' => 'secret123',
+            'company' => 'rbs',
+        ]);
+        $blockedResponse->assertStatus(403)
+            ->assertJson([
+                'status' => 'error',
+            ]);
+        $this->assertStringContainsString('Akun Anda terdaftar di PT. Riama Mandiri Pratama', $blockedResponse->json('message'));
+
+        // 2. Riama staff logs into Riama portal -> Success 200
+        $successResponse = $this->postJson('/api/login', [
+            'identifier' => 'riama.staff@test.com',
+            'password' => 'secret123',
+            'company' => 'rimamandiri',
+        ]);
+        $successResponse->assertStatus(200);
+
+        // 3. Super Admin logs into Riama portal -> Success 200
+        $superAdminRiama = $this->postJson('/api/login', [
+            'identifier' => 'superadmin@test.com',
+            'password' => 'secret123',
+            'company' => 'rimamandiri',
+        ]);
+        $superAdminRiama->assertStatus(200);
+
+        // 4. Super Admin logs into RBS portal -> Success 200
+        $superAdminRbs = $this->postJson('/api/login', [
+            'identifier' => 'superadmin@test.com',
+            'password' => 'secret123',
+            'company' => 'rbs',
+        ]);
+        $superAdminRbs->assertStatus(200);
+    }
+
+    public function test_ordinary_admin_cannot_access_or_modify_other_company_payrolls(): void
+    {
+        $riamaPayroll = Payroll::factory()->create([
+            'employee_name' => 'Karyawan Riama',
+            'company' => 'rimamandiri',
+        ]);
+
+        $rbsAdmin = $this->admin; // company = 'rbs'
+
+        // 1. RBS Admin tries to view Riama payroll detail -> 403 Forbidden
+        $responseShow = $this->actingAs($rbsAdmin, 'sanctum')->getJson("/api/payrolls/{$riamaPayroll->id}");
+        $responseShow->assertStatus(403);
+
+        // 2. RBS Admin tries to update Riama payroll -> 403 Forbidden
+        $responseUpdate = $this->actingAs($rbsAdmin, 'sanctum')->putJson("/api/payrolls/{$riamaPayroll->id}", [
+            'employee_name' => 'Hacked Name',
+            'nik' => $riamaPayroll->nik,
+            'province' => $riamaPayroll->province,
+            'period' => $riamaPayroll->period,
+            'basic_salary' => 5000000,
+        ]);
+        $responseUpdate->assertStatus(403);
+
+        // 3. RBS Admin tries to delete Riama payroll -> 403 Forbidden
+        $responseDelete = $this->actingAs($rbsAdmin, 'sanctum')->deleteJson("/api/payrolls/{$riamaPayroll->id}");
+        $responseDelete->assertStatus(403);
+
+        // 4. Riama Admin can view and delete their own payroll -> 200 OK
+        $riamaAdmin = User::factory()->admin()->create(['company' => 'rimamandiri']);
+        $responseRiamaShow = $this->actingAs($riamaAdmin, 'sanctum')->getJson("/api/payrolls/{$riamaPayroll->id}");
+        $responseRiamaShow->assertStatus(200);
+
+        $responseRiamaDelete = $this->actingAs($riamaAdmin, 'sanctum')->deleteJson("/api/payrolls/{$riamaPayroll->id}");
+        $responseRiamaDelete->assertStatus(200);
     }
 }
 

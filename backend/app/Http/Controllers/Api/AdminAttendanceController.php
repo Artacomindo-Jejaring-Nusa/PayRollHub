@@ -18,14 +18,24 @@ class AdminAttendanceController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $currentUser = $request->user();
         $date = $request->query('date', Carbon::today('Asia/Jakarta')->toDateString());
         $month = $request->query('month');
         $search = $request->query('search');
         $status = $request->query('status');
 
         $query = Attendance::with(['user' => function ($q) {
-            $q->select('id', 'name', 'email', 'nik', 'company', 'phone', 'role');
+            $q->select('id', 'name', 'email', 'nik', 'company', 'phone', 'role', 'school_unit');
         }]);
+
+        // Strict company isolation:
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
+            : ($currentUser->company ?: 'rbs');
+
+        if ($targetCompany) {
+            $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+        }
 
         if ($date && !$month) {
             $query->where('date', $date);
@@ -66,10 +76,23 @@ class AdminAttendanceController extends Controller
      */
     public function summary(Request $request): JsonResponse
     {
+        $currentUser = $request->user();
         $date = $request->query('date', Carbon::today('Asia/Jakarta')->toDateString());
-        $totalEmployees = User::where('role', '!=', 'admin')->count();
 
-        $todayAttendances = Attendance::where('date', $date)->get();
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
+            : ($currentUser->company ?: 'rbs');
+
+        $usersQuery = User::where('role', '!=', 'admin')->where('role', '!=', 'super_admin');
+        $attendanceQuery = Attendance::where('date', $date);
+
+        if ($targetCompany) {
+            $usersQuery->where('company', $targetCompany);
+            $attendanceQuery->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+        }
+
+        $totalEmployees = $usersQuery->count();
+        $todayAttendances = $attendanceQuery->get();
         $totalPresent = $todayAttendances->count();
         $totalOnTime = $todayAttendances->where('check_in_status', 'on_time')->count();
         $totalLate = $todayAttendances->where('check_in_status', 'late')->count();
@@ -83,6 +106,7 @@ class AdminAttendanceController extends Controller
             'status' => 'success',
             'data' => [
                 'date' => $date,
+                'company' => $targetCompany ?: 'all',
                 'total_employees' => $totalEmployees,
                 'total_present' => $totalPresent,
                 'total_on_time' => $totalOnTime,
@@ -98,7 +122,12 @@ class AdminAttendanceController extends Controller
      */
     public function getSettings(Request $request): JsonResponse
     {
-        $setting = AttendanceSetting::getActiveSetting();
+        $currentUser = $request->user();
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : 'rbs')
+            : ($currentUser->company ?: 'rbs');
+
+        $setting = AttendanceSetting::getActiveSetting($targetCompany);
 
         return response()->json([
             'status' => 'success',
@@ -121,15 +150,20 @@ class AdminAttendanceController extends Controller
             'late_tolerance_minutes' => 'required|integer|min:0|max:120',
         ]);
 
-        $setting = AttendanceSetting::getActiveSetting();
-        $setting->update($validated);
+        $currentUser = $request->user();
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : 'rbs')
+            : ($currentUser->company ?: 'rbs');
+
+        $setting = AttendanceSetting::getActiveSetting($targetCompany);
+        $setting->update(array_merge($validated, ['tenant_id' => $targetCompany]));
 
         \App\Models\ActivityLog::record(
             action: 'UPDATE_ATTENDANCE_SETTING',
             module: 'attendance',
-            description: "Memperbarui konfigurasi lokasi kantor '{$setting->office_name}' (Radius: {$setting->radius_meters}m, Jam Kerja: {$setting->work_start_time} - {$setting->work_end_time})",
+            description: "Memperbarui konfigurasi lokasi kantor '{$setting->office_name}' ({$targetCompany}) (Radius: {$setting->radius_meters}m, Jam Kerja: {$setting->work_start_time} - {$setting->work_end_time})",
             details: $validated,
-            company: $setting->tenant_id
+            company: $targetCompany
         );
 
         return response()->json([
@@ -147,7 +181,17 @@ class AdminAttendanceController extends Controller
         $date = $request->query('date');
         $month = $request->query('month', Carbon::now('Asia/Jakarta')->format('Y-m'));
 
+        $currentUser = $request->user();
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
+            : ($currentUser->company ?: 'rbs');
+
         $query = Attendance::with('user');
+
+        if ($targetCompany) {
+            $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+        }
+
         if ($date) {
             $query->where('date', $date);
             $filename = "rekap_absensi_{$date}.csv";

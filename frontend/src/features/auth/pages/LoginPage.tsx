@@ -14,13 +14,20 @@ import {
   UserCheck,
   KeyRound,
 } from 'lucide-react';
-import { useTenantTheme } from '../../../lib/theme';
+import { useTenantTheme, isLockedDomain } from '../../../lib/theme';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuthStore();
-  const { tenant } = useTenantTheme();
+  const { tenant, tenantId, switchTenant } = useTenantTheme();
   const isRima = tenant.id === 'rimamandiri';
+
+  React.useEffect(() => {
+    const locked = isLockedDomain();
+    if (locked && locked !== tenantId) {
+      switchTenant(locked);
+    }
+  }, [tenantId, switchTenant]);
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -39,6 +46,7 @@ export const LoginPage: React.FC = () => {
         identifier: identifier.trim(),
         password,
         remember_me: rememberMe,
+        company: tenant.id,
       });
 
       login(response.data.user, response.data.token);

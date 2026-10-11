@@ -33,14 +33,59 @@ class AuthController extends Controller
             ], 429);
         }
 
+        // Detect requested company / portal from body, header, or domain origin
+        $requestedCompany = $request->input('company') ?: $request->header('X-Tenant-ID');
+        if (empty($requestedCompany)) {
+            $origin = $request->header('Origin') ?: $request->header('Referer') ?: $request->getHost();
+            if ($origin) {
+                $originLower = strtolower($origin);
+                if (str_contains($originLower, 'riama') || str_contains($originLower, 'rimamandiri')) {
+                    $requestedCompany = 'rimamandiri';
+                } elseif (str_contains($originLower, 'rimbun')) {
+                    $requestedCompany = 'rbs';
+                }
+            }
+        }
+        if ($requestedCompany) {
+            $reqLower = strtolower($requestedCompany);
+            if (in_array($reqLower, ['rimamandiri', 'rima', 'riamamandiripratama'])) {
+                $requestedCompany = 'rimamandiri';
+            } elseif (in_array($reqLower, ['rbs', 'rimbun', 'rimbunbuanasejahtera'])) {
+                $requestedCompany = 'rbs';
+            } else {
+                $requestedCompany = null;
+            }
+        }
+
         // 1. Try finding user directly by email or NIK
-        $user = User::where('email', $identifier)
-            ->orWhere('nik', $identifier)
-            ->first();
+        $userQuery = User::where(function ($q) use ($identifier) {
+            $q->where('email', $identifier)->orWhere('nik', $identifier);
+        });
+
+        if ($requestedCompany) {
+            // Priority: find user belonging to this company or super_admin
+            $user = (clone $userQuery)->where(function ($q) use ($requestedCompany) {
+                $q->where('company', $requestedCompany)->orWhere('role', 'super_admin');
+            })->first();
+
+            // If not found, look for any user with this identifier to detect wrong portal
+            if (!$user) {
+                $user = $userQuery->first();
+            }
+        } else {
+            $user = $userQuery->first();
+        }
 
         // 2. If not found in users, check if valid employee NIK in payrolls (Auto-provisioning karyawan)
         if (!$user && preg_match('/^[A-Za-z0-9\-]+$/', $identifier)) {
-            $payroll = Payroll::where('nik', $identifier)->latest('period')->first();
+            $payrollQuery = Payroll::where('nik', $identifier);
+            if ($requestedCompany) {
+                $payrollQuery->where('company', $requestedCompany);
+            }
+            $payroll = $payrollQuery->latest('period')->first();
+            if (!$payroll && !$requestedCompany) {
+                $payroll = Payroll::where('nik', $identifier)->latest('period')->first();
+            }
             if ($payroll) {
                 $user = \App\Services\PayrollService::syncEmployeeAccount($payroll);
             }
@@ -53,6 +98,24 @@ class AuthController extends Controller
                 'status' => 'error',
                 'message' => 'Email/NIK atau kata sandi tidak cocok. Silakan coba lagi.',
             ], 422);
+        }
+
+        // 3. Strict portal boundary enforcement: Only Super Admin can access both dashboards
+        if ($user->role !== 'super_admin' && $requestedCompany) {
+            $userCompany = in_array(strtolower($user->company ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
+            if ($userCompany !== $requestedCompany) {
+                $targetPortal = $userCompany === 'rimamandiri'
+                    ? 'PT. Riama Mandiri Pratama (riamamandiripratama.com)'
+                    : 'PT. Rimbun Buana Sejahtera (rimbunbuanasejahtera.com)';
+                $currentPortal = $requestedCompany === 'rimamandiri' ? 'Riama Mandiri' : 'RBS Global';
+
+                RateLimiter::hit($throttleKey, 60);
+
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Akun Anda terdaftar di {$targetPortal}. Anda tidak dapat login melalui portal {$currentPortal}. Silakan gunakan portal yang sesuai.",
+                ], 403);
+            }
         }
 
         RateLimiter::clear($throttleKey);

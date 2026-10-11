@@ -14,12 +14,21 @@ class AnnouncementController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $company = $request->input('company');
+        $currentUser = $request->user();
         $search = $request->input('search');
 
-        $announcements = Announcement::with('author:id,name')
-            ->when($company && $company !== 'all', fn ($q) => $q->where('company', $company))
-            ->when($search, fn ($q, $s) => $q->where('title', 'like', "%{$s}%")->orWhere('content', 'like', "%{$s}%"))
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
+            : ($currentUser->company ?: 'rbs');
+
+        $query = Announcement::with('author:id,name');
+
+        if ($targetCompany) {
+            $query->whereIn('company', ['all', $targetCompany]);
+        }
+
+        $announcements = $query
+            ->when($search, fn ($q, $s) => $q->where(fn ($sub) => $sub->where('title', 'like', "%{$s}%")->orWhere('content', 'like', "%{$s}%")))
             ->orderByDesc('is_pinned')
             ->latest('published_at')
             ->paginate(15);
@@ -40,6 +49,8 @@ class AnnouncementController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $currentUser = $request->user();
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'content' => ['required', 'string'],
@@ -48,9 +59,13 @@ class AnnouncementController extends Controller
             'is_pinned' => ['boolean'],
         ]);
 
+        if (!$currentUser->isSuperAdmin()) {
+            $validated['company'] = $currentUser->company ?: 'rbs';
+        }
+
         $announcement = Announcement::create([
             ...$validated,
-            'author_id' => $request->user()->id,
+            'author_id' => $currentUser->id,
             'published_at' => now(),
         ]);
 
@@ -66,6 +81,15 @@ class AnnouncementController extends Controller
      */
     public function update(Request $request, Announcement $announcement): JsonResponse
     {
+        $currentUser = $request->user();
+
+        if (!$currentUser->isSuperAdmin()) {
+            $userCompany = $currentUser->company ?: 'rbs';
+            if ($announcement->company !== $userCompany && $announcement->company !== 'all') {
+                abort(403, 'Akses ditolak. Anda tidak memiliki izin mengubah pengumuman perusahaan lain.');
+            }
+        }
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'content' => ['required', 'string'],
@@ -73,6 +97,10 @@ class AnnouncementController extends Controller
             'company' => ['required', 'string', 'in:all,rbs,rimamandiri'],
             'is_pinned' => ['boolean'],
         ]);
+
+        if (!$currentUser->isSuperAdmin()) {
+            $validated['company'] = $currentUser->company ?: 'rbs';
+        }
 
         $announcement->update($validated);
 
@@ -86,8 +114,17 @@ class AnnouncementController extends Controller
     /**
      * Delete an announcement.
      */
-    public function destroy(Announcement $announcement): JsonResponse
+    public function destroy(Request $request, Announcement $announcement): JsonResponse
     {
+        $currentUser = $request->user();
+
+        if (!$currentUser->isSuperAdmin()) {
+            $userCompany = $currentUser->company ?: 'rbs';
+            if ($announcement->company !== $userCompany && $announcement->company !== 'all') {
+                abort(403, 'Akses ditolak. Anda tidak memiliki izin menghapus pengumuman perusahaan lain.');
+            }
+        }
+
         $announcement->delete();
 
         return response()->json([

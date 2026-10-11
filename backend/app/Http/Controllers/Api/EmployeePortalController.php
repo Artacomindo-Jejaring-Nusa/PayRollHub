@@ -24,10 +24,13 @@ class EmployeePortalController extends Controller
     {
         $user = $request->user();
 
-        // 1. Latest Payroll
+        // 1. Latest Payroll strictly scoped to employee's company
         $latestPayroll = null;
         if ($user->nik) {
-            $latestPayroll = Payroll::where('nik', $user->nik)->latest('period')->first();
+            $latestPayroll = Payroll::where('nik', $user->nik)
+                ->where('company', $user->company ?: 'rbs')
+                ->latest('period')
+                ->first();
         }
 
         // 2. Announcements
@@ -42,8 +45,10 @@ class EmployeePortalController extends Controller
         $pendingReports = WorkReport::where('user_id', $user->id)->where('status', 'pending')->count();
         $approvedReports = WorkReport::where('user_id', $user->id)->where('status', 'approved')->count();
 
-        // 4. Total Payroll periods
-        $totalPayrolls = $user->nik ? Payroll::where('nik', $user->nik)->count() : 0;
+        // 4. Total Payroll periods strictly scoped
+        $totalPayrolls = $user->nik
+            ? Payroll::where('nik', $user->nik)->where('company', $user->company ?: 'rbs')->count()
+            : 0;
 
         return response()->json([
             'status' => 'success',
@@ -77,6 +82,7 @@ class EmployeePortalController extends Controller
         }
 
         $payrolls = Payroll::where('nik', $user->nik)
+            ->where('company', $user->company ?: 'rbs')
             ->latest('period')
             ->get();
 
@@ -95,6 +101,7 @@ class EmployeePortalController extends Controller
 
         $payroll = Payroll::where('id', $id)
             ->where('nik', $user->nik)
+            ->where('company', $user->company ?: 'rbs')
             ->first();
 
         if (!$payroll) {
@@ -119,6 +126,7 @@ class EmployeePortalController extends Controller
 
         $payroll = Payroll::where('id', $id)
             ->where('nik', $user->nik)
+            ->where('company', $user->company ?: 'rbs')
             ->first();
 
         if (!$payroll) {

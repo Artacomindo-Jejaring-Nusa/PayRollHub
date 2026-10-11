@@ -225,19 +225,23 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 continue;
             }
 
-            // Match existing record
+            // Match existing record strictly within target company
+            $targetCompany = in_array(strtolower($this->defaultCompany ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
+
             $existing = null;
             if (!empty($nik)) {
-                $existing = Payroll::where('nik', $nik)->where('period', $period)->first();
+                $existing = Payroll::where('company', $targetCompany)->where('nik', $nik)->where('period', $period)->first();
             }
             if (!$existing && !empty($schoolUnit)) {
-                $existing = Payroll::where('employee_name', $name)
+                $existing = Payroll::where('company', $targetCompany)
+                    ->where('employee_name', $name)
                     ->where('school_unit', $schoolUnit)
                     ->where('period', $period)
                     ->first();
             }
             if (!$existing) {
-                $existing = Payroll::where('employee_name', $name)
+                $existing = Payroll::where('company', $targetCompany)
+                    ->where('employee_name', $name)
                     ->where('province', $province)
                     ->where('period', $period)
                     ->first();
@@ -261,7 +265,7 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 'join_date' => $joinDate,
                 'resign_date' => $resignDate,
                 'status' => $status,
-                'company' => in_array(strtolower($company ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs',
+                'company' => $targetCompany,
                 'period' => $period,
                 'net_base_price' => $netBase,
                 'bpjs_kes' => $bpjsKes,

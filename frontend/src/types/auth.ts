@@ -6,6 +6,8 @@ export interface User {
   email: string;
   nik?: string;
   phone?: string;
+  birth_date?: string | null;
+  gender?: string | null;
   company?: string;
   school_unit?: string | null;
   bank_name?: string;

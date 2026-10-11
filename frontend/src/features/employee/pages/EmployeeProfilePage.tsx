@@ -12,6 +12,9 @@ import {
   Lock,
   Save,
   CheckCircle2,
+  Calendar,
+  Mail,
+  Users,
 } from 'lucide-react';
 
 export const EmployeeProfilePage: React.FC = () => {
@@ -21,8 +24,11 @@ export const EmployeeProfilePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Form Fields
+  // Form Fields (Editable by employee - including yellow data)
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState('');
   const [bankName, setBankName] = useState('');
   const [bankAccount, setBankAccount] = useState('');
   const [address, setAddress] = useState('');
@@ -39,6 +45,9 @@ export const EmployeeProfilePage: React.FC = () => {
       const data = await employeeService.getProfile();
       setProfileData(data);
       setPhone(data.user.phone || '');
+      setEmail(data.user.email || '');
+      setBirthDate(data.user.birth_date || '');
+      setGender(data.user.gender || '');
       setBankName(data.user.bank_name || '');
       setBankAccount(data.user.bank_account || '');
       setAddress(data.user.address || '');
@@ -56,7 +65,10 @@ export const EmployeeProfilePage: React.FC = () => {
 
     try {
       const updatedUser = await employeeService.updateProfile({
-        phone: phone.trim(),
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        birth_date: birthDate.trim() || null,
+        gender: gender.trim() || null,
         bank_name: bankName.trim(),
         bank_account: bankAccount.trim(),
         address: address.trim(),
@@ -64,7 +76,7 @@ export const EmployeeProfilePage: React.FC = () => {
       });
 
       setUser(updatedUser);
-      setSuccessMessage('Data profil Anda berhasil disimpan.');
+      setSuccessMessage('Data profil & informasi pribadi Anda berhasil disimpan.');
       setCurrentPassword('');
       setNewPassword('');
     } catch (err: any) {
@@ -161,52 +173,80 @@ export const EmployeeProfilePage: React.FC = () => {
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[12px] font-medium text-text-primary mb-1">
-                    Nomor WhatsApp / HP Aktif
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Contoh: 081234567890"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full h-10 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    />
+              {/* Bagian Data Pribadi & Kontak */}
+              <div className="space-y-4">
+                <div className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
+                  Informasi Kontak & Biodata Pribadi
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[12px] font-medium text-text-primary mb-1">
+                      Nomor WhatsApp / HP Aktif
+                    </label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Contoh: 081234567890"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-medium text-text-primary mb-1">
+                      Email Pribadi / Kontak
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        placeholder="nama@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[12px] font-medium text-text-primary mb-1">
-                    Nama Bank Pencairan
-                  </label>
-                  <div className="relative">
-                    <CreditCard className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="Contoh: BCA / BRI / Mandiri / BSI"
-                      value={bankName}
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full h-10 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[12px] font-medium text-text-primary mb-1">
+                      Tanggal Lahir
+                    </label>
+                    <div className="relative">
+                      <Calendar className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Contoh: 01-08-1995"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[12px] font-medium text-text-primary mb-1">
-                    Nomor Rekening Bank
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Contoh: 1234567890"
-                    value={bankAccount}
-                    onChange={(e) => setBankAccount(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
-                  />
+                  <div>
+                    <label className="block text-[12px] font-medium text-text-primary mb-1">
+                      Jenis Kelamin
+                    </label>
+                    <div className="relative">
+                      <Users className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
+                      >
+                        <option value="">Pilih Jenis Kelamin</option>
+                        <option value="Laki-laki">Laki-laki</option>
+                        <option value="Perempuan">Perempuan</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -220,6 +260,44 @@ export const EmployeeProfilePage: React.FC = () => {
                     onChange={(e) => setAddress(e.target.value)}
                     className="w-full h-10 px-3.5 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   />
+                </div>
+              </div>
+
+              {/* Bagian Rekening Bank */}
+              <div className="pt-4 border-t border-border-subtle space-y-3">
+                <div className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
+                  Informasi Rekening Bank Pencairan
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[12px] font-medium text-text-primary mb-1">
+                      Nama Bank Pencairan
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Contoh: BCA / BRI / Mandiri / BSI / BNI"
+                        value={bankName}
+                        onChange={(e) => setBankName(e.target.value)}
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-medium text-text-primary mb-1">
+                      Nomor Rekening Bank
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: 1234567890"
+                      value={bankAccount}
+                      onChange={(e) => setBankAccount(e.target.value)}
+                      className="w-full h-10 px-3.5 rounded-lg border border-border-subtle bg-surface text-[13px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono"
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -573,5 +573,66 @@ class PayrollHubApiTest extends TestCase
         $this->assertTrue($namesSp2->contains('Karyawan SP 2'));
         $this->assertFalse($namesSp2->contains('Karyawan SP 1'));
     }
+
+    public function test_admin_can_clear_all_payrolls(): void
+    {
+        Payroll::factory()->count(5)->create(['company' => 'rimamandiri']);
+        Payroll::factory()->count(3)->create(['company' => 'rbs']);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->deleteJson('/api/payrolls/clear/all?company=rimamandiri');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'deleted_count' => 5,
+                ],
+            ]);
+
+        $this->assertEquals(0, Payroll::where('company', 'rimamandiri')->count());
+        $this->assertEquals(3, Payroll::where('company', 'rbs')->count());
+    }
+
+    public function test_employee_can_update_profile_without_altering_hrd_fields(): void
+    {
+        $employeeUser = User::factory()->create([
+            'role' => 'user',
+            'company' => 'rimamandiri',
+            'school_unit' => 'Salemba (Pusat)',
+            'nik' => '3171012304910001',
+            'name' => 'Febri Hidayat',
+        ]);
+
+        $response = $this->actingAs($employeeUser, 'sanctum')
+            ->putJson('/api/employee/profile', [
+                'name' => 'Hacker Name', // Should be ignored or rejected for HRD
+                'nik' => '9999999999999999', // Should be ignored or rejected for HRD
+                'position' => 'Direktur Utama', // Should be ignored
+                'school_unit' => 'Pusat Mars', // Should be ignored
+                'phone' => '081234567890',
+                'birth_date' => '1995-08-01',
+                'gender' => 'Laki-laki',
+                'bank_name' => 'BCA',
+                'bank_account' => '1234567890',
+                'address' => 'Jl. Salemba Raya No. 10',
+            ]);
+
+        $response->assertStatus(200);
+
+        $employeeUser->refresh();
+        // Personal data updated:
+        $this->assertEquals('081234567890', $employeeUser->phone);
+        $this->assertEquals('1995-08-01', $employeeUser->birth_date);
+        $this->assertEquals('Laki-laki', $employeeUser->gender);
+        $this->assertEquals('BCA', $employeeUser->bank_name);
+        $this->assertEquals('1234567890', $employeeUser->bank_account);
+        $this->assertEquals('Jl. Salemba Raya No. 10', $employeeUser->address);
+
+        // HRD locked fields UNCHANGED:
+        $this->assertEquals('Febri Hidayat', $employeeUser->name);
+        $this->assertEquals('3171012304910001', $employeeUser->nik);
+        $this->assertEquals('Salemba (Pusat)', $employeeUser->school_unit);
+    }
 }
 

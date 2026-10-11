@@ -61,6 +61,22 @@ export const payrollService = {
     await api.delete(`/payrolls/${id}`);
   },
 
+  clearAllPayrolls: async (params?: { period?: string; company?: string }): Promise<{ deleted_count: number; message: string }> => {
+    const activeTenant = detectInitialTenant();
+    const finalParams = {
+      company: params?.company || activeTenant,
+      ...params,
+    };
+    const response = await api.delete<{ status: string; message: string; data: { deleted_count: number } }>(
+      '/payrolls/clear/all',
+      { params: finalParams }
+    );
+    return {
+      deleted_count: response.data.data.deleted_count,
+      message: response.data.message,
+    };
+  },
+
   exportFile: async (
     format: 'xlsx' | 'csv' | 'pdf',
     params?: {

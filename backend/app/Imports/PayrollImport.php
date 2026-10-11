@@ -70,6 +70,10 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             $nik = $row['nik'] ?? $row['nik_'] ?? $row['nik_karyawan'] ?? $row[2] ?? $row['2'] ?? null;
             $name = $row['nama_lengkap'] ?? $row['nama_pekerja'] ?? $row['nama_pekerja_'] ?? $row['nama_karyawan'] ?? $row['nama'] ?? $row['employee_name'] ?? null;
             $position = $row['fungsi_tenaga_kependidikan'] ?? $row['jabatan'] ?? $row['jabatan_'] ?? $row['position'] ?? null;
+            $birthDate = $row['tanggal_lahir'] ?? $row['tgl_lahir'] ?? $row['birth_date'] ?? null;
+            $gender = $row['jenis_kelamin'] ?? $row['gender'] ?? $row['jk'] ?? null;
+            $whatsapp = $row['whatsapp'] ?? $row['wa'] ?? $row['no_wa'] ?? $row['phone'] ?? $row['no_hp'] ?? null;
+            $email = $row['email'] ?? $row['email_pribadi'] ?? null;
             $joinDate = $row['tanggal_masuk'] ?? $row['tanggal_bekerja'] ?? $row['tgl_masuk'] ?? $row['tgl_bekerja'] ?? $row['join_date'] ?? null;
             $resignDate = $row['tanggal_keluar'] ?? $row['tgl_keluar'] ?? $row['resign_date'] ?? null;
             $status = $row['status'] ?? null;
@@ -81,6 +85,8 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             $bpjsTk = $row['bpjs_tk_924'] ?? $row['bpjs_tk_9_24'] ?? $row['bpjs_tk'] ?? 0;
             $absenceDeduction = $row['potongan_absensi'] ?? $row['absence_deduction'] ?? 0;
             $absenceNote = $row['keterangan_absensi'] ?? $row['keterangan'] ?? null;
+            $pph21 = $row['pph21'] ?? $row['pph_21'] ?? $row['pph'] ?? 0;
+            $rawThp = $row['total_diterima_take_home_pay'] ?? $row['total_diterima'] ?? $row['take_home_pay'] ?? $row['thp'] ?? null;
 
             $bankAccount = $row['no_rekening'] ?? $row['nomor_rekening'] ?? $row['no_rekening_'] ?? $row['rekening'] ?? $row['bank_account'] ?? null;
             $bankName = $row['bank'] ?? $row['bank_'] ?? $row['nama_bank'] ?? $row['jenis_bank'] ?? $row['bank_name'] ?? null;
@@ -146,6 +152,14 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
 
             $joinDate = $cleanDate($joinDate);
             $resignDate = $cleanDate($resignDate);
+            $birthDate = $cleanDate($birthDate);
+            $whatsapp = !empty($whatsapp) ? trim((string) $whatsapp) : null;
+            if ($whatsapp !== null) {
+                $whatsapp = ltrim($whatsapp, "'");
+                if ($whatsapp === '') $whatsapp = null;
+            }
+            $email = !empty($email) ? trim((string) $email) : null;
+            $gender = !empty($gender) ? trim((string) $gender) : null;
 
             // Determine status
             if ($status) {
@@ -191,6 +205,7 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             $allowance = $cleanNumber($allowance);
             $deduction = $cleanNumber($deduction);
             $absenceDeduction = $cleanNumber($absenceDeduction);
+            $pph21 = $cleanNumber($pph21);
 
             // Calculate according to Excel rule: Gaji Pokok = netBase - bpjsKes - bpjsTk
             if ($netBase > 0) {
@@ -228,7 +243,9 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                     ->first();
             }
 
-            $takeHomePay = max(0, $basicSalary + $allowance - $deduction - $absenceDeduction);
+            // If Excel provided calculated Take Home Pay, use it; otherwise compute
+            $parsedThp = $rawThp !== null ? $cleanNumber($rawThp) : 0;
+            $takeHomePay = $parsedThp > 0 ? $parsedThp : max(0, $basicSalary + $allowance - $deduction - $absenceDeduction - $pph21);
 
             $payrollData = [
                 'row_no' => $rowNo,
@@ -237,6 +254,10 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 'province' => $province,
                 'school_unit' => $schoolUnit,
                 'position' => $position,
+                'birth_date' => $birthDate,
+                'gender' => $gender,
+                'whatsapp' => $whatsapp,
+                'email' => $email,
                 'join_date' => $joinDate,
                 'resign_date' => $resignDate,
                 'status' => $status,
@@ -250,6 +271,7 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 'deduction' => $deduction,
                 'absence_deduction' => $absenceDeduction,
                 'absence_note' => !empty($absenceNote) ? trim((string) $absenceNote) : null,
+                'pph21' => $pph21,
                 'take_home_pay' => $takeHomePay,
                 'bank_account' => $bankAccount,
                 'bank_name' => $bankName,

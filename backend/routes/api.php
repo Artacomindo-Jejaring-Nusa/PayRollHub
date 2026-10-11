@@ -86,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/admin/attendance-settings', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'updateSettings']);
 
         // Payroll Modifications
+        Route::delete('/payrolls/clear/all', [PayrollController::class, 'clearAll']);
         Route::post('/payrolls', [PayrollController::class, 'store']);
         Route::put('/payrolls/{payroll}', [PayrollController::class, 'update']);
         Route::match(['patch', 'post', 'put'], '/payrolls/{payroll}/status', [PayrollController::class, 'updateStatus']);

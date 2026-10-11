@@ -239,6 +239,15 @@ class PayrollService
                 if (!empty($payroll->bank_account) && empty($user->bank_account)) {
                     $updates['bank_account'] = $payroll->bank_account;
                 }
+                if (!empty($payroll->birth_date) && empty($user->birth_date)) {
+                    $updates['birth_date'] = $payroll->birth_date;
+                }
+                if (!empty($payroll->gender) && empty($user->gender)) {
+                    $updates['gender'] = $payroll->gender;
+                }
+                if (!empty($payroll->whatsapp) && empty($user->phone)) {
+                    $updates['phone'] = $payroll->whatsapp;
+                }
                 if (!empty($updates)) {
                     $user->update($updates);
                 }
@@ -256,6 +265,9 @@ class PayrollService
                 'school_unit' => !empty($schoolUnit) ? $schoolUnit : null,
                 'company' => $company,
                 'role' => 'karyawan',
+                'birth_date' => $payroll->birth_date ?: null,
+                'gender' => $payroll->gender ?: null,
+                'phone' => $payroll->whatsapp ?: null,
                 'bank_name' => $payroll->bank_name,
                 'bank_account' => $payroll->bank_account,
                 'password' => Hash::make($defaultPassword),

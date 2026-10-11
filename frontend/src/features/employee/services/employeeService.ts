@@ -64,6 +64,9 @@ export const employeeService = {
 
   async updateProfile(data: {
     phone?: string;
+    birth_date?: string | null;
+    gender?: string | null;
+    email?: string;
     bank_name?: string;
     bank_account?: string;
     address?: string;

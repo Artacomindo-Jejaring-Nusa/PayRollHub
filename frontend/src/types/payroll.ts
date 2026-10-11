@@ -6,6 +6,10 @@ export interface PayrollItem {
   province: string;
   school_unit?: string | null;
   position?: string | null;
+  birth_date?: string | null;
+  gender?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
   join_date?: string | null;
   resign_date?: string | null;
   status: 'active' | 'off';
@@ -19,6 +23,7 @@ export interface PayrollItem {
   basic_salary: number;   // Gaji Pokok = net_base_price - bpjs_kes - bpjs_tk
   allowance: number;
   deduction: number;
+  pph21?: number;         // PPh 21
 
   // Absence deduction fields
   absence_count: number;    // Multiplier (1x, 2x, 3x...)
@@ -29,6 +34,8 @@ export interface PayrollItem {
   take_home_pay: number;
   bank_account?: string | null;
   bank_name?: string | null;
+
+  formatted_pph21?: string;
 
   formatted_net_base_price?: string;
   formatted_bpjs_kes?: string;

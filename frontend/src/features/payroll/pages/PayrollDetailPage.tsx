@@ -216,6 +216,14 @@ export const PayrollDetailPage: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center text-[13px]">
+              <span className="w-40 text-text-muted">Tanggal Lahir</span>
+              <span className="text-text-primary font-medium">: {payroll.birth_date || '-'}</span>
+            </div>
+            <div className="flex items-center text-[13px]">
+              <span className="w-40 text-text-muted">Jenis Kelamin</span>
+              <span className="text-text-primary font-medium">: {payroll.gender || '-'}</span>
+            </div>
+            <div className="flex items-center text-[13px]">
               <span className="w-40 text-text-muted">Status Keaktifan</span>
               <span className="font-semibold flex items-center gap-1.5">
                 :{' '}
@@ -240,6 +248,14 @@ export const PayrollDetailPage: React.FC = () => {
             <div className="flex items-center text-[13px]">
               <span className="w-40 text-text-muted">Sekolah Rakyat</span>
               <span className="text-text-primary font-medium">: {payroll.school_unit || '-'}</span>
+            </div>
+            <div className="flex items-center text-[13px]">
+              <span className="w-40 text-text-muted">WhatsApp / No HP</span>
+              <span className="font-mono text-text-primary">: {payroll.whatsapp || '-'}</span>
+            </div>
+            <div className="flex items-center text-[13px]">
+              <span className="w-40 text-text-muted">Email</span>
+              <span className="text-text-primary">: {payroll.email || '-'}</span>
             </div>
             <div className="flex items-center text-[13px]">
               <span className="w-40 text-text-muted">Tanggal Masuk</span>
@@ -369,6 +385,21 @@ export const PayrollDetailPage: React.FC = () => {
                         </td>
                         <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-semibold">
                           -{payroll.formatted_absence_deduction}
+                        </td>
+                      </tr>
+                    ) : null}
+
+                    {/* Col S: PPh21 */}
+                    {payroll.pph21 && Number(payroll.pph21) > 0 ? (
+                      <tr className="bg-amber-50/40">
+                        <td className="py-2.5 px-4 font-medium text-amber-800">
+                          Pajak Penghasilan (PPh 21)
+                        </td>
+                        <td className="py-2.5 px-4 text-center text-[12px] text-amber-700 font-mono">
+                          Kolom S
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono text-amber-800 font-semibold">
+                          -{payroll.formatted_pph21 || formatCurrency(payroll.pph21)}
                         </td>
                       </tr>
                     ) : null}

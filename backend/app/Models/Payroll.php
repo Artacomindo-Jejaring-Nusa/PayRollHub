@@ -29,6 +29,10 @@ class Payroll extends Model
         'province',
         'school_unit',
         'position',
+        'birth_date',
+        'gender',
+        'whatsapp',
+        'email',
         'join_date',
         'resign_date',
         'status',
@@ -44,6 +48,7 @@ class Payroll extends Model
         'absence_rate',
         'absence_deduction',
         'absence_note',
+        'pph21',
         'take_home_pay',
         'bank_account',
         'bank_name',
@@ -66,6 +71,7 @@ class Payroll extends Model
             'absence_count' => 'integer',
             'absence_rate' => 'decimal:2',
             'absence_deduction' => 'decimal:2',
+            'pph21' => 'decimal:2',
             'take_home_pay' => 'decimal:2',
         ];
     }
@@ -100,9 +106,11 @@ class Payroll extends Model
                 $payroll->status = 'active';
             }
 
-            // Take Home Pay = Basic Salary + Allowance - General Deduction - Absence Deduction
-            $thp = (float) $payroll->basic_salary + (float) $payroll->allowance - (float) $payroll->deduction - (float) $payroll->absence_deduction;
-            $payroll->take_home_pay = max(0, $thp);
+            // If take_home_pay is not explicitly provided or components changed, calculate: Basic Salary + Allowance - General Deduction - Absence Deduction - PPh21
+            if (! $payroll->isDirty('take_home_pay') || (float) $payroll->take_home_pay <= 0) {
+                $thp = (float) $payroll->basic_salary + (float) $payroll->allowance - (float) $payroll->deduction - (float) $payroll->absence_deduction - (float) $payroll->pph21;
+                $payroll->take_home_pay = max(0, $thp);
+            }
         });
     }
 

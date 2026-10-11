@@ -169,7 +169,10 @@ class EmployeePortalController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'birth_date' => ['nullable', 'string', 'max:50'],
+            'gender' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'string', 'email', 'max:150', 'unique:users,email,' . $user->id],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'bank_account' => ['nullable', 'string', 'max:100'],
             'address' => ['nullable', 'string', 'max:500'],
@@ -188,11 +191,42 @@ class EmployeePortalController extends Controller
             $user->password = Hash::make($validated['new_password']);
         }
 
-        $user->phone = $validated['phone'] ?? $user->phone;
-        $user->bank_name = $validated['bank_name'] ?? $user->bank_name;
-        $user->bank_account = $validated['bank_account'] ?? $user->bank_account;
-        $user->address = $validated['address'] ?? $user->address;
+        if (array_key_exists('phone', $validated)) {
+            $user->phone = $validated['phone'];
+        }
+        if (array_key_exists('birth_date', $validated)) {
+            $user->birth_date = $validated['birth_date'];
+        }
+        if (array_key_exists('gender', $validated)) {
+            $user->gender = $validated['gender'];
+        }
+        if (!empty($validated['email'])) {
+            $user->email = $validated['email'];
+        }
+        if (array_key_exists('bank_name', $validated)) {
+            $user->bank_name = $validated['bank_name'];
+        }
+        if (array_key_exists('bank_account', $validated)) {
+            $user->bank_account = $validated['bank_account'];
+        }
+        if (array_key_exists('address', $validated)) {
+            $user->address = $validated['address'];
+        }
         $user->save();
+
+        // Also update latest payroll record if relevant so slip gaji matches updated info
+        if (!empty($user->nik)) {
+            Payroll::where('nik', $user->nik)
+                ->latest('period')
+                ->first()
+                ?->update(array_filter([
+                    'bank_name' => $user->bank_name,
+                    'bank_account' => $user->bank_account,
+                    'birth_date' => $user->birth_date,
+                    'gender' => $user->gender,
+                    'whatsapp' => $user->phone,
+                ], fn($v) => !is_null($v)));
+        }
 
         return response()->json([
             'status' => 'success',

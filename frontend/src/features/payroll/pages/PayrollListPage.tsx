@@ -80,6 +80,7 @@ export const PayrollListPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<PayrollItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+
   // Load data
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -198,6 +199,7 @@ export const PayrollListPage: React.FC = () => {
       setIsDeleting(false);
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -856,6 +858,7 @@ export const PayrollListPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
     </div>
   );
 };

@@ -25,35 +25,39 @@ class PayrollTemplateExporter
         $sheet1 = $spreadsheet->getActiveSheet();
         $sheet1->setTitle('DATA_PENGGAJIAN');
 
-        // Column Headings
+        // Column Headings (A to Z)
         $headings = [
-            'NO',
-            'WILAYAH',
-            'SEKOLAH RAKYAT PERMANEN',
-            'NIK',
-            'NAMA LENGKAP',
-            'FUNGSI TENAGA KEPENDIDIKAN',
-            'TANGGAL MASUK',
-            'STATUS',
-            'TANGGAL KELUAR',
-            'PERUSAHAAN',
-            'HARGA DASAR (NET PPH & FEE)',
-            'BPJS KES 5%',
-            'BPJS TK 9.24%',
-            'GAJI POKOK',
-            'POTONGAN ABSENSI',
-            'KETERANGAN ABSENSI',
-            'TUNJANGAN',
-            'POTONGAN LAIN',
-            'TOTAL DITERIMA (TAKE HOME PAY)',
-            'NO REKENING',
-            'BANK',
-            'PERIODE',
+            'NO',                           // A
+            'WILAYAH',                      // B
+            'SEKOLAH RAKYAT PERMANEN',      // C
+            'NIK',                          // D
+            'NAMA LENGKAP',                 // E
+            'FUNGSI TENAGA KEPENDIDIKAN',   // F
+            'TANGGAL LAHIR',                // G (Kuning)
+            'JENIS KELAMIN',                // H (Kuning)
+            'WHATSAPP',                     // I (Kuning)
+            'EMAIL',                        // J (Kuning)
+            'TANGGAL MASUK',                // K
+            'STATUS',                       // L
+            'TANGGAL KELUAR',               // M
+            'PERUSAHAAN',                   // N
+            'BPJS KES',                     // O
+            'BPJS TK ',                     // P
+            'GAJI POKOK',                   // Q
+            'POTONGAN ABSENSI',             // R
+            'PPH21',                        // S
+            'KETERANGAN ABSENSI',           // T
+            'TUNJANGAN',                    // U
+            'POTONGAN LAIN',                // V
+            'TOTAL DITERIMA (TAKE HOME PAY)',// W
+            'NO REKENING',                  // X
+            'BANK',                         // Y
+            'PERIODE',                      // Z
         ];
 
         $sheet1->fromArray([$headings], null, 'A1');
 
-        // Sample Data Rows (3 typical scenarios)
+        // Sample Data Rows (Matching new template)
         $sampleRows = [
             // Row 2: Standard Active Employee
             [
@@ -64,18 +68,22 @@ class PayrollTemplateExporter
                 'FEBRI HIDAYAT',
                 'Koordinator Administrasi',
                 '01-08-2024',
+                '',
+                '',
+                '',
+                '01-08-2024',
                 'Aktif',
                 '',
                 'rbs',
-                6671000,
-                333550,
+                100000,
                 616400,
                 5721050,
-                0,
                 '',
-                0,
-                0,
-                5721050,
+                '',
+                '',
+                '',
+                '',
+                5204650,
                 "'2098199007",
                 'BNI',
                 '2026-08',
@@ -88,18 +96,22 @@ class PayrollTemplateExporter
                 "'3174051206950002",
                 'MUHAMAD FERIANSAH',
                 'Cleaning Service',
+                '',
+                '',
+                '',
+                '',
                 '18-08-2025',
                 'Aktif',
                 '',
                 'rbs',
-                6671000,
                 333550,
                 616400,
                 5721050,
                 200000,
+                '',
                 'Izin 2 hari x Rp 100.000',
-                0,
-                0,
+                '',
+                '',
                 5521050,
                 "'2098393515",
                 'BNI',
@@ -113,18 +125,22 @@ class PayrollTemplateExporter
                 "'1213131111910001",
                 'RUDI SAPUTRA',
                 'Security',
+                '',
+                '',
+                '',
+                '',
                 '25-07-2024',
                 'Off',
                 '15-08-2026',
                 'rima',
-                3683000,
                 184150,
                 340309,
                 3158541,
-                0,
+                '',
+                '',
                 'Karyawan off / resign per 15 Ags 2026',
-                0,
-                0,
+                '',
+                '',
                 3158541,
                 "'2097700845",
                 'BNI',
@@ -134,8 +150,8 @@ class PayrollTemplateExporter
 
         $sheet1->fromArray($sampleRows, null, 'A2');
 
-        // Style Header Sheet 1
-        $sheet1->getStyle('A1:V1')->applyFromArray([
+        // Style Blue Header (A1:F1 and K1:Z1)
+        $blueHeaderStyle = [
             'font' => [
                 'bold' => true,
                 'color' => ['rgb' => 'FFFFFF'],
@@ -149,11 +165,40 @@ class PayrollTemplateExporter
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
                 'vertical' => Alignment::VERTICAL_CENTER,
             ],
+        ];
+        $sheet1->getStyle('A1:F1')->applyFromArray($blueHeaderStyle);
+        $sheet1->getStyle('K1:Z1')->applyFromArray($blueHeaderStyle);
+
+        // Style Yellow Header for Personal Data (G1:J1)
+        $yellowHeaderStyle = [
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => '000000'],
+                'size' => 10,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'FFFF00'],
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ];
+        $sheet1->getStyle('G1:J1')->applyFromArray($yellowHeaderStyle);
+
+        // Highlight Yellow Columns Data Cells (G2:J4)
+        $sheet1->getStyle('G2:J4')->applyFromArray([
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'FFFF00'],
+            ],
         ]);
+
         $sheet1->getRowDimension(1)->setRowHeight(28);
 
-        // Style Sample Rows
-        $sheet1->getStyle('A2:V4')->applyFromArray([
+        // Style Sample Rows Border & Alignment
+        $sheet1->getStyle('A2:Z4')->applyFromArray([
             'alignment' => [
                 'vertical' => Alignment::VERTICAL_CENTER,
             ],
@@ -165,8 +210,8 @@ class PayrollTemplateExporter
             ],
         ]);
 
-        // Auto-fit column widths for Sheet 1
-        foreach (range('A', 'V') as $col) {
+        // Auto-fit column widths for Sheet 1 (A to Z)
+        foreach (range('A', 'Z') as $col) {
             $sheet1->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -341,15 +386,19 @@ class PayrollTemplateExporter
             'NIK',
             'NAMA LENGKAP',
             'FUNGSI TENAGA KEPENDIDIKAN',
+            'TANGGAL LAHIR',
+            'JENIS KELAMIN',
+            'WHATSAPP',
+            'EMAIL',
             'TANGGAL MASUK',
             'STATUS',
             'TANGGAL KELUAR',
             'PERUSAHAAN',
-            'HARGA DASAR (NET PPH & FEE)',
-            'BPJS KES 5%',
-            'BPJS TK 9.24%',
+            'BPJS KES',
+            'BPJS TK ',
             'GAJI POKOK',
             'POTONGAN ABSENSI',
+            'PPH21',
             'KETERANGAN ABSENSI',
             'TUNJANGAN',
             'POTONGAN LAIN',
@@ -368,18 +417,22 @@ class PayrollTemplateExporter
                 'FEBRI HIDAYAT',
                 'Koordinator Administrasi',
                 '01-08-2024',
+                '',
+                '',
+                '',
+                '01-08-2024',
                 'Aktif',
                 '',
                 'rbs',
-                '6671000',
-                '333550',
+                '100000',
                 '616400',
                 '5721050',
-                '0',
                 '',
-                '0',
-                '0',
-                '5721050',
+                '',
+                '',
+                '',
+                '',
+                '5204650',
                 "'2098199007",
                 'BNI',
                 '2026-08',
@@ -391,18 +444,22 @@ class PayrollTemplateExporter
                 "'3174051206950002",
                 'MUHAMAD FERIANSAH',
                 'Cleaning Service',
+                '',
+                '',
+                '',
+                '',
                 '18-08-2025',
                 'Aktif',
                 '',
                 'rbs',
-                '6671000',
                 '333550',
                 '616400',
                 '5721050',
                 '200000',
+                '',
                 'Izin 2 hari x Rp 100.000',
-                '0',
-                '0',
+                '',
+                '',
                 '5521050',
                 "'2098393515",
                 'BNI',
@@ -415,18 +472,22 @@ class PayrollTemplateExporter
                 "'1213131111910001",
                 'RUDI SAPUTRA',
                 'Security',
+                '',
+                '',
+                '',
+                '',
                 '25-07-2024',
                 'Off',
                 '15-08-2026',
                 'rima',
-                '3683000',
                 '184150',
                 '340309',
                 '3158541',
-                '0',
+                '',
+                '',
                 'Karyawan off / resign per 15 Ags 2026',
-                '0',
-                '0',
+                '',
+                '',
                 '3158541',
                 "'2097700845",
                 'BNI',

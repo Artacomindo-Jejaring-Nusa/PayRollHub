@@ -161,6 +161,45 @@ class PayrollController extends Controller
     }
 
     /**
+     * Clear / takeout existing payroll records (e.g. for starting fresh with new template).
+     */
+    public function clearAll(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user || !$user->isAdmin()) {
+            abort(403, 'Akses ditolak. Fitur ini hanya dapat diakses oleh Administrator.');
+        }
+
+        $period = $request->input('period');
+        $company = $this->payrollService->resolveCompany($request);
+
+        $query = Payroll::query();
+        if ($company) {
+            $query->where('company', $company);
+        }
+        if (!empty($period) && $period !== 'all') {
+            $query->where('period', $period);
+        }
+
+        $count = $query->count();
+        $query->delete();
+
+        \App\Models\ActivityLog::record(
+            action: 'CLEAR_PAYROLLS',
+            module: 'payroll',
+            description: "Menghapus/Take-out {$count} data penggajian (Periode: " . ($period ?: 'Semua') . ", Perusahaan: " . ($company ?: 'Semua') . ")",
+            details: ['deleted_count' => $count, 'period' => $period, 'company' => $company],
+            company: $company
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil mengeluarkan/menghapus {$count} data penggajian.",
+            'data' => ['deleted_count' => $count],
+        ]);
+    }
+
+    /**
      * Update employee employment status ('active' or 'off') with optional resign date. (Admin only)
      */
     public function updateStatus(Request $request, Payroll $payroll): JsonResponse

@@ -28,6 +28,10 @@ class StorePayrollRequest extends FormRequest
             'province' => ['required', 'string', 'max:100'],
             'school_unit' => ['nullable', 'string', 'max:200'],
             'position' => ['nullable', 'string', 'max:100'],
+            'birth_date' => ['nullable', 'string', 'max:50'],
+            'gender' => ['nullable', 'string', 'max:30'],
+            'whatsapp' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'string', 'email', 'max:100'],
             'join_date' => ['nullable', 'string', 'max:50'],
             'resign_date' => ['nullable', 'string', 'max:50'],
             'status' => ['nullable', 'string', 'in:active,off'],
@@ -43,6 +47,7 @@ class StorePayrollRequest extends FormRequest
             'absence_rate' => ['nullable', 'numeric', 'min:0'],
             'absence_deduction' => ['nullable', 'numeric', 'min:0'],
             'absence_note' => ['nullable', 'string', 'max:255'],
+            'pph21' => ['nullable', 'numeric', 'min:0'],
             'bank_account' => ['nullable', 'string', 'max:50'],
             'bank_name' => ['nullable', 'string', 'max:50'],
         ];

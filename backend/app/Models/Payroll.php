@@ -42,6 +42,7 @@ class Payroll extends Model
         'replacement_date',
         'company',
         'period',
+        'is_visible_to_user',
         'net_base_price',
         'bpjs_kes',
         'bpjs_tk',
@@ -87,6 +88,7 @@ class Payroll extends Model
             'absence_deduction' => 'decimal:2',
             'pph21' => 'decimal:2',
             'take_home_pay' => 'decimal:2',
+            'is_visible_to_user' => 'boolean',
             'replacement_date' => 'date',
         ];
     }
@@ -97,6 +99,17 @@ class Payroll extends Model
     protected static function booted(): void
     {
         static::saving(function (Payroll $payroll) {
+            // Auto-sync visibility jika belum diset secara eksplisit
+            if ($payroll->is_visible_to_user === null && !empty($payroll->period)) {
+                $periodSetting = PayrollPeriod::where('code', trim($payroll->period))->first();
+                if ($periodSetting) {
+                    $payroll->is_visible_to_user = (bool) $periodSetting->is_visible_to_user;
+                } else {
+                    // Default: jika format SP maka true, jika bukan SP (contoh Ambon/Cikarang) maka false
+                    $payroll->is_visible_to_user = (bool) preg_match('/^SP\s*\d+$/i', trim($payroll->period));
+                }
+            }
+
             // Auto calculate absence deduction if rate and count are specified
             if ((int) $payroll->absence_count > 0 && (float) $payroll->absence_rate > 0 && (float) $payroll->absence_deduction <= 0) {
                 $payroll->absence_deduction = (int) $payroll->absence_count * (float) $payroll->absence_rate;
@@ -191,6 +204,14 @@ class Payroll extends Model
         }
 
         return $query->where('position', $position);
+    }
+
+    /**
+     * Scope a query to only include records visible to user (portal karyawan).
+     */
+    public function scopeVisibleToUser(Builder $query): Builder
+    {
+        return $query->where('is_visible_to_user', true);
     }
 
     /**

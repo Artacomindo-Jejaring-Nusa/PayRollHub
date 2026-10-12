@@ -29,6 +29,8 @@ class UserResource extends JsonResource
             'address' => $this->address,
             'avatar' => $this->avatar ? url('storage/' . $this->avatar) : null,
             'role' => $this->role,
+            'last_login_at' => $this->last_login_at?->toISOString(),
+            'last_login_ip' => $this->last_login_ip,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

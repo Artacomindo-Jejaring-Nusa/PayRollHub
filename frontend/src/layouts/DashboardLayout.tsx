@@ -128,7 +128,7 @@ export const DashboardLayout: React.FC = () => {
       path: '/activity-logs',
       icon: <ShieldAlert className="w-4 h-4" />,
       adminOnly: true,
-      superAdminOnly: true,
+      superAdminOnly: false,
     },
   ];
 

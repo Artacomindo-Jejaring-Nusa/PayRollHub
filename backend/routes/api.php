@@ -151,12 +151,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // User Account Management
         Route::apiResource('users', UserController::class);
-    });
 
-    // Super Admin Only Operations (Audit Trail / Activity Logs)
-    Route::middleware('super_admin')->group(function () {
+        // Target Surat Pesanan (SP) & Periode Custom (Poin 17)
+        Route::get('/admin/payroll-periods', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'index']);
+        Route::post('/admin/payroll-periods', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'store']);
+        Route::put('/admin/payroll-periods/{payrollPeriod}', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'update']);
+        Route::delete('/admin/payroll-periods/{payrollPeriod}', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'destroy']);
+
+        // Activity Logs & Audit Trail / Monitoring User Inaktif (Poin 18)
         Route::get('/admin/activity-logs', [\App\Http\Controllers\Api\ActivityLogController::class, 'index']);
         Route::get('/admin/activity-logs/stats', [\App\Http\Controllers\Api\ActivityLogController::class, 'stats']);
+        Route::get('/admin/activity-logs/user-logins', [\App\Http\Controllers\Api\ActivityLogController::class, 'userLogins']);
     });
+
+    // Public / Karyawan Read of Active Payroll Periods (Poin 17)
+    Route::get('/payroll-periods', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'index']);
 });
 

@@ -39,6 +39,7 @@ class PayrollResource extends JsonResource
             'status' => $this->status ?: 'active',
             'company' => $this->company ?: 'rbs',
             'period' => $this->period,
+            'is_visible_to_user' => (bool) ($this->is_visible_to_user ?? true),
             'net_base_price' => $canViewFinancials ? (float) $this->net_base_price : 0,
             'bpjs_kes' => $canViewFinancials ? (float) $this->bpjs_kes : 0,
             'bpjs_tk' => $canViewFinancials ? (float) $this->bpjs_tk : 0,

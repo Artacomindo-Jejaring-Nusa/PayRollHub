@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { activityLogService } from '../services/activityLogService';
-import { ActivityLogItem, ActivityLogStats } from '../types';
+import { ActivityLogItem, ActivityLogStats, UserLoginTrackingItem } from '../types';
 import { Card } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
@@ -22,15 +22,26 @@ import {
   AlertTriangle,
   Info,
   Laptop,
+  Users,
+  UserCheck,
+  UserX,
+  ArrowRight,
+  Eye,
 } from 'lucide-react';
 
 export const ActivityLogsPage: React.FC = () => {
+  // Navigation Tabs: 'logs' = Audit Trail Aktivitas, 'logins' = Monitoring Login User & Admin (Point 18)
+  const [activeTab, setActiveTab] = useState<'logs' | 'logins'>('logins');
+
+  // ==========================================
+  // TAB 1: System Activity Logs State
+  // ==========================================
   const [logs, setLogs] = useState<ActivityLogItem[]>([]);
   const [stats, setStats] = useState<ActivityLogStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
 
-  // Filters & Pagination
+  // Filters & Pagination for Logs
   const [search, setSearch] = useState('');
   const [selectedModule, setSelectedModule] = useState('all');
   const [selectedCompany, setSelectedCompany] = useState('all');
@@ -45,9 +56,37 @@ export const ActivityLogsPage: React.FC = () => {
     total: 0,
   });
 
-  // Modal Detail
+  // Modal Detail Log
   const [selectedLog, setSelectedLog] = useState<ActivityLogItem | null>(null);
 
+  // ==========================================
+  // TAB 2: Monitoring Login User/Admin (Point 18)
+  // ==========================================
+  const [loginUsers, setLoginUsers] = useState<UserLoginTrackingItem[]>([]);
+  const [isLoginsLoading, setIsLoginsLoading] = useState(true);
+  const [loginSummary, setLoginSummary] = useState({
+    total_users: 0,
+    active_recently: 0,
+    inactive_over_7_days: 0,
+    never_logged_in: 0,
+  });
+
+  // Filters & Pagination for Login Tracking
+  const [loginSearch, setLoginSearch] = useState('');
+  const [loginRole, setLoginRole] = useState('all');
+  const [loginStatus, setLoginStatus] = useState('all');
+  const [loginCompany, setLoginCompany] = useState('all');
+  const [loginSortOrder, setLoginSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [loginPage, setLoginPage] = useState(1);
+  const [loginPerPage, setLoginPerPage] = useState(15);
+  const [loginMeta, setLoginMeta] = useState({
+    current_page: 1,
+    last_page: 1,
+    per_page: 15,
+    total: 0,
+  });
+
+  // Fetch Activity Logs
   const fetchLogs = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -69,6 +108,7 @@ export const ActivityLogsPage: React.FC = () => {
     }
   }, [search, selectedModule, selectedCompany, startDate, endDate, page, perPage]);
 
+  // Fetch Log Stats
   const fetchStats = useCallback(async () => {
     setIsStatsLoading(true);
     try {
@@ -83,13 +123,49 @@ export const ActivityLogsPage: React.FC = () => {
     }
   }, [selectedCompany]);
 
-  useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+  // Fetch User Login Tracking (Point 18)
+  const fetchUserLogins = useCallback(async () => {
+    setIsLoginsLoading(true);
+    try {
+      const res = await activityLogService.getUserLogins({
+        search: loginSearch.trim() || undefined,
+        role: loginRole !== 'all' ? loginRole : undefined,
+        status: loginStatus !== 'all' ? loginStatus : undefined,
+        company: loginCompany !== 'all' ? loginCompany : undefined,
+        sort_by: 'last_login_at',
+        sort_order: loginSortOrder,
+        page: loginPage,
+        per_page: loginPerPage,
+      });
+      setLoginUsers(res.data);
+      setLoginMeta(res.meta);
+      if (res.summary) {
+        setLoginSummary(res.summary);
+      }
+    } catch (err) {
+      console.error('Failed to load user logins tracking:', err);
+    } finally {
+      setIsLoginsLoading(false);
+    }
+  }, [loginSearch, loginRole, loginStatus, loginCompany, loginSortOrder, loginPage, loginPerPage]);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    if (activeTab === 'logs') {
+      fetchLogs();
+    }
+  }, [activeTab, fetchLogs]);
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      fetchStats();
+    }
+  }, [activeTab, fetchStats]);
+
+  useEffect(() => {
+    if (activeTab === 'logins') {
+      fetchUserLogins();
+    }
+  }, [activeTab, fetchUserLogins]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,6 +180,28 @@ export const ActivityLogsPage: React.FC = () => {
     setStartDate('');
     setEndDate('');
     setPage(1);
+  };
+
+  const handleLoginSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginPage(1);
+    fetchUserLogins();
+  };
+
+  const handleResetLoginFilters = () => {
+    setLoginSearch('');
+    setLoginRole('all');
+    setLoginStatus('all');
+    setLoginCompany('all');
+    setLoginSortOrder('asc');
+    setLoginPage(1);
+  };
+
+  // Inspect user logs directly from login tracking
+  const handleInspectUserLogs = (userItem: UserLoginTrackingItem) => {
+    setSearch(userItem.email || userItem.name);
+    setPage(1);
+    setActiveTab('logs');
   };
 
   const getActionBadge = (action: string) => {
@@ -193,6 +291,52 @@ export const ActivityLogsPage: React.FC = () => {
     );
   };
 
+  const getInactivityBadge = (item: UserLoginTrackingItem) => {
+    switch (item.status_label) {
+      case 'never':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+            <UserX className="w-3 h-3 text-rose-600" />
+            <span>Belum Pernah Login</span>
+          </span>
+        );
+      case 'inactive_30':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+            <Clock className="w-3 h-3 text-amber-700" />
+            <span>Tidak Aktif &gt; 30 Hari ({item.days_since_login} hari)</span>
+          </span>
+        );
+      case 'inactive_7':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-yellow-50 text-yellow-800 border border-yellow-300">
+            <Clock className="w-3 h-3 text-yellow-700" />
+            <span>Tidak Aktif &gt; 7 Hari ({item.days_since_login} hari)</span>
+          </span>
+        );
+      case 'active':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
+            <UserCheck className="w-3 h-3 text-emerald-600" />
+            <span>Aktif ({item.days_since_login === 0 ? 'Hari ini' : `${item.days_since_login} hari lalu`})</span>
+          </span>
+        );
+    }
+  };
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'super_admin':
+        return <Badge variant="super_admin">Super Admin</Badge>;
+      case 'admin':
+        return <Badge variant="admin">Admin</Badge>;
+      case 'karyawan':
+      default:
+        return <Badge variant="role">Karyawan</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Page Header */}
@@ -207,10 +351,10 @@ export const ActivityLogsPage: React.FC = () => {
                 <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
                   Audit Trail & Log Aktivitas Admin
                 </h1>
-                <Badge variant="super_admin">Khusus Super Admin</Badge>
+                <Badge variant="admin">Admin & Super Admin</Badge>
               </div>
               <p className="font-body-default text-body-default text-text-muted">
-                Rekaman forensik seluruh tindakan admin untuk transparansi sistem dan mencegah sabotase data.
+                Monitoring keaktifan login pengguna, audit trail forensik sistem, dan transparansi operasional.
               </p>
             </div>
           </div>
@@ -221,318 +365,789 @@ export const ActivityLogsPage: React.FC = () => {
             variant="outline"
             size="sm"
             onClick={() => {
-              fetchLogs();
-              fetchStats();
+              if (activeTab === 'logs') {
+                fetchLogs();
+                fetchStats();
+              } else {
+                fetchUserLogins();
+              }
             }}
-            isLoading={isLoading}
+            isLoading={activeTab === 'logs' ? isLoading : isLoginsLoading}
             leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
           >
-            Refresh Log
+            Refresh Data
           </Button>
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
-              Aktivitas Hari Ini
+      {/* Tabs Navigation */}
+      <div className="flex border-b border-border-subtle gap-2">
+        <button
+          onClick={() => setActiveTab('logins')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-[13.5px] font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'logins'
+              ? 'border-primary text-primary bg-primary/5 rounded-t-lg'
+              : 'border-transparent text-text-muted hover:text-text-primary'
+          }`}
+        >
+          <UserCheck className="w-4 h-4" />
+          <span>Monitoring Login User / Admin (Poin 18)</span>
+          {loginSummary.never_logged_in > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500 text-white">
+              {loginSummary.never_logged_in}
             </span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-text-primary">
-              {isStatsLoading ? '...' : (stats?.today_count ?? 0)}
-            </span>
-            <span className="text-[11px] text-text-muted">tindakan tercatat</span>
-          </div>
-        </Card>
+          )}
+        </button>
 
-        <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
-              Aktivitas Pekan Ini
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Activity className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-text-primary">
-              {isStatsLoading ? '...' : (stats?.this_week_count ?? 0)}
-            </span>
-            <span className="text-[11px] text-text-muted">tindakan pekan ini</span>
-          </div>
-        </Card>
-
-        <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
-              Total Riwayat Log
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-              <Terminal className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-text-primary">
-              {isStatsLoading ? '...' : (stats?.total_count ?? 0)}
-            </span>
-            <span className="text-[11px] text-text-muted">total peristiwa</span>
-          </div>
-        </Card>
-
-        <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
-              Integritas & Audit
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-1.5 text-emerald-600 font-semibold text-[13px]">
-            <span>Aktif & Terlindungi</span>
-          </div>
-          <span className="text-[11px] text-text-muted">Audit log tidak dapat dihapus</span>
-        </Card>
+        <button
+          onClick={() => setActiveTab('logs')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-[13.5px] font-semibold border-b-2 transition-colors cursor-pointer ${
+            activeTab === 'logs'
+              ? 'border-primary text-primary bg-primary/5 rounded-t-lg'
+              : 'border-transparent text-text-muted hover:text-text-primary'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>Log Aktivitas Sistem (Audit Trail)</span>
+        </button>
       </div>
 
-      {/* Filter and Search Box */}
-      <div className="bg-surface-panel rounded-xl border border-border-subtle p-3.5 sm:p-4 shadow-sm space-y-3">
-        <form onSubmit={handleSearchSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-3">
-          {/* Search Input */}
-          <div className="sm:col-span-2 lg:col-span-4 relative flex items-center">
-            <Search className="w-4 h-4 text-text-muted absolute left-3 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Cari admin, aksi, nama karyawan, IP..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 pl-9 pr-4 bg-surface-panel rounded-lg text-body-default text-text-primary placeholder:text-text-muted border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[12.5px]"
-            />
+      {/* ========================================================================= */}
+      {/* TAB 2: MONITORING LOGIN USER & ADMIN (POIN 18)                           */}
+      {/* ========================================================================= */}
+      {activeTab === 'logins' && (
+        <div className="space-y-6">
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
+                  Total Pengguna Terdaftar
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono text-text-primary">
+                  {isLoginsLoading ? '...' : loginSummary.total_users}
+                </span>
+                <span className="text-[11px] text-text-muted">akun di sistem</span>
+              </div>
+            </Card>
+
+            <Card className="p-4 border border-rose-200 bg-rose-50/40 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-rose-700 uppercase tracking-wider">
+                  Belum Pernah Login
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <UserX className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono text-rose-700">
+                  {isLoginsLoading ? '...' : loginSummary.never_logged_in}
+                </span>
+                <span className="text-[11px] text-rose-600 font-medium">user/admin pasif</span>
+              </div>
+            </Card>
+
+            <Card className="p-4 border border-amber-200 bg-amber-50/40 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-amber-700 uppercase tracking-wider">
+                  Tidak Aktif &gt; 7 Hari
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono text-amber-800">
+                  {isLoginsLoading ? '...' : loginSummary.inactive_over_7_days}
+                </span>
+                <span className="text-[11px] text-amber-700 font-medium">jarang login</span>
+              </div>
+            </Card>
+
+            <Card className="p-4 border border-emerald-200 bg-emerald-50/40 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-emerald-700 uppercase tracking-wider">
+                  Aktif Pekan Ini
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono text-emerald-700">
+                  {isLoginsLoading ? '...' : loginSummary.active_recently}
+                </span>
+                <span className="text-[11px] text-emerald-600 font-medium">login &lt; 7 hari</span>
+              </div>
+            </Card>
           </div>
 
-          {/* Module Filter */}
-          <div className="sm:col-span-1 lg:col-span-2">
-            <select
-              value={selectedModule}
-              onChange={(e) => {
-                setSelectedModule(e.target.value);
-                setPage(1);
-              }}
-              className="w-full h-9 px-2.5 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[12.5px] cursor-pointer"
-            >
-              <option value="all">Semua Modul</option>
-              <option value="payroll">Modul Gaji (Payroll)</option>
-              <option value="attendance">Modul Absensi</option>
-              <option value="user">Modul User</option>
-              <option value="auth">Modul Otentikasi</option>
-            </select>
+          {/* Filter Bar */}
+          <div className="bg-surface-panel rounded-xl border border-border-subtle p-4 shadow-sm space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
+              {/* Search */}
+              <form
+                onSubmit={handleLoginSearchSubmit}
+                className="md:col-span-4 relative flex items-center"
+              >
+                <Search className="w-4 h-4 text-text-muted absolute left-3 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Cari Nama, Email, NIK..."
+                  value={loginSearch}
+                  onChange={(e) => setLoginSearch(e.target.value)}
+                  className="w-full h-10 pl-9 pr-4 bg-surface-panel rounded-lg text-body-default text-text-primary placeholder:text-text-muted border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px]"
+                />
+              </form>
+
+              {/* Role Filter */}
+              <div className="md:col-span-2 relative flex items-center">
+                <select
+                  value={loginRole}
+                  onChange={(e) => {
+                    setLoginRole(e.target.value);
+                    setLoginPage(1);
+                  }}
+                  className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
+                >
+                  <option value="all">Semua Role</option>
+                  <option value="all_admins">⭐ Semua Admin</option>
+                  <option value="super_admin">Super Admin Saja</option>
+                  <option value="admin">Admin Saja</option>
+                  <option value="karyawan">Karyawan Saja</option>
+                </select>
+              </div>
+
+              {/* Login Status Filter */}
+              <div className="md:col-span-3 relative flex items-center">
+                <select
+                  value={loginStatus}
+                  onChange={(e) => {
+                    setLoginStatus(e.target.value);
+                    setLoginPage(1);
+                  }}
+                  className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
+                >
+                  <option value="all">Semua Status Login</option>
+                  <option value="never">❌ Belum Pernah Login</option>
+                  <option value="inactive_30">⚠️ Tidak Aktif &gt; 30 Hari</option>
+                  <option value="inactive_7">⏱️ Tidak Aktif &gt; 7 Hari</option>
+                  <option value="active">🟢 Aktif Baru-baru Ini</option>
+                </select>
+              </div>
+
+              {/* Company Filter */}
+              <div className="md:col-span-2 relative flex items-center">
+                <select
+                  value={loginCompany}
+                  onChange={(e) => {
+                    setLoginCompany(e.target.value);
+                    setLoginPage(1);
+                  }}
+                  className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
+                >
+                  <option value="all">Semua Entitas</option>
+                  <option value="rbs">PT RBS</option>
+                  <option value="rimamandiri">Riama Mandiri</option>
+                </select>
+              </div>
+
+              {/* Reset */}
+              <div className="md:col-span-1 flex items-center">
+                <button
+                  type="button"
+                  onClick={handleResetLoginFilters}
+                  className="w-full h-10 flex items-center justify-center rounded-lg border border-border-subtle hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                  title="Reset Filter"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Sort & Preset Buttons */}
+            <div className="pt-2 border-t border-border-subtle flex flex-wrap items-center justify-between gap-2 text-[12px]">
+              <div className="flex items-center gap-1.5 text-text-muted">
+                <span>Filter Cepat:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginRole('all_admins');
+                    setLoginStatus('never');
+                    setLoginPage(1);
+                  }}
+                  className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-medium transition-colors"
+                >
+                  Admin Belum Pernah Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginRole('all_admins');
+                    setLoginStatus('inactive_7');
+                    setLoginPage(1);
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-medium transition-colors"
+                >
+                  Admin Tidak Login &gt; 7 Hari
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-text-muted">Urutan:</span>
+                <select
+                  value={loginSortOrder}
+                  onChange={(e) => {
+                    setLoginSortOrder(e.target.value as 'asc' | 'desc');
+                    setLoginPage(1);
+                  }}
+                  className="px-2 py-1 rounded bg-surface border border-border-subtle text-[11.5px] font-semibold text-text-primary outline-none cursor-pointer"
+                >
+                  <option value="asc">Paling Lama / Belum Login Dulu</option>
+                  <option value="desc">Baru Login Terakhir Dulu</option>
+                </select>
+              </div>
+            </div>
           </div>
 
-          {/* Company Filter */}
-          <div className="sm:col-span-1 lg:col-span-2">
-            <select
-              value={selectedCompany}
-              onChange={(e) => {
-                setSelectedCompany(e.target.value);
-                setPage(1);
-              }}
-              className="w-full h-9 px-2.5 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[12.5px] cursor-pointer"
-            >
-              <option value="all">Semua Entitas</option>
-              <option value="rbs">PT Rimbun Buana Sejahtera</option>
-              <option value="rimamandiri">PT Riama Mandiri Pratama</option>
-            </select>
-          </div>
-
-          {/* Date Range Start */}
-          <div className="sm:col-span-1 lg:col-span-2">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                setPage(1);
-              }}
-              className="w-full h-9 px-2 bg-surface-panel rounded-lg text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[11.5px]"
-              title="Tanggal Mulai"
-            />
-          </div>
-
-          {/* Date Range End & Reset */}
-          <div className="sm:col-span-1 lg:col-span-2 flex items-center gap-1.5">
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
-                setPage(1);
-              }}
-              className="w-full h-9 px-2 bg-surface-panel rounded-lg text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[11.5px]"
-              title="Tanggal Sampai"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleResetFilters}
-              title="Reset Filter"
-              className="px-2.5 h-9 shrink-0 text-xs"
-            >
-              Reset
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      {/* Activity Log Data Table */}
-      <div className="w-full bg-surface-panel rounded-xl border border-border-subtle shadow-sm overflow-hidden">
-        <div className="px-4 py-2 bg-slate-50/70 border-b border-border-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-text-muted">
-          <span>Daftar kronologis audit aktivitas administrator sistem</span>
-          <span className="hidden sm:inline-block text-slate-400">Geser ke samping jika kolom terpotong →</span>
-        </div>
-        <div className="w-full overflow-x-auto scrollbar-thin">
-          <table className="w-full min-w-[960px] text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border-subtle bg-surface-container-low text-text-secondary text-[11.5px] font-semibold uppercase tracking-wider">
-                <th className="py-3 px-3 w-12 text-center">No</th>
-                <th className="py-3 px-3 min-w-[130px] whitespace-nowrap">Waktu (WIB)</th>
-                <th className="py-3 px-3 min-w-[170px]">Pelaksana / Admin</th>
-                <th className="py-3 px-3 min-w-[100px] text-center whitespace-nowrap">Entitas</th>
-                <th className="py-3 px-3 min-w-[130px] text-center whitespace-nowrap">Jenis Tindakan</th>
-                <th className="py-3 px-3 min-w-[260px]">Deskripsi Aktivitas</th>
-                <th className="py-3 px-3 min-w-[110px] text-center whitespace-nowrap">IP Address</th>
-                <th className="py-3 px-3 w-16 text-center whitespace-nowrap">Detail</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-row text-[13px]">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-text-muted">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-                      <span>Memuat catatan log aktivitas...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : logs.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-text-muted">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-                      <span className="font-semibold text-text-primary">
-                        Tidak ada catatan log aktivitas yang cocok dengan kriteria.
-                      </span>
-                      <span className="text-[12px]">
-                        Semua aktivitas penambahan, pengubahan, dan penghapusan admin akan otomatis tercatat di sini.
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                logs.map((log, index) => {
-                  const logDate = new Date(log.created_at);
-                  const formattedDate = logDate.toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  });
-                  const formattedTime = logDate.toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                  });
-
-                  return (
-                    <tr
-                      key={log.id}
-                      className="hover:bg-surface-container-low transition-colors"
-                    >
-                      <td className="py-3 px-3 text-center text-text-muted font-mono text-[11px]">
-                        {(page - 1) * perPage + index + 1}
-                      </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <div className="font-semibold text-text-primary text-[12.5px]">
-                          {formattedDate}
+          {/* Table */}
+          <div className="bg-surface-panel rounded-xl border border-border-subtle shadow-sm overflow-hidden">
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full min-w-[1000px] text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container-low border-b border-border-subtle text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                    <th className="py-3.5 px-3 text-center w-12">No</th>
+                    <th className="py-3.5 px-3 min-w-[200px]">Nama & Email Pengguna</th>
+                    <th className="py-3.5 px-3 min-w-[120px] text-center">Peran</th>
+                    <th className="py-3.5 px-3 min-w-[110px] text-center">Entitas</th>
+                    <th className="py-3.5 px-3 min-w-[180px]">Terakhir Login</th>
+                    <th className="py-3.5 px-3 min-w-[120px]">IP Login</th>
+                    <th className="py-3.5 px-3 min-w-[180px]">Status Keaktifan</th>
+                    <th className="py-3.5 px-3 min-w-[200px]">Aktivitas Terakhir di Sistem</th>
+                    <th className="py-3.5 px-3 text-center min-w-[110px]">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-row text-[13px]">
+                  {isLoginsLoading ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <tr key={`login-skel-${idx}`} className="animate-pulse">
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="h-4 w-5 bg-slate-200 rounded mx-auto" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-36 bg-slate-200 rounded mb-1" />
+                          <div className="h-3 w-28 bg-slate-100 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="h-5 w-20 bg-slate-200 rounded-full mx-auto" />
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="h-5 w-16 bg-slate-200 rounded mx-auto" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-28 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-20 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-5 w-28 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-32 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="h-7 w-16 bg-slate-200 rounded mx-auto" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : loginUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-12 text-center text-text-muted">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Users className="w-8 h-8 text-slate-300" />
+                          <span className="font-medium text-text-primary">
+                            Tidak ada data pengguna yang sesuai dengan filter.
+                          </span>
+                          <span className="text-[12px]">
+                            Coba sesuaikan kata kunci pencarian atau reset filter status login.
+                          </span>
                         </div>
-                        <div className="text-[11px] font-mono text-text-muted flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{formattedTime} WIB</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="font-semibold text-text-primary flex items-center gap-1.5">
-                          <span>{log.user_name}</span>
-                          {log.user_role === 'super_admin' ? (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-100 text-amber-800 font-bold border border-amber-300">
-                              Super Admin
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-purple-100 text-purple-700 font-semibold border border-purple-200">
-                              Admin
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-text-muted font-mono truncate max-w-[170px]">
-                          {log.user_email}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        {getCompanyBadge(log.company)}
-                      </td>
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        {getActionBadge(log.action)}
-                      </td>
-                      <td className="py-3 px-3 text-text-primary leading-snug break-words max-w-[340px]">
-                        <span>{log.description}</span>
-                      </td>
-                      <td className="py-3 px-3 text-center font-mono text-[11.5px] text-text-muted whitespace-nowrap">
-                        {log.ip_address || '-'}
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLog(log)}
-                          className="p-1.5 rounded-lg text-primary hover:bg-surface-container transition-colors cursor-pointer"
-                          title="Lihat Detail Forensik"
-                        >
-                          <Info className="w-4 h-4" />
-                        </button>
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    loginUsers.map((item, index) => {
+                      const rowNumber = (loginMeta.current_page - 1) * loginMeta.per_page + index + 1;
+                      return (
+                        <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 text-center font-mono text-[12px] text-text-muted">
+                            {rowNumber}
+                          </td>
 
-        {/* Pagination Footer */}
-        {meta.total > 0 && (
-          <Pagination
-            meta={{
-              current_page: meta.current_page,
-              last_page: meta.last_page,
-              per_page: meta.per_page,
-              total: meta.total,
-              from: (page - 1) * perPage + 1,
-              to: Math.min(page * perPage, meta.total),
-            }}
-            onPageChange={(p) => setPage(p)}
-            perPage={perPage}
-            onPerPageChange={(pp) => {
-              setPerPage(pp);
-              setPage(1);
-            }}
-            isLoading={isLoading}
-          />
-        )}
-      </div>
+                          {/* Nama & Email */}
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-text-primary text-[13px]">
+                              {item.name}
+                            </div>
+                            <div className="text-[11.5px] text-text-muted font-mono">
+                              {item.email}
+                            </div>
+                            {item.nik && (
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                NIK: {item.nik}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Role */}
+                          <td className="py-3 px-3 text-center">
+                            {getRoleBadge(item.role)}
+                          </td>
+
+                          {/* Company */}
+                          <td className="py-3 px-3 text-center">
+                            {getCompanyBadge(item.company)}
+                          </td>
+
+                          {/* Last Login At */}
+                          <td className="py-3 px-3">
+                            {item.last_login_at ? (
+                              <div>
+                                <div className="font-medium text-text-primary text-[12.5px] font-mono">
+                                  {new Date(item.last_login_at).toLocaleString('id-ID', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </div>
+                                <div className="text-[11px] text-text-muted">
+                                  {item.last_login_human}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 font-semibold text-rose-600 text-[11.5px]">
+                                <span>Belum pernah</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Last Login IP */}
+                          <td className="py-3 px-3 font-mono text-[11.5px] text-text-muted">
+                            {item.last_login_ip || '-'}
+                          </td>
+
+                          {/* Inactivity Status Badge */}
+                          <td className="py-3 px-3">
+                            {getInactivityBadge(item)}
+                          </td>
+
+                          {/* Last System Activity */}
+                          <td className="py-3 px-3">
+                            {item.last_activity ? (
+                              <div className="max-w-[240px]">
+                                <div className="text-[11.5px] font-medium text-text-primary truncate" title={item.last_activity.description}>
+                                  {item.last_activity.description}
+                                </div>
+                                <div className="text-[10.5px] text-text-muted">
+                                  {item.last_activity.human}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-[11px] italic">Tidak ada rekaman</span>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleInspectUserLogs(item)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-semibold bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all cursor-pointer"
+                              title="Lihat riwayat aktivitas user ini di Log Sistem"
+                            >
+                              <span>Cek Log</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {loginMeta.total > 0 && (
+              <Pagination
+                meta={{
+                  current_page: loginMeta.current_page,
+                  last_page: loginMeta.last_page,
+                  per_page: loginMeta.per_page,
+                  total: loginMeta.total,
+                  from: (loginPage - 1) * loginPerPage + 1,
+                  to: Math.min(loginPage * loginPerPage, loginMeta.total),
+                }}
+                onPageChange={(p) => setLoginPage(p)}
+                perPage={loginPerPage}
+                onPerPageChange={(pp) => {
+                  setLoginPerPage(pp);
+                  setLoginPage(1);
+                }}
+                isLoading={isLoginsLoading}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1: LOG AKTIVITAS SISTEM (AUDIT TRAIL)                                 */}
+      {/* ========================================================================= */}
+      {activeTab === 'logs' && (
+        <div className="space-y-6">
+          {/* KPI Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
+                  Aktivitas Hari Ini
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono text-text-primary">
+                  {isStatsLoading ? '...' : (stats?.today_count ?? 0)}
+                </span>
+                <span className="text-[11px] text-text-muted">tindakan tercatat</span>
+              </div>
+            </Card>
+
+            <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
+                  Aktivitas Pekan Ini
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Activity className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono text-text-primary">
+                  {isStatsLoading ? '...' : (stats?.this_week_count ?? 0)}
+                </span>
+                <span className="text-[11px] text-text-muted">tindakan pekan ini</span>
+              </div>
+            </Card>
+
+            <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
+                  Total Riwayat Log
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Terminal className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-bold font-mono text-text-primary">
+                  {isStatsLoading ? '...' : (stats?.total_count ?? 0)}
+                </span>
+                <span className="text-[11px] text-text-muted">total peristiwa</span>
+              </div>
+            </Card>
+
+            <Card className="p-4 border border-border-subtle bg-surface-panel shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">
+                  Integritas & Audit
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 flex items-center gap-1.5 text-emerald-600 font-semibold text-[13px]">
+                <span>Aktif & Terlindungi</span>
+              </div>
+              <span className="text-[11px] text-text-muted">Audit log tidak dapat dihapus</span>
+            </Card>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="bg-surface-panel rounded-xl border border-border-subtle p-4 shadow-sm space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
+              {/* Search */}
+              <form
+                onSubmit={handleSearchSubmit}
+                className="md:col-span-4 relative flex items-center"
+              >
+                <Search className="w-4 h-4 text-text-muted absolute left-3 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Cari User, Deskripsi, IP Address..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full h-10 pl-9 pr-4 bg-surface-panel rounded-lg text-body-default text-text-primary placeholder:text-text-muted border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px]"
+                />
+              </form>
+
+              {/* Modul Filter */}
+              <div className="md:col-span-2 relative flex items-center">
+                <select
+                  value={selectedModule}
+                  onChange={(e) => {
+                    setSelectedModule(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
+                >
+                  <option value="all">Semua Modul</option>
+                  <option value="PAYROLL">Penggajian</option>
+                  <option value="AUTH">Autentikasi</option>
+                  <option value="ATTENDANCE">Absensi</option>
+                  <option value="USER_MANAGEMENT">Manajemen User</option>
+                  <option value="SYSTEM">Sistem</option>
+                </select>
+              </div>
+
+              {/* Perusahaan Filter */}
+              <div className="md:col-span-2 relative flex items-center">
+                <select
+                  value={selectedCompany}
+                  onChange={(e) => {
+                    setSelectedCompany(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
+                >
+                  <option value="all">Semua Entitas</option>
+                  <option value="rbs">PT RBS</option>
+                  <option value="rimamandiri">Riama Mandiri</option>
+                </select>
+              </div>
+
+              {/* Tanggal */}
+              <div className="md:col-span-3 flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full h-10 px-2 rounded-lg border border-border-subtle bg-surface-panel text-text-primary text-[12px] outline-none focus:ring-2 focus:ring-primary"
+                  title="Dari Tanggal"
+                />
+                <span className="text-text-muted text-[11px]">s/d</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full h-10 px-2 rounded-lg border border-border-subtle bg-surface-panel text-text-primary text-[12px] outline-none focus:ring-2 focus:ring-primary"
+                  title="Sampai Tanggal"
+                />
+              </div>
+
+              {/* Reset */}
+              <div className="md:col-span-1 flex items-center">
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="w-full h-10 flex items-center justify-center rounded-lg border border-border-subtle hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                  title="Reset Filter"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-surface-panel rounded-xl border border-border-subtle shadow-sm overflow-hidden">
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full min-w-[1000px] text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container-low border-b border-border-subtle text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                    <th className="py-3.5 px-3 text-center w-12">No</th>
+                    <th className="py-3.5 px-3 min-w-[150px]">Waktu & Tanggal</th>
+                    <th className="py-3.5 px-3 min-w-[180px]">Pelaksana (Admin)</th>
+                    <th className="py-3.5 px-3 min-w-[100px] text-center">Entitas</th>
+                    <th className="py-3.5 px-3 min-w-[130px]">Tindakan</th>
+                    <th className="py-3.5 px-3 min-w-[100px]">Modul</th>
+                    <th className="py-3.5 px-3 min-w-[280px]">Deskripsi Peristiwa</th>
+                    <th className="py-3.5 px-3 min-w-[110px]">IP Address</th>
+                    <th className="py-3.5 px-3 text-center min-w-[80px]">Detail</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-row text-[13px]">
+                  {isLoading ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <tr key={`log-skel-${idx}`} className="animate-pulse">
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="h-4 w-5 bg-slate-200 rounded mx-auto" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-28 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-32 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="h-5 w-16 bg-slate-200 rounded mx-auto" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-5 w-24 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-16 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-48 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3">
+                          <div className="h-4 w-20 bg-slate-200 rounded" />
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="h-6 w-8 bg-slate-200 rounded mx-auto" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : logs.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-12 text-center text-text-muted">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Terminal className="w-8 h-8 text-slate-300" />
+                          <span className="font-medium text-text-primary">
+                            Tidak ada catatan aktivitas yang ditemukan.
+                          </span>
+                          <span className="text-[12px]">
+                            Coba sesuaikan kata kunci pencarian atau tanggal.
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    logs.map((log, index) => {
+                      const rowNumber = (meta.current_page - 1) * meta.per_page + index + 1;
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 text-center font-mono text-[12px] text-text-muted">
+                            {rowNumber}
+                          </td>
+
+                          {/* Waktu */}
+                          <td className="py-3 px-3 font-mono text-[12px] text-text-primary whitespace-nowrap">
+                            <div>
+                              {new Date(log.created_at).toLocaleDateString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </div>
+                            <div className="text-[11px] text-text-muted">
+                              {new Date(log.created_at).toLocaleTimeString('id-ID', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                              })}{' '}
+                              WIB
+                            </div>
+                          </td>
+
+                          {/* Pelaksana */}
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-text-primary text-[12.5px]">
+                              {log.user_name || 'System'}
+                            </div>
+                            <div className="text-[11px] text-text-muted font-mono truncate max-w-[180px]">
+                              {log.user_email}
+                            </div>
+                          </td>
+
+                          {/* Perusahaan */}
+                          <td className="py-3 px-3 text-center">
+                            {getCompanyBadge(log.company)}
+                          </td>
+
+                          {/* Tindakan */}
+                          <td className="py-3 px-3">
+                            {getActionBadge(log.action)}
+                          </td>
+
+                          {/* Modul */}
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-surface-container border border-border-subtle text-text-secondary">
+                              {log.module}
+                            </span>
+                          </td>
+
+                          {/* Deskripsi */}
+                          <td className="py-3 px-3">
+                            <div className="font-medium text-text-primary text-[12.5px] line-clamp-2" title={log.description}>
+                              {log.description}
+                            </div>
+                          </td>
+
+                          {/* IP Address */}
+                          <td className="py-3 px-3 font-mono text-[11px] text-text-muted">
+                            {log.ip_address || '-'}
+                          </td>
+
+                          {/* Detail Button */}
+                          <td className="py-3 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLog(log)}
+                              className="p-1.5 rounded-lg text-primary hover:bg-surface-container transition-colors cursor-pointer"
+                              title="Lihat Detail Forensik"
+                            >
+                              <Info className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Footer */}
+            {meta.total > 0 && (
+              <Pagination
+                meta={{
+                  current_page: meta.current_page,
+                  last_page: meta.last_page,
+                  per_page: meta.per_page,
+                  total: meta.total,
+                  from: (page - 1) * perPage + 1,
+                  to: Math.min(page * perPage, meta.total),
+                }}
+                onPageChange={(p) => setPage(p)}
+                perPage={perPage}
+                onPerPageChange={(pp) => {
+                  setPerPage(pp);
+                  setPage(1);
+                }}
+                isLoading={isLoading}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal Detail Forensik Log */}
       {selectedLog && (

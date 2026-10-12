@@ -72,12 +72,17 @@ export const normalizePeriodToSP = (period?: string | null): string => {
 export const formatPeriodDisplay = (period?: string | null): string => {
   if (!period) return '-';
   const clean = period.trim();
-
-  // Cek apakah format SP
-  const spCode = normalizePeriodToSP(clean);
-  const match = SP_PERIOD_LIST.find(
-    (item) => item.code.toLowerCase() === spCode.toLowerCase()
-  );
-
+  const normalized = normalizePeriodToSP(clean);
+  const match = SP_PERIOD_LIST.find((item) => item.code.toLowerCase() === normalized.toLowerCase());
   return match ? match.fullLabel : clean;
+};
+
+export const isStandardSP = (period?: string | null): boolean => {
+  if (!period) return false;
+  return /^SP\s*\d+$/i.test(period.trim()) || /^Surat\s+Pesanan/i.test(period.trim());
+};
+
+export const isOutsideSP = (period?: string | null): boolean => {
+  if (!period) return false;
+  return !isStandardSP(period);
 };

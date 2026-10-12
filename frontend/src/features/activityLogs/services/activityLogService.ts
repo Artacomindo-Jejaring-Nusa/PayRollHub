@@ -23,4 +23,13 @@ export const activityLogService = {
     );
     return response.data.data;
   },
+
+  getUserLogins: async (params?: import('../types').UserLoginParams): Promise<import('../types').UserLoginTrackingResponse> => {
+    const response = await api.get<import('../types').UserLoginTrackingResponse>(
+      '/admin/activity-logs/user-logins',
+      { params }
+    );
+    return response.data;
+  },
 };
+

@@ -37,6 +37,7 @@ class UpdatePayrollRequest extends FormRequest
             'status' => ['nullable', 'string', 'in:active,off'],
             'company' => ['nullable', 'string', 'max:50'],
             'period' => ['required', 'string', 'max:50'],
+            'is_visible_to_user' => ['nullable', 'boolean'],
             'net_base_price' => ['nullable', 'numeric', 'min:0'],
             'bpjs_kes' => ['nullable', 'numeric', 'min:0'],
             'bpjs_tk' => ['nullable', 'numeric', 'min:0'],

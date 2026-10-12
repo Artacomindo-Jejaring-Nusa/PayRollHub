@@ -32,6 +32,16 @@ Sistem Rekapitulasi & Manajemen Penggajian Karyawan modern, cepat, dan aman berb
   - **Admin**: Akses penuh ke seluruh fitur entitas perusahaan terkait.
   - **User / Karyawan**: Portal Karyawan mandiri untuk absensi selfie geolokasi radius 100+ titik, cek slip gaji, laporan kerja harian, dan tiket keluhan.
 
+- **Target SP / Periode Fleksibel & Karyawan Luar SP (Poin 17)**:
+  - Admin dapat menambah target periode kustom di luar SP standar (seperti **Ambon**, **Cikarang**, atau penugasan khusus).
+  - Dilengkapi opsi **Visibilitas User View**: Periode atau karyawan di luar SP dapat disetel **hanya tampil di Admin** dan otomatis **disembunyikan dari Portal Karyawan (User View)**, slip gaji mandiri, dan unduhan slip PDF karyawan.
+
+- **Monitoring Keaktifan Login User & Admin di Log Aktivitas (Poin 18)**:
+  - Tab baru di menu **Log Aktivitas**: *Monitoring Login User & Admin*.
+  - Melacak kapan terakhir kali setiap admin/karyawan login (`last_login_at`, IP, dan waktu relatif).
+  - Deteksi instan admin/user yang **belum pernah login** (`never`) atau **tidak aktif > 7 hari / 30 hari** dengan kartu KPI dan filter cepat.
+  - Hubungkan langsung riwayat login ke detail jejak forensik sistem (audit trail).
+
 ---
 
 # 📋 PANDUAN PENGGUNAAN FITUR BARU & SOP (PM / HRD GUIDE)
@@ -128,6 +138,71 @@ Setelah disimpan:
    * **Tabel Rincian Potongan:** Menampilkan potongan absensi beserta keterangannya, serta rincian seluruh potongan kustom.
    * **Kotak Hijau TOTAL GAJI DITERIMA:** Menampilkan nominal Take Home Pay yang sudah bersih setelah dipotong absensi dan potongan kustom.
    * **BPJS Ketenagakerjaan Non-Potongan:** JHT & JP ditampilkan rapi di bagian bawah sebagai klaim yang dapat dicairkan terpisah.
+
+---
+
+## 🔹 BAGIAN 5: Target SP / Periode Fleksibel & Karyawan Luar SP (Poin 17)
+
+Fitur ini menjawab kebutuhan:  
+> *"Jd yg Ambon dan cikarang Si admin bisa nambahin, Tp dia bisa pilih juga bahwa itu ga di tampilin di user view."*
+
+### Cara Menambah Target SP / Periode Baru:
+1. Buka menu **Data Penggajian** di sidebar.
+2. Di toolbar atas sebelah tombol *Tambah Data*, klik tombol ungu:  
+   👉 **`Target SP & Periode`**.
+3. Modal **Kelola Target Surat Pesanan (SP) & Periode** akan muncul:
+   * **Kode Periode:** Ketik kode (contoh: `Ambon`, `Cikarang`, `SP 10`, dll).
+   * **Nama Periode:** Ketik nama lengkap (contoh: *Penugasan Khusus Ambon*, *Proyek Luar SP Cikarang*).
+   * **Status SP:** Tentukan apakah ini SP Resmi (`SP`) atau di luar SP (`Luar SP`).
+   * **Visibilitas User View:**
+     * 🟢 **Centang Tampil di User View**: Karyawan dapat melihat slip gaji dan periode ini di portal mereka.
+     * 🔒 **Hilangkan Centang (Admin Only)**: Periode ini **hanya tampil di Admin** dan otomatis **disembunyikan dari User View** (portal karyawan tidak akan menampilkan slip ini).
+4. Klik **+ Simpan Periode**.
+
+### Cara Input Gaji Karyawan Luar SP (Hanya Tampil di Admin):
+1. Di menu **Data Penggajian**, klik **+ Tambah Data** (atau **Edit Data**).
+2. Di bagian **1. Informasi Karyawan & Penugasan**:
+   * Pada dropdown **Surat Pesanan / Periode**, pilih periode kustom yang tadi dibuat (contoh: `Ambon` atau `Cikarang`).
+   * Di samping dropdown terdapat tombol cepat: **`+ Kelola / Tambah Target SP`** jika Anda ingin menambah periode baru tanpa pindah halaman.
+   * Perhatikan kotak toggle **Visibilitas Data**:
+     * Jika memilih periode luar SP yang disembunyikan (Ambon/Cikarang), opsi **"Sembunyikan dari User View (Hanya Tampil di Admin)"** otomatis aktif.
+     * Admin juga bisa mencentang/membatalkan toggle ini kapan saja secara manual.
+3. Simpan data gaji karyawan.
+4. **Hasil di Sistem:**
+   * Di tabel Admin: Terdapat badge **`🔒 Luar SP (Admin Only)`** pada baris karyawan tersebut.
+   * Di tabel Filter: Admin dapat memilih filter visibilitas: *Semua Data*, *Tampil di Karyawan*, atau *Luar SP (Admin Only)*.
+   * Di Portal Karyawan: Karyawan tersebut **sama sekali tidak dapat melihat** catatan gaji atau mengunduh slip periode tersebut.
+
+---
+
+## 🔹 BAGIAN 6: Monitoring Login User & Admin di Log Aktivitas (Poin 18)
+
+Fitur ini menjawab kebutuhan:  
+> *"untuk admin bisa cek di Log Aktifitas user admin yang gak login login dan last login nya kapan."*
+
+### Langkah-langkah:
+1. Buka menu **Log Aktivitas** di sidebar kiri.
+2. Di bagian atas, pilih tab:  
+   👉 **`Monitoring Login User / Admin (Poin 18)`**.
+3. **Lihat Kartu Ringkasan (KPI):**
+   * **Total Pengguna Terdaftar:** Total seluruh akun aktif di sistem.
+   * **Belum Pernah Login (Kotak Merah):** Jumlah user/admin yang sejak dibuat belum pernah melakukan login sama sekali.
+   * **Tidak Aktif > 7 Hari (Kotak Oranye):** Jumlah user/admin yang sudah lebih dari seminggu tidak membuka sistem.
+   * **Aktif Pekan Ini (Kotak Hijau):** Jumlah user/admin yang aktif login dalam 7 hari terakhir.
+4. **Penyaringan & Deteksi Akun Pasif:**
+   * **Filter Peran:** Pilih *Semua Admin*, *Admin Saja*, *Super Admin Saja*, atau *Karyawan*.
+   * **Filter Status Login:** Pilih *❌ Belum Pernah Login*, *⚠️ Tidak Aktif > 30 Hari*, *⏱️ Tidak Aktif > 7 Hari*, atau *🟢 Aktif*.
+   * **Tombol Cepat:** Klik tombol *[Admin Belum Pernah Login]* atau *[Admin Tidak Login > 7 Hari]* untuk filter 1-klik.
+   * **Urutan:** Bisa diurutkan dari yang *Paling Lama / Belum Login Dulu* ke yang paling baru.
+5. **Kolom Data yang Ditampilkan:**
+   * **Nama & Email Pengguna** + NIK.
+   * **Peran & Entitas** (Admin RBS / Riama).
+   * **Terakhir Login:** Tanggal & jam presisi (WIB) serta waktu relatif (contoh: *2 jam lalu*, *14 hari lalu*, atau *Belum pernah*).
+   * **IP Login:** Alamat IP koneksi terakhir pelaksana.
+   * **Status Keaktifan:** Badge visual status keaktifan.
+   * **Aktivitas Terakhir:** Tindakan terakhir apa yang mereka kerjakan di sistem sebelum logout.
+6. **Hubungkan ke Log Sistem:**
+   * Klik tombol **`Cek Log →`** di baris pengguna tersebut untuk langsung melihat rekaman forensik seluruh tindakan mereka di tab Audit Trail.
 
 ---
 

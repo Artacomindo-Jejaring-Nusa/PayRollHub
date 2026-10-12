@@ -120,6 +120,12 @@ class AuthController extends Controller
 
         RateLimiter::clear($throttleKey);
 
+        // Update last login timestamp & IP
+        $user->forceFill([
+            'last_login_at' => now(),
+            'last_login_ip' => $request->ip(),
+        ])->save();
+
         // Delete old tokens if not remember_me or generate fresh token
         $tokenName = $request->boolean('remember_me') ? 'auth_token_remembered' : 'auth_token';
         $token = $user->createToken($tokenName)->plainTextToken;

@@ -97,6 +97,13 @@ class PayrollService
             $query->whereIn('bank_account', $duplicateAccList);
         }
 
+        // Filter visibilitas user view (Poin 17)
+        if ($request->input('visibility') === 'visible') {
+            $query->where('is_visible_to_user', true);
+        } elseif ($request->input('visibility') === 'hidden') {
+            $query->where('is_visible_to_user', false);
+        }
+
         $sortBy = $request->input('sort_by', 'id');
         $sortOrder = strtolower($request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
 
@@ -369,15 +376,20 @@ class PayrollService
     }
 
     /**
-     * Get distinct list of periods from data.
+     * Get distinct list of periods from data and master payroll periods.
      */
     public function getDistinctPeriods(?string $company = null): array
     {
+        $masterPeriods = \App\Models\PayrollPeriod::forCompany($company)->pluck('code')->toArray();
+
         $query = Payroll::query()->select('period')->whereNotNull('period');
         if ($company) {
             $query->where('company', $company);
         }
-        return $query->distinct()->orderByDesc('period')->pluck('period')->toArray();
+        $existingPeriods = $query->distinct()->orderByDesc('period')->pluck('period')->toArray();
+
+        $allPeriods = array_unique(array_merge($masterPeriods, $existingPeriods));
+        return array_values($allPeriods);
     }
 
     /**

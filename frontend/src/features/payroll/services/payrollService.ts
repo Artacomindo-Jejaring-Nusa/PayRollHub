@@ -26,6 +26,7 @@ export const payrollService = {
     sort_by?: string;
     sort_order?: string;
     duplicate_account?: boolean;
+    visibility?: string;
   }): Promise<PayrollListResponse> => {
     const activeTenant = detectInitialTenant();
     const finalParams = {

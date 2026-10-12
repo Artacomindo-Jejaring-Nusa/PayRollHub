@@ -16,6 +16,7 @@ import { ConfirmDialog } from '../../../components/shared/ConfirmDialog';
 import { SP_PERIOD_LIST, MONTH_PERIOD_OPTIONS, formatPeriodDisplay } from '../../../lib/period';
 import { ProvinceSettingsModal } from '../components/ProvinceSettingsModal';
 import { EmployeeReplacementsModal } from '../components/EmployeeReplacementsModal';
+import { PayrollPeriodsModal } from '../components/PayrollPeriodsModal';
 import {
   Search,
   Filter,
@@ -37,6 +38,7 @@ import {
   AlertTriangle,
   SlidersHorizontal,
   History,
+  Layers,
 } from 'lucide-react';
 
 export const PayrollListPage: React.FC = () => {
@@ -72,9 +74,11 @@ export const PayrollListPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<string | null>(null);
 
-  // New features: Province Settings, Replacements, Duplicate Account Detection
+  // New features: Province Settings, Replacements, Duplicate Account Detection, Target SP Periods
   const [isProvinceModalOpen, setIsProvinceModalOpen] = useState(false);
   const [isReplacementModalOpen, setIsReplacementModalOpen] = useState(false);
+  const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
+  const [selectedVisibility, setSelectedVisibility] = useState<string>('');
   const [filterDuplicateAccount, setFilterDuplicateAccount] = useState(false);
   const [totalDuplicateAccounts, setTotalDuplicateAccounts] = useState(0);
 
@@ -112,6 +116,7 @@ export const PayrollListPage: React.FC = () => {
         sort_by: 'id',
         sort_order: 'asc',
         duplicate_account: filterDuplicateAccount ? true : undefined,
+        visibility: selectedVisibility ? (selectedVisibility as 'visible' | 'hidden') : undefined,
       });
 
       setPayrolls(response.data);
@@ -131,7 +136,7 @@ export const PayrollListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [search, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id, filterDuplicateAccount]);
+  }, [search, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id, filterDuplicateAccount, selectedVisibility]);
 
   useEffect(() => {
     fetchData();
@@ -284,6 +289,14 @@ export const PayrollListPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="sm"
+                leftIcon={<Layers className="w-4 h-4 text-purple-600" />}
+                onClick={() => setIsPeriodModalOpen(true)}
+              >
+                Target SP & Periode
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 leftIcon={<SlidersHorizontal className="w-4 h-4 text-primary" />}
                 onClick={() => setIsProvinceModalOpen(true)}
               >
@@ -407,11 +420,17 @@ export const PayrollListPage: React.FC = () => {
               className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
             >
               <option value="">Semua SP / Periode</option>
-              {SP_PERIOD_LIST.map((sp) => (
-                <option key={sp.code} value={sp.code}>
-                  {sp.fullLabel}
-                </option>
-              ))}
+              {Array.from(new Set([
+                ...SP_PERIOD_LIST.map((sp) => sp.code),
+                ...periodOptions,
+              ])).map((pCode) => {
+                const std = SP_PERIOD_LIST.find((s) => s.code === pCode);
+                return (
+                  <option key={pCode} value={pCode}>
+                    {std ? std.fullLabel : formatPeriodDisplay(pCode)}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -424,6 +443,7 @@ export const PayrollListPage: React.FC = () => {
                     setSelectedProvince('');
                     setSelectedPosition('');
                     setSelectedPeriod('');
+                    setSelectedVisibility('');
                     setStartPeriod('');
                     setEndPeriod('');
                     setPage(1);
@@ -498,6 +518,24 @@ export const PayrollListPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <div className="flex items-center gap-1.5 bg-surface-container/60 border border-border-subtle rounded-md px-2 py-1">
+                    <span className="text-[11px] font-medium text-text-muted">Visibilitas:</span>
+                    <select
+                      value={selectedVisibility}
+                      onChange={(e) => {
+                        setSelectedVisibility(e.target.value);
+                        setPage(1);
+                      }}
+                      className="bg-transparent text-[11px] font-semibold text-text-primary outline-none cursor-pointer"
+                    >
+                      <option value="">Semua Data</option>
+                      <option value="visible">👁️ Tampil di Karyawan</option>
+                      <option value="hidden">🔒 Luar SP (Admin Only)</option>
+                    </select>
+                  </div>
+                )}
+
                 {isAdmin && (
                   <button
                     type="button"
@@ -685,8 +723,16 @@ export const PayrollListPage: React.FC = () => {
 
                       {/* Nama Lengkap */}
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <div className="font-semibold text-text-primary group-hover:text-primary transition-colors text-[13px]">
-                          {item.employee_name}
+                        <div className="font-semibold text-text-primary group-hover:text-primary transition-colors text-[13px] flex items-center gap-1.5">
+                          <span>{item.employee_name}</span>
+                          {isAdmin && item.is_visible_to_user === false && (
+                            <span
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-purple-100 text-purple-700 border border-purple-200"
+                              title="Karyawan di luar SP: Hanya tampil di Admin, disembunyikan dari User View"
+                            >
+                              🔒 Luar SP (Admin Only)
+                            </span>
+                          )}
                         </div>
                         {item.replaced_employee_name && (
                           <div
@@ -1016,6 +1062,13 @@ export const PayrollListPage: React.FC = () => {
         onReplacementRecorded={fetchData}
         company={tenant.id}
         payrolls={payrolls}
+      />
+
+      {/* Target SP & Periode Modal (Poin 17) */}
+      <PayrollPeriodsModal
+        isOpen={isPeriodModalOpen}
+        onClose={() => setIsPeriodModalOpen(false)}
+        onPeriodUpdated={fetchData}
       />
 
     </div>

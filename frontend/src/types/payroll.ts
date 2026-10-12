@@ -20,6 +20,7 @@ export interface PayrollItem {
   status: 'active' | 'off';
   company?: string;
   period: string;
+  is_visible_to_user?: boolean;
 
   // New salary formula fields based on Excel
   net_base_price: number; // Harga Dasar di potong PPh & Fee manajemen
@@ -249,4 +250,16 @@ export interface OffEmployeeItem {
   resign_date?: string | null;
   company?: string | null;
 }
+
+export interface PayrollPeriodItem {
+  id?: number;
+  code: string;
+  name: string;
+  company?: 'all' | 'rbs' | 'rimamandiri';
+  is_sp?: boolean;
+  is_visible_to_user?: boolean;
+  description?: string | null;
+  employee_count?: number;
+}
+
 

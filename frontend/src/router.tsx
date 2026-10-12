@@ -185,9 +185,9 @@ export const AppRouter: React.FC = () => {
         <Route
           path="/activity-logs"
           element={
-            <SuperAdminRoute>
+            <AdminRoute>
               <ActivityLogsPage />
-            </SuperAdminRoute>
+            </AdminRoute>
           }
         />
       </Route>

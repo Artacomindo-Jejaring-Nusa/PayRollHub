@@ -34,6 +34,7 @@ class EmployeePortalController extends Controller
                       ->orWhere('nik', "'{$cleanNik}");
                 })
                 ->where('company', $user->company ?: 'rbs')
+                ->where('is_visible_to_user', true)
                 ->latest('period')
                 ->first();
         }
@@ -59,6 +60,7 @@ class EmployeePortalController extends Controller
                       ->orWhere('nik', "'{$cleanNik}");
                 })
                 ->where('company', $user->company ?: 'rbs')
+                ->where('is_visible_to_user', true)
                 ->count();
         }
 
@@ -115,7 +117,8 @@ class EmployeePortalController extends Controller
                 $q->where('nik', $cleanNik)
                   ->orWhere('nik', "'{$cleanNik}");
             })
-            ->where('company', $user->company ?: 'rbs');
+            ->where('company', $user->company ?: 'rbs')
+            ->where('is_visible_to_user', true);
 
         if ($request->filled('period') && $request->input('period') !== 'all') {
             $query->byPeriod($request->input('period'));
@@ -147,6 +150,7 @@ class EmployeePortalController extends Controller
                   ->orWhere('nik', "'{$cleanNik}");
             })
             ->where('company', $user->company ?: 'rbs')
+            ->where('is_visible_to_user', true)
             ->first();
 
         if (!$payroll) {
@@ -176,6 +180,7 @@ class EmployeePortalController extends Controller
                   ->orWhere('nik', "'{$cleanNik}");
             })
             ->where('company', $user->company ?: 'rbs')
+            ->where('is_visible_to_user', true)
             ->first();
 
         if (!$payroll) {

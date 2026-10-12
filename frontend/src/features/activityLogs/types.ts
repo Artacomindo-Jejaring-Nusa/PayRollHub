@@ -45,3 +45,53 @@ export interface ActivityLogParams {
   page?: number;
   per_page?: number;
 }
+
+export interface UserLoginTrackingItem {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  company: string;
+  nik?: string | null;
+  phone?: string | null;
+  last_login_at?: string | null;
+  last_login_human: string;
+  last_login_ip?: string | null;
+  days_since_login?: number | null;
+  status_label: 'active' | 'inactive_7' | 'inactive_30' | 'never';
+  last_activity?: {
+    action: string;
+    description: string;
+    created_at: string;
+    human: string;
+  } | null;
+}
+
+export interface UserLoginTrackingResponse {
+  status: string;
+  data: UserLoginTrackingItem[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+  summary: {
+    total_users: number;
+    active_recently: number;
+    inactive_over_7_days: number;
+    never_logged_in: number;
+  };
+}
+
+export interface UserLoginParams {
+  search?: string;
+  role?: string;
+  status?: string;
+  company?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+  page?: number;
+  per_page?: number;
+}
+

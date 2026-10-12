@@ -10,7 +10,9 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { Card } from '../../../components/ui/Card';
-import { ProvincePayrollSetting, OffEmployeeItem } from '../../../types/payroll';
+import { ProvincePayrollSetting, OffEmployeeItem, PayrollPeriodItem } from '../../../types/payroll';
+import { PayrollPeriodsModal } from '../components/PayrollPeriodsModal';
+import { payrollPeriodService } from '../services/payrollPeriodService';
 import {
   ArrowLeft,
   Save,
@@ -33,6 +35,9 @@ import {
   SlidersHorizontal,
   History,
   AlertTriangle,
+  Eye,
+  EyeOff,
+  Layers,
 } from 'lucide-react';
 
 export const PayrollFormPage: React.FC = () => {
@@ -57,6 +62,9 @@ export const PayrollFormPage: React.FC = () => {
   const [status, setStatus] = useState<'active' | 'off'>('active');
   const [resignDate, setResignDate] = useState('');
   const [period, setPeriod] = useState('SP 1');
+  const [isVisibleToUser, setIsVisibleToUser] = useState<boolean>(true);
+  const [availablePeriods, setAvailablePeriods] = useState<PayrollPeriodItem[]>([]);
+  const [isPeriodsModalOpen, setIsPeriodsModalOpen] = useState(false);
   const [bankAccount, setBankAccount] = useState('');
   const [bankName, setBankName] = useState('BNI');
 
@@ -237,6 +245,7 @@ export const PayrollFormPage: React.FC = () => {
           setPosition(data.position || 'Wali Asuh');
           setJoinDate(data.join_date || '');
           setPeriod(normalizePeriodToSP(data.period));
+          setIsVisibleToUser(data.is_visible_to_user ?? true);
           setCompany(data.company === 'rimamandiri' ? 'rimamandiri' : 'rbs');
           setStatus(data.status || 'active');
           setResignDate(data.resign_date || '');
@@ -298,6 +307,17 @@ export const PayrollFormPage: React.FC = () => {
     }
   }, [isEdit, id, tenant.id]);
 
+  useEffect(() => {
+    payrollPeriodService
+      .getPeriods({ company })
+      .then((items) => {
+        setAvailablePeriods(items);
+      })
+      .catch((err) => {
+        console.error('Failed to load periods', err);
+      });
+  }, [company]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
@@ -315,6 +335,7 @@ export const PayrollFormPage: React.FC = () => {
       position: position.trim() || undefined,
       join_date: joinDate.trim() || undefined,
       period: period.trim(),
+      is_visible_to_user: isVisibleToUser,
       company,
       status,
       resign_date: status === 'off' ? resignDate.trim() || undefined : undefined,
@@ -639,29 +660,114 @@ export const PayrollFormPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Surat Pesanan (SP) / Periode */}
-              {(() => {
-                const spOptions = SP_PERIOD_LIST.map((sp) => ({
-                  label: sp.fullLabel,
-                  value: sp.code,
-                }));
-                if (period && !spOptions.some((opt) => opt.value === period)) {
-                  spOptions.unshift({
-                    label: `${period} (Periode/SP)`,
-                    value: period,
+              {/* Surat Pesanan (SP) / Periode & Visibilitas (Poin 17) */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-text">
+                    Surat Pesanan (SP) / Periode Target *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsPeriodsModalOpen(true)}
+                    className="text-[11.5px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>+ Kelola / Tambah Target SP (Poin 17)</span>
+                  </button>
+                </div>
+
+                {(() => {
+                  const optionsMap = new Map<string, string>();
+                  SP_PERIOD_LIST.forEach((sp) => optionsMap.set(sp.code, sp.fullLabel));
+                  availablePeriods.forEach((ap) => {
+                    const suffix = ap.is_visible_to_user === false ? ' (Luar SP — Hidden)' : (!ap.is_sp ? ' (Luar SP)' : '');
+                    optionsMap.set(ap.code, `${ap.code} — ${ap.name}${suffix}`);
                   });
-                }
-                return (
-                  <Select
-                    label="Surat Pesanan (SP) / Periode *"
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
-                    options={spOptions}
-                    error={errors.period}
-                    required
-                  />
-                );
-              })()}
+                  if (period && !optionsMap.has(period)) {
+                    optionsMap.set(period, `${period} (Target Periode)`);
+                  }
+
+                  const spOptions = Array.from(optionsMap.entries()).map(([value, label]) => ({
+                    value,
+                    label,
+                  }));
+
+                  return (
+                    <Select
+                      value={period}
+                      onChange={(e) => {
+                        const selectedVal = e.target.value;
+                        setPeriod(selectedVal);
+                        const matched = availablePeriods.find(
+                          (p) => p.code.toLowerCase() === selectedVal.toLowerCase()
+                        );
+                        if (matched) {
+                          setIsVisibleToUser(matched.is_visible_to_user ?? true);
+                        } else {
+                          setIsVisibleToUser(/^SP\s*\d+$/i.test(selectedVal));
+                        }
+                      }}
+                      options={spOptions}
+                      error={errors.period}
+                      required
+                    />
+                  );
+                })()}
+
+                {/* Visibilitas di Portal Karyawan (User View) (Poin 17) */}
+                <div className="p-3 rounded-xl border border-border-subtle bg-slate-50/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-text flex items-center gap-1.5">
+                      {isVisibleToUser ? (
+                        <span className="text-emerald-700 flex items-center gap-1">
+                          <Eye className="w-3.5 h-3.5" />
+                          Tampil di Portal Karyawan
+                        </span>
+                      ) : (
+                        <span className="text-amber-800 flex items-center gap-1">
+                          <EyeOff className="w-3.5 h-3.5" />
+                          Khusus Admin (Disembunyikan dari User View)
+                        </span>
+                      )}
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsVisibleToUser(true)}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                          isVisibleToUser
+                            ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        👁️ Tampilkan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsVisibleToUser(false)}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                          !isVisibleToUser
+                            ? 'bg-amber-50 border-amber-500 text-amber-800 shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        🔒 Sembunyikan
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-text-muted leading-tight">
+                    {isVisibleToUser ? (
+                      <span>Karyawan ini dapat melihat dan mengunduh slip gaji di portal karyawan mandiri.</span>
+                    ) : (
+                      <span className="text-amber-800 font-medium">
+                        Karyawan di luar SP (misal Ambon, Cikarang) tidak akan melihat data penggajian ini di User View. Hanya Admin yang dapat melihat dan mengelola data ini.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
 
               {/* Bank & Nomor Rekening */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -1201,6 +1307,16 @@ export const PayrollFormPage: React.FC = () => {
           </Button>
         </div>
       </form>
+
+      {/* Modal Kelola Target SP & Periode Custom (Poin 17) */}
+      <PayrollPeriodsModal
+        isOpen={isPeriodsModalOpen}
+        onClose={() => setIsPeriodsModalOpen(false)}
+        onPeriodChanged={(newList) => {
+          setAvailablePeriods(newList);
+        }}
+        company={company}
+      />
     </div>
   );
 };

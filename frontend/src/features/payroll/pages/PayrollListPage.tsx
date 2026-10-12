@@ -13,7 +13,7 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { Modal } from '../../../components/ui/Modal';
 import { Pagination } from '../../../components/shared/Pagination';
 import { ConfirmDialog } from '../../../components/shared/ConfirmDialog';
-import { SP_PERIOD_LIST, formatPeriodDisplay } from '../../../lib/period';
+import { SP_PERIOD_LIST, MONTH_PERIOD_OPTIONS, formatPeriodDisplay } from '../../../lib/period';
 import {
   Search,
   Filter,
@@ -59,6 +59,8 @@ export const PayrollListPage: React.FC = () => {
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [startPeriod, setStartPeriod] = useState('');
+  const [endPeriod, setEndPeriod] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
@@ -90,6 +92,8 @@ export const PayrollListPage: React.FC = () => {
         province: selectedProvince,
         position: selectedPosition,
         period: selectedPeriod,
+        start_period: startPeriod || undefined,
+        end_period: endPeriod || undefined,
         status: selectedStatus,
         company: tenant.id,
         page,
@@ -114,7 +118,7 @@ export const PayrollListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [search, selectedProvince, selectedPosition, selectedPeriod, selectedStatus, page, perPage, tenant.id]);
+  }, [search, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id]);
 
   useEffect(() => {
     fetchData();
@@ -382,24 +386,94 @@ export const PayrollListPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Reset Button */}
-          <div className="md:col-span-1 flex items-center">
-            <button
-              onClick={() => {
-                setSearch('');
-                setSelectedStatus('');
-                setSelectedProvince('');
-                setSelectedPosition('');
-                setSelectedPeriod('');
-                setPage(1);
-              }}
-              className="w-full h-10 flex items-center justify-center rounded-lg border border-border-subtle hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors cursor-pointer"
-              title="Reset Filter"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+              {/* Reset Button */}
+              <div className="md:col-span-1 flex items-center">
+                <button
+                  onClick={() => {
+                    setSearch('');
+                    setSelectedStatus('');
+                    setSelectedProvince('');
+                    setSelectedPosition('');
+                    setSelectedPeriod('');
+                    setStartPeriod('');
+                    setEndPeriod('');
+                    setPage(1);
+                  }}
+                  className="w-full h-10 flex items-center justify-center rounded-lg border border-border-subtle hover:bg-surface-container text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                  title="Reset Filter"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-bar: Filter Rentang Periode (Tutup Absen Bulan ke Tahun) */}
+            <div className="pt-2.5 border-t border-border-subtle flex flex-wrap items-center justify-between gap-2.5 text-[12px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-text-primary flex items-center gap-1.5 shrink-0">
+                  <Calendar className="w-3.5 h-3.5 text-primary" />
+                  <span>Rentang Periode / Tutup Absen:</span>
+                </span>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-text-muted text-[11px]">Dari:</span>
+                  <select
+                    value={startPeriod}
+                    onChange={(e) => {
+                      setStartPeriod(e.target.value);
+                      setPage(1);
+                    }}
+                    className="h-8 px-2.5 bg-surface-panel rounded-lg text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[12px] font-medium cursor-pointer"
+                  >
+                    <option value="">Awal (Semua)</option>
+                    {MONTH_PERIOD_OPTIONS.map((opt) => (
+                      <option key={opt.code} value={opt.code}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-text-muted text-[11px]">Sampai:</span>
+                  <select
+                    value={endPeriod}
+                    onChange={(e) => {
+                      setEndPeriod(e.target.value);
+                      setPage(1);
+                    }}
+                    className="h-8 px-2.5 bg-surface-panel rounded-lg text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[12px] font-medium cursor-pointer"
+                  >
+                    <option value="">Akhir (Semua)</option>
+                    {MONTH_PERIOD_OPTIONS.map((opt) => (
+                      <option key={opt.code} value={opt.code}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {(startPeriod || endPeriod) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStartPeriod('');
+                      setEndPeriod('');
+                      setPage(1);
+                    }}
+                    className="text-[11px] text-rose-600 hover:text-rose-700 underline font-medium cursor-pointer ml-1"
+                  >
+                    Hapus Rentang
+                  </button>
+                )}
+              </div>
+
+              {(startPeriod || endPeriod) && (
+                <div className="text-[11px] text-primary bg-primary/10 px-2.5 py-0.5 rounded-md font-semibold">
+                  Rentang Aktif: {startPeriod || 'Awal'} s/d {endPeriod || 'Akhir'}
+                </div>
+              )}
+            </div>
       </div>
 
       {/* Main Payroll Table */}
@@ -428,14 +502,11 @@ export const PayrollListPage: React.FC = () => {
                 <th className="py-3.5 px-3 min-w-[120px] whitespace-nowrap text-center">Status</th>
                 {isAdmin && (
                   <>
-                    <th className="py-3.5 px-3 text-right min-w-[140px] whitespace-nowrap font-medium text-slate-700">
-                      Harga Dasar Bersih
+                    <th className="py-3.5 px-3 text-right min-w-[130px] whitespace-nowrap font-medium text-slate-700">
+                      Gaji Pokok
                     </th>
                     <th className="py-3.5 px-3 text-right min-w-[130px] whitespace-nowrap font-medium text-slate-700">
                       BPJS Kes & TK
-                    </th>
-                    <th className="py-3.5 px-3 text-right min-w-[130px] whitespace-nowrap font-medium text-slate-700">
-                      Gaji Pokok
                     </th>
                     <th className="py-3.5 px-3 text-right min-w-[120px] whitespace-nowrap font-medium text-rose-600">
                       Pot. Absensi
@@ -489,9 +560,6 @@ export const PayrollListPage: React.FC = () => {
                           <Skeleton className="h-5 w-20 ml-auto rounded" />
                         </td>
                         <td className="py-3.5 px-3 text-right">
-                          <Skeleton className="h-5 w-20 ml-auto rounded" />
-                        </td>
-                        <td className="py-3.5 px-3 text-right">
                           <Skeleton className="h-5 w-16 ml-auto rounded" />
                         </td>
                         <td className="py-3.5 px-3 text-right">
@@ -512,7 +580,7 @@ export const PayrollListPage: React.FC = () => {
                 ))
               ) : payrolls.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 15 : 9} className="py-12 text-center text-text-muted">
+                  <td colSpan={isAdmin ? 14 : 9} className="py-12 text-center text-text-muted">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <FileSpreadsheet className="w-8 h-8 text-slate-300" />
                       <span className="font-medium text-text-primary">
@@ -596,24 +664,19 @@ export const PayrollListPage: React.FC = () => {
                       {/* Admin Detailed Financial Columns */}
                       {isAdmin && (
                         <>
-                          {/* Harga Dasar Bersih (di potong PPh & Fee) */}
-                          <td className="py-3 px-3 text-right whitespace-nowrap font-mono text-[12px] text-text-secondary">
-                            {item.formatted_net_base_price || '-'}
-                          </td>
-
-                          {/* BPJS Kes (5%) & TK (9.24%) */}
-                          <td className="py-3 px-3 text-right whitespace-nowrap">
-                            <div className="font-mono text-[11.5px] text-text-secondary">
-                              Kes: {item.formatted_bpjs_kes || '0'}
-                            </div>
-                            <div className="font-mono text-[11px] text-text-muted">
-                              TK: {item.formatted_bpjs_tk || '0'}
-                            </div>
-                          </td>
-
-                          {/* Gaji Pokok (Col N - Q - T) */}
+                          {/* Gaji Pokok */}
                           <td className="py-3 px-3 text-right whitespace-nowrap font-mono font-medium text-[12.5px] text-text-primary">
                             {item.formatted_basic_salary}
+                          </td>
+
+                          {/* BPJS Kes (+) & TK (-) */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <div className="font-mono text-[11.5px] text-emerald-700">
+                              +Kes: {item.formatted_bpjs_kes || '0'}
+                            </div>
+                            <div className="font-mono text-[11px] text-rose-600">
+                              -TK: {item.formatted_bpjs_tk || '0'}
+                            </div>
                           </td>
 
                           {/* Potongan Absensi (multiplier x rate) */}

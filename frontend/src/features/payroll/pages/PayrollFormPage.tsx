@@ -25,6 +25,8 @@ import {
   UserX,
   Wallet,
   CheckCircle2,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 
 export const PayrollFormPage: React.FC = () => {
@@ -52,16 +54,11 @@ export const PayrollFormPage: React.FC = () => {
   const [bankAccount, setBankAccount] = useState('');
   const [bankName, setBankName] = useState('BNI');
 
-  // Formula Gaji Pokok (Kotak 3)
-  // Col N: Harga Dasar di potong PPh & Fee manajemen
-  const [netBasePrice, setNetBasePrice] = useState<number | string>('');
-  // Col Q: BPJS KES 5%
+  // Formula Gaji Pokok & BPJS (Sesuai Rumus Resmi PM)
+  const [basicSalary, setBasicSalary] = useState<number | string>('');
   const [bpjsKes, setBpjsKes] = useState<number | string>('');
-  // Col T: BPJS TK 9,24%
-  const [bpjsTk, setBpjsTk] = useState<number | string>('');
-  // Col U: Gaji Pokok (Col N - Col Q - Col T)
-  const [basicSalary, setBasicSalary] = useState<number | string>(0);
-  const [isManualBasicSalary, setIsManualBasicSalary] = useState(false);
+  const [bpjsTk, setBpjsTk] = useState<number | string>(0);
+  const [netBasePrice, setNetBasePrice] = useState<number | string>('');
 
   // Potongan Absensi & Take Home Pay (Kotak 4)
   const [absenceCount, setAbsenceCount] = useState<number>(0);
@@ -69,54 +66,52 @@ export const PayrollFormPage: React.FC = () => {
   const [absenceDeduction, setAbsenceDeduction] = useState<number | string>(0);
   const [absenceNote, setAbsenceNote] = useState('');
   const [allowance, setAllowance] = useState<number | string>(0);
-  const [deduction, setDeduction] = useState<number | string>(0);
+
+  // Custom Deductions (Bisa nambah-nambah potongan kustom)
+  const [customDeductions, setCustomDeductions] = useState<
+    Array<{ id: string; name: string; amount: number | string }>
+  >([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
 
-  // Auto calculate BPJS and Basic Salary from Net Base Price
-  const handleNetBasePriceChange = (valStr: string) => {
-    setNetBasePrice(valStr);
+  // Auto-hitung BPJS Kesehatan saat Gaji Pokok berubah (BPJS TK default 0)
+  const handleBasicSalaryChange = (valStr: string) => {
+    setBasicSalary(valStr);
     const val = parseFloat(valStr) || 0;
     if (val > 0) {
-      const computedKes = Math.round(val * 0.05);
-      const computedTk = Math.round(val * 0.0924);
-      const computedBasic = Math.max(0, val - computedKes - computedTk);
-
-      setBpjsKes(computedKes);
-      setBpjsTk(computedTk);
-      if (!isManualBasicSalary) {
-        setBasicSalary(computedBasic);
+      if (!bpjsKes || Number(bpjsKes) === 0) {
+        setBpjsKes(100000);
       }
-    } else {
-      setBpjsKes(0);
-      setBpjsTk(0);
-      if (!isManualBasicSalary) {
-        setBasicSalary(0);
-      }
+      // Note: BPJS TK default 0 karena setiap karyawan nilai nya berbeda-beda
     }
   };
 
-  const handleBpjsKesChange = (valStr: string) => {
-    setBpjsKes(valStr);
-    const valNet = parseFloat(String(netBasePrice)) || 0;
-    const valKes = parseFloat(valStr) || 0;
-    const valTk = parseFloat(String(bpjsTk)) || 0;
-    if (valNet > 0 && !isManualBasicSalary) {
-      setBasicSalary(Math.max(0, valNet - valKes - valTk));
-    }
+  const handleAddCustomDeduction = () => {
+    setCustomDeductions((prev) => [
+      ...prev,
+      {
+        id: `cd-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        name: '',
+        amount: '',
+      },
+    ]);
   };
 
-  const handleBpjsTkChange = (valStr: string) => {
-    setBpjsTk(valStr);
-    const valNet = parseFloat(String(netBasePrice)) || 0;
-    const valKes = parseFloat(String(bpjsKes)) || 0;
-    const valTk = parseFloat(valStr) || 0;
-    if (valNet > 0 && !isManualBasicSalary) {
-      setBasicSalary(Math.max(0, valNet - valKes - valTk));
-    }
+  const handleRemoveCustomDeduction = (id: string) => {
+    setCustomDeductions((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleCustomDeductionChange = (
+    id: string,
+    field: 'name' | 'amount',
+    val: string | number
+  ) => {
+    setCustomDeductions((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: val } : item))
+    );
   };
 
   // Potongan Absensi
@@ -132,12 +127,21 @@ export const PayrollFormPage: React.FC = () => {
     setAbsenceDeduction(total);
   };
 
-  // Live Take Home Pay
+  // Live Take Home Pay (Rumus Resmi: Pokok + BPJS KES + Tunjangan - BPJS TK - Absensi - Potongan Kustom)
   const numBasic = parseFloat(String(basicSalary)) || 0;
+  const numBpjsKes = parseFloat(String(bpjsKes)) || 0;
+  const numBpjsTk = parseFloat(String(bpjsTk)) || 0;
   const numAllowance = parseFloat(String(allowance)) || 0;
-  const numDeduction = parseFloat(String(deduction)) || 0;
   const numAbsence = parseFloat(String(absenceDeduction)) || 0;
-  const takeHomePay = Math.max(0, numBasic + numAllowance - numDeduction - numAbsence);
+
+  const numCustomDeductions = customDeductions.reduce((sum, item) => {
+    const val = parseFloat(String(item.amount)) || 0;
+    return sum + (val > 0 ? val : 0);
+  }, 0);
+
+  const totalEarnings = numBasic + numBpjsKes + numAllowance;
+  const totalDeductions = numBpjsTk + numAbsence + numCustomDeductions;
+  const takeHomePay = Math.max(0, totalEarnings - totalDeductions);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -159,7 +163,7 @@ export const PayrollFormPage: React.FC = () => {
 
           setNetBasePrice(data.net_base_price ?? '');
           setBpjsKes(data.bpjs_kes ?? '');
-          setBpjsTk(data.bpjs_tk ?? '');
+          setBpjsTk(data.bpjs_tk ?? 0);
           setBasicSalary(data.basic_salary);
 
           setAbsenceCount(data.absence_count ?? 0);
@@ -168,7 +172,27 @@ export const PayrollFormPage: React.FC = () => {
           setAbsenceNote(data.absence_note || '');
 
           setAllowance(data.allowance);
-          setDeduction(data.deduction);
+
+          if (data.custom_deductions && Array.isArray(data.custom_deductions) && data.custom_deductions.length > 0) {
+            setCustomDeductions(
+              data.custom_deductions.map((item, idx) => ({
+                id: `cd-${idx}-${Date.now()}`,
+                name: item.name || '',
+                amount: item.amount || 0,
+              }))
+            );
+          } else if (data.deduction && Number(data.deduction) > 0) {
+            setCustomDeductions([
+              {
+                id: `cd-legacy`,
+                name: 'Potongan Lainnya',
+                amount: data.deduction,
+              },
+            ]);
+          } else {
+            setCustomDeductions([]);
+          }
+
           setBankAccount(data.bank_account || '');
           setBankName(data.bank_name || 'BNI');
         })
@@ -202,7 +226,7 @@ export const PayrollFormPage: React.FC = () => {
 
       net_base_price: netBasePrice !== '' ? parseFloat(String(netBasePrice)) : undefined,
       bpjs_kes: bpjsKes !== '' ? parseFloat(String(bpjsKes)) : undefined,
-      bpjs_tk: bpjsTk !== '' ? parseFloat(String(bpjsTk)) : undefined,
+      bpjs_tk: bpjsTk !== '' ? parseFloat(String(bpjsTk)) : 0,
       basic_salary: numBasic,
 
       absence_count: absenceCount || 0,
@@ -211,7 +235,13 @@ export const PayrollFormPage: React.FC = () => {
       absence_note: absenceNote.trim() || undefined,
 
       allowance: numAllowance,
-      deduction: numDeduction,
+      deduction: numCustomDeductions,
+      custom_deductions: customDeductions
+        .filter((cd) => cd.name.trim() !== '' || (parseFloat(String(cd.amount)) || 0) > 0)
+        .map((cd) => ({
+          name: cd.name.trim() || 'Potongan Kustom',
+          amount: parseFloat(String(cd.amount)) || 0,
+        })),
       bank_account: bankAccount.trim() || undefined,
       bank_name: bankName.trim() || undefined,
     };
@@ -551,7 +581,7 @@ export const PayrollFormPage: React.FC = () => {
           </Card>
 
           {/* ======================================================== */}
-          {/* KOTAK 3 (Kiri Bawah): Formula Gaji Pokok (Rumus Excel)     */}
+          {/* KOTAK 3 (Kiri Bawah): Gaji Pokok & Komponen BPJS         */}
           {/* ======================================================== */}
           <Card className="p-6 flex flex-col justify-between space-y-4 border border-border-subtle shadow-sm hover:border-slate-300 transition-colors">
             <div className="space-y-4">
@@ -562,111 +592,88 @@ export const PayrollFormPage: React.FC = () => {
                   </div>
                   <div>
                     <h2 className="font-title-card text-[15px] font-bold text-text-primary">
-                      3. Perhitungan Gaji Pokok (Rumus Excel)
+                      3. Gaji Pokok & Komponen BPJS
                     </h2>
                     <p className="text-[11px] text-text-muted">
-                      Col U = Col N (Harga Dasar) - Q (BPJS KES) - T (BPJS TK)
+                      Gaji Pokok, Tunjangan BPJS KES (+), & Potongan BPJS TK (-)
                     </p>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsManualBasicSalary(!isManualBasicSalary)}
-                  className="text-[11px] text-primary hover:underline font-semibold"
-                >
-                  {isManualBasicSalary ? 'Auto-Kalkulasi' : 'Manual'}
-                </button>
               </div>
 
               <div className="space-y-3.5">
-                {/* Col N */}
+                {/* Gaji Pokok Langsung */}
                 <div>
                   <Input
-                    label="Harga Dasar di potong PPh & Fee (Rp) *"
+                    label="Gaji Pokok (Rp) *"
                     type="number"
                     min="0"
                     step="1"
-                    placeholder="Contoh: 3462919"
-                    value={netBasePrice}
-                    onChange={(e) => handleNetBasePriceChange(e.target.value)}
-                    error={errors.net_base_price}
+                    placeholder="Contoh: 3489300"
+                    value={basicSalary}
+                    onChange={(e) => handleBasicSalaryChange(e.target.value)}
+                    error={errors.basic_salary}
+                    required
                   />
                   <span className="text-[10px] text-text-muted">
-                    Kolom N pada Excel (Dasar acuan persentase BPJS)
+                    Penghasilan dasar pegawai (komponen utama)
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Col Q: BPJS KES 5% */}
+                  {/* BPJS KES */}
                   <div>
                     <Input
-                      label="BPJS KES 5% (Rp)"
+                      label="Tunjangan BPJS Kesehatan (Rp)"
                       type="number"
                       min="0"
                       step="1"
-                      placeholder="Otomatis 5%"
+                      placeholder="Contoh: 100000"
                       value={bpjsKes}
-                      onChange={(e) => handleBpjsKesChange(e.target.value)}
+                      onChange={(e) => setBpjsKes(e.target.value)}
                       error={errors.bpjs_kes}
                     />
-                    <span className="text-[10px] text-text-muted">
-                      Col Q (= 5% Col N)
+                    <span className="text-[10px] text-emerald-600 font-medium">
+                      + Tunjangan Kesehatan (Penambah)
                     </span>
                   </div>
 
-                  {/* Col T: BPJS TK 9.24% */}
+                  {/* BPJS TK */}
                   <div>
                     <Input
-                      label="BPJS TK 9,24% (Rp)"
+                      label="Potongan BPJS TK (Rp)"
                       type="number"
                       min="0"
                       step="1"
-                      placeholder="Otomatis 9.24%"
+                      placeholder="0 (Default 0 jika tidak ada)"
                       value={bpjsTk}
-                      onChange={(e) => handleBpjsTkChange(e.target.value)}
+                      onChange={(e) => setBpjsTk(e.target.value)}
                       error={errors.bpjs_tk}
                     />
-                    <span className="text-[10px] text-text-muted">
-                      Col T (= 9.24% Col N)
+                    <span className="text-[10px] text-text-muted font-medium block mt-0.5">
+                      - BPJS TK default Rp 0 (karena tiap karyawan berbeda). Masukkan nominal jika ada potongan.
                     </span>
                   </div>
                 </div>
 
-                {/* Banner Hasil Gaji Pokok (Col U) */}
-                <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-2">
+                {/* Banner Total Gaji Sebelum Potongan */}
+                <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-[12px] font-bold uppercase tracking-wider text-primary block">
-                        Gaji Pokok Terhitung (Col U = N - Q - T)
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-primary block">
+                        TOTAL GAJI SEBELUM POTONGAN
                       </span>
                       <span className="text-[11px] text-text-muted font-mono">
-                        {netBasePrice ? formatCurrency(parseFloat(String(netBasePrice)) || 0) : 'Rp 0'} -{' '}
-                        {bpjsKes ? formatCurrency(parseFloat(String(bpjsKes)) || 0) : 'Rp 0'} -{' '}
-                        {bpjsTk ? formatCurrency(parseFloat(String(bpjsTk)) || 0) : 'Rp 0'}
+                        Pokok ({formatCurrency(numBasic)}) + BPJS KES ({formatCurrency(numBpjsKes)}) + Tunjangan ({formatCurrency(numAllowance)})
                       </span>
                     </div>
 
                     <div className="text-right">
                       <span className="text-[20px] font-bold font-mono text-primary">
-                        {formatCurrency(numBasic)}
+                        {formatCurrency(totalEarnings)}
                       </span>
                     </div>
                   </div>
-
-                  {isManualBasicSalary && (
-                    <div className="pt-2 border-t border-blue-200/60">
-                      <Input
-                        label="Nilai Gaji Pokok Manual (Override)"
-                        type="number"
-                        min="0"
-                        value={basicSalary}
-                        onChange={(e) => setBasicSalary(e.target.value)}
-                        error={errors.basic_salary}
-                        required
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -721,7 +728,7 @@ export const PayrollFormPage: React.FC = () => {
                     label="Tarif per Hari (Rp)"
                     type="number"
                     min="0"
-                    step="5000"
+                    step="any"
                     value={absenceRate}
                     onChange={(e) => handleAbsenceRateChange(parseFloat(e.target.value) || 0)}
                   />
@@ -733,6 +740,7 @@ export const PayrollFormPage: React.FC = () => {
                       label="Total Pot. Absensi (Rp)"
                       type="number"
                       min="0"
+                      step="any"
                       value={absenceDeduction}
                       onChange={(e) => setAbsenceDeduction(e.target.value)}
                       error={errors.absence_deduction}
@@ -746,7 +754,7 @@ export const PayrollFormPage: React.FC = () => {
                     label="Tunjangan / Lembur (Rp)"
                     type="number"
                     min="0"
-                    step="1000"
+                    step="any"
                     value={allowance}
                     onChange={(e) => setAllowance(e.target.value)}
                     error={errors.allowance}
@@ -761,15 +769,93 @@ export const PayrollFormPage: React.FC = () => {
                   error={errors.absence_note}
                 />
 
-                <Input
-                  label="Potongan Lainnya di Luar Absensi (Rp)"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={deduction}
-                  onChange={(e) => setDeduction(e.target.value)}
-                  error={errors.deduction}
-                />
+                {/* Bagian Potongan Kustom (Bisa nambah-nambah potongan kustom) */}
+                <div className="pt-2 border-t border-border-subtle space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-[12px] font-semibold text-text-primary">
+                        Potongan Kustom / Lainnya (Di luar Absensi)
+                      </label>
+                      <p className="text-[11px] text-text-muted">
+                        Tambahkan potongan fleksibel sesuai kebutuhan karyawan (misal: Kasbon, Koperasi, Seragam, Denda, dll).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomDeduction}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[12px] font-semibold border border-rose-200 transition-colors shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah Potongan</span>
+                    </button>
+                  </div>
+
+                  {customDeductions.length === 0 ? (
+                    <div className="p-3 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 text-center">
+                      <span className="text-[12px] text-text-muted">
+                        Belum ada potongan kustom. Klik <strong>+ Tambah Potongan</strong> jika ada potongan lain di luar absensi.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {customDeductions.map((item, index) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-panel border border-border-subtle"
+                        >
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              placeholder={`Nama Potongan #${index + 1} (misal: Kasbon, Koperasi)`}
+                              value={item.name}
+                              onChange={(e) =>
+                                handleCustomDeductionChange(item.id, 'name', e.target.value)
+                              }
+                              className="w-full h-9 px-3 bg-surface rounded-md text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-rose-500 font-medium"
+                            />
+                          </div>
+
+                          <div className="w-40 sm:w-48">
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-text-muted font-mono font-semibold">
+                                Rp
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder="0"
+                                value={item.amount}
+                                onChange={(e) =>
+                                  handleCustomDeductionChange(item.id, 'amount', e.target.value)
+                                }
+                                className="w-full h-9 pl-9 pr-3 bg-surface rounded-md text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-rose-500 font-mono font-medium text-right"
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomDeduction(item.id)}
+                            title="Hapus Potongan"
+                            className="p-2 rounded-md text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+
+                      <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-rose-50/70 border border-rose-200/80 text-[12px]">
+                        <span className="font-semibold text-rose-800">
+                          Total Potongan Kustom ({customDeductions.length} item):
+                        </span>
+                        <span className="font-mono font-bold text-rose-800 text-[13px]">
+                          -{formatCurrency(numCustomDeductions)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Live Take Home Pay Highlight Banner */}
                 <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 to-teal-50/80 border-2 border-emerald-400/50 space-y-1">
@@ -779,7 +865,7 @@ export const PayrollFormPage: React.FC = () => {
                         TOTAL TAKE HOME PAY (BERSIH)
                       </span>
                       <span className="text-[10.5px] text-emerald-700 font-mono">
-                        Pokok ({formatCurrency(numBasic)}) + Tunjangan ({formatCurrency(numAllowance)}) - Absensi ({formatCurrency(numAbsence)}) - Potongan ({formatCurrency(numDeduction)})
+                        Pokok ({formatCurrency(numBasic)}) + BPJS KES ({formatCurrency(numBpjsKes)}) + Tunjangan ({formatCurrency(numAllowance)}) - BPJS TK ({formatCurrency(numBpjsTk)}) - Absensi ({formatCurrency(numAbsence)}) - Potongan ({formatCurrency(numCustomDeductions)})
                       </span>
                     </div>
 

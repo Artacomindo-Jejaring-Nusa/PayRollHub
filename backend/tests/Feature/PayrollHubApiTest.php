@@ -405,7 +405,9 @@ class PayrollHubApiTest extends TestCase
 
         $this->assertEquals(2969799, $data['basic_salary']);
         $this->assertEquals(100000, $data['absence_deduction']);
-        $this->assertEquals(2969799 - 100000, $data['take_home_pay']);
+        // Take Home Pay Resmi = (Gaji Pokok + BPJS Kesehatan) - (BPJS TK + Potongan Absensi)
+        $expectedThp = (2969799 + 173146) - (319974 + 100000);
+        $this->assertEquals($expectedThp, $data['take_home_pay']);
     }
 
     public function test_admin_can_toggle_employee_status_to_off_and_active(): void

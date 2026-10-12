@@ -3,7 +3,7 @@ import { User } from '../../../types/auth';
 import { UserFormData, UserListResponse } from '../../../types/user';
 
 export const userService = {
-  getUsers: async (params?: { search?: string; role?: string; page?: number }): Promise<UserListResponse> => {
+  getUsers: async (params?: { search?: string; role?: string; page?: number; per_page?: number }): Promise<UserListResponse> => {
     const response = await api.get<UserListResponse>('/users', { params });
     return response.data;
   },

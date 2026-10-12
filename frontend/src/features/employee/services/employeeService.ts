@@ -32,8 +32,12 @@ export const employeeService = {
     return res.data.data;
   },
 
-  async getPayrolls(): Promise<PayrollItem[]> {
-    const res = await api.get('/employee/payrolls');
+  async getPayrolls(params?: {
+    period?: string;
+    start_period?: string;
+    end_period?: string;
+  }): Promise<PayrollItem[]> {
+    const res = await api.get('/employee/payrolls', { params });
     return res.data.data;
   },
 

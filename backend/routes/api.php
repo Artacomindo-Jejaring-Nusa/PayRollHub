@@ -12,7 +12,10 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Public Authentication
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->name('login');
+
+// Public Download Blank Template Lokasi Absensi (.xlsx)
+Route::get('/attendance-locations/template', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'downloadTemplate']);
 
 // Developer Feature Passkey Verification
 Route::post('/dev/verify-key', function (\Illuminate\Http\Request $request) {
@@ -51,6 +54,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/announcements/{announcement}', [\App\Http\Controllers\Api\AnnouncementController::class, 'update']);
     Route::delete('/announcements/{announcement}', [\App\Http\Controllers\Api\AnnouncementController::class, 'destroy']);
 
+    // Attendance Active Locations (Accessible to Employees & Admin)
+    Route::get('/attendance/locations', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'activeList']);
+
     // Admin & HR Review of Work Reports
     Route::get('/admin/work-reports/export', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'export']);
     Route::get('/admin/work-reports/{workReport}/pdf', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'downloadSinglePdf']);
@@ -84,6 +90,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/attendances/export', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'export']);
         Route::get('/admin/attendance-settings', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'getSettings']);
         Route::put('/admin/attendance-settings', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'updateSettings']);
+
+        // Master 100+ Lokasi Radius Absensi & Sinkronisasi Unit Sekolah (Admin)
+        Route::get('/admin/attendance-locations/template', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'downloadTemplate']);
+        Route::post('/admin/attendance-locations/import/preview', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'previewImport']);
+        Route::post('/admin/attendance-locations/import', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'import']);
+        Route::get('/admin/attendance-locations/export', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'export']);
+        Route::get('/admin/attendance-locations/school-units', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'schoolUnits']);
+        Route::post('/admin/attendance-locations/sync-from-school-units', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'syncFromSchoolUnits']);
+        Route::delete('/admin/attendance-locations/clear-all', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'clearAll']);
+        Route::get('/admin/attendance-locations', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'index']);
+        Route::post('/admin/attendance-locations', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'store']);
+        Route::get('/admin/attendance-locations/{attendanceLocation}', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'show']);
+        Route::put('/admin/attendance-locations/{attendanceLocation}', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'update']);
+        Route::delete('/admin/attendance-locations/{attendanceLocation}', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'destroy']);
+        Route::get('/admin/attendance-locations/{attendanceLocation}/employees', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'getEmployees']);
+        Route::post('/admin/attendance-locations/{attendanceLocation}/assign-employees', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'assignEmployees']);
 
         // Payroll Modifications
         Route::delete('/payrolls/clear/all', [PayrollController::class, 'clearAll']);

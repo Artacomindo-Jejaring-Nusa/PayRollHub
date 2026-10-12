@@ -305,18 +305,17 @@ class PayrollTemplateExporter
             [8, 'STATUS', 'Wajib', 'Pilihan: Aktif / Off', 'Aktif atau Off', 'Status keaktifan pegawai. Jika diisi "Off", pegawai tercatat tidak aktif dan otomatis masuk laporan Off pada dashboard admin.'],
             [9, 'TANGGAL KELUAR', 'Opsional (Wajib jika Off)', 'Tanggal / Teks', '15-08-2026', 'Tanggal berhenti bekerja jika status pegawai diisi "Off".'],
             [10, 'PERUSAHAAN', 'Opsional', 'Kode: rbs / rima', 'rbs atau rima', 'Entitas legal: "rbs" untuk PT. Rimbun Buana Sejahtera, "rima" untuk PT. Riama Mandiri Pratama. Default: "rbs".'],
-            [11, 'HARGA DASAR (NET PPH & FEE)', 'Wajib', 'Angka murni', '6671000', 'Harga dasar bersih setelah potongan PPh dan Fee Manajemen. Masukkan angka bulat tanpa titik, koma, atau simbol Rp.'],
-            [12, 'BPJS KES 5%', 'Opsional (Otomatis)', 'Angka murni', '333550', 'Nominal BPJS Kesehatan (5%). Jika dikosongkan/0, sistem saat import otomatis menghitung: 5% x Harga Dasar.'],
-            [13, 'BPJS TK 9.24%', 'Opsional (Otomatis)', 'Angka murni', '616400', 'Nominal BPJS Ketenagakerjaan (9.24%). Jika dikosongkan/0, sistem saat import otomatis menghitung: 9.24% x Harga Dasar.'],
-            [14, 'GAJI POKOK', 'Opsional (Otomatis)', 'Angka murni', '5721050', 'Gaji Pokok. Formula: Harga Dasar - BPJS KES - BPJS TK. Jika dikosongkan, dihitung otomatis oleh sistem.'],
-            [15, 'POTONGAN ABSENSI', 'Opsional', 'Angka murni', '200000', 'Nominal potongan ketidakhadiran/mangkir. Dapat diisi kelipatan hari x tarif harian (misal: 2 hari x Rp 100.000).'],
-            [16, 'KETERANGAN ABSENSI', 'Opsional', 'Teks', 'Izin 2 hari x Rp 100.000', 'Rincian atau alasan potongan absensi (misal: "Sakit 1 hari", "Mangkir 2x", dsb).'],
-            [17, 'TUNJANGAN', 'Opsional', 'Angka murni', '0', 'Nominal tunjangan tambahan jika ada.'],
-            [18, 'POTONGAN LAIN', 'Opsional', 'Angka murni', '0', 'Nominal potongan lainnya di luar absensi jika ada.'],
-            [19, 'TOTAL DITERIMA (TAKE HOME PAY)', 'Opsional (Otomatis)', 'Angka murni', '5521050', 'Total THP yang diterima. Formula: Gaji Pokok + Tunjangan - Potongan Lain - Potongan Absensi.'],
-            [20, 'NO REKENING', 'Opsional', 'Teks / Angka', "'2098199007", "Nomor rekening bank penerima. Berikan tanda petik satu (') di depan jika berawalan angka nol."],
-            [21, 'BANK', 'Opsional', 'Teks', 'BNI, BCA, Mandiri, BRI', 'Nama institusi bank untuk pencairan gaji.'],
-            [22, 'PERIODE', 'Opsional', 'Format: YYYY-MM', '2026-08', 'Periode bulan penggajian. Jika dikosongkan, otomatis menggunakan periode yang dipilih pada sistem saat upload.'],
+            [11, 'GAJI POKOK', 'Wajib', 'Angka murni', '5721050', 'Gaji Pokok tenaga kependidikan/pegawai. Masukkan angka bulat tanpa titik atau simbol Rp.'],
+            [12, 'BPJS KES', 'Opsional', 'Angka murni', '100000', 'Nominal Tunjangan BPJS Kesehatan (penambah pendapatan). Masukkan angka murni.'],
+            [13, 'BPJS TK', 'Opsional', 'Angka murni', '104679', 'Nominal Potongan BPJS Ketenagakerjaan: JHT 2% + JP 1% (pengurang). Masukkan angka murni.'],
+            [14, 'POTONGAN ABSENSI', 'Opsional', 'Angka murni', '200000', 'Nominal potongan ketidakhadiran/mangkir. Dapat diisi kelipatan hari x tarif harian (misal: 2 hari x Rp 100.000).'],
+            [15, 'KETERANGAN ABSENSI', 'Opsional', 'Teks', 'Izin 2 hari x Rp 100.000', 'Rincian atau alasan potongan absensi (misal: "Sakit 1 hari", "Mangkir 2x", dsb).'],
+            [16, 'TUNJANGAN', 'Opsional', 'Angka murni', '0', 'Nominal tunjangan tambahan / lembur jika ada.'],
+            [17, 'POTONGAN LAIN', 'Opsional', 'Angka murni', '0', 'Nominal potongan lainnya di luar absensi jika ada.'],
+            [18, 'TOTAL DITERIMA (TAKE HOME PAY)', 'Opsional (Otomatis)', 'Angka murni', '5521050', 'Total THP yang diterima. Formula: Gaji Pokok + BPJS KES + Tunjangan - BPJS TK - Potongan Absensi - Potongan Lain.'],
+            [19, 'NO REKENING', 'Opsional', 'Teks / Angka', "'2098199007", "Nomor rekening bank penerima. Berikan tanda petik satu (') di depan jika berawalan angka nol."],
+            [20, 'BANK', 'Opsional', 'Teks', 'BNI, BCA, Mandiri, BRI', 'Nama institusi bank untuk pencairan gaji.'],
+            [21, 'PERIODE', 'Opsional', 'Format: YYYY-MM', '2026-08', 'Periode bulan penggajian. Jika dikosongkan, otomatis menggunakan periode yang dipilih pada sistem saat upload.'],
         ];
 
         $sheet2->fromArray($guideData, null, 'A5');
@@ -342,8 +341,8 @@ class PayrollTemplateExporter
         ]);
 
         $rules = [
-            '1. RUMUS GAJI POKOK: Gaji Pokok = Harga Dasar (Net PPh & Fee) - BPJS KES (5%) - BPJS TK (9.24%).',
-            '2. PERHITUNGAN OTOMATIS: Jika kolom BPJS KES atau BPJS TK dikosongkan di Excel, sistem akan otomatis menghitung 5% dan 9.24% dari Harga Dasar.',
+            '1. STRUKTUR GAJI & THP: Take Home Pay = (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (BPJS TK + Potongan Absensi + Potongan Lain + PPh21).',
+            '2. KOMPONEN BPJS: BPJS Kesehatan dihitung sebagai tunjangan (penambah), sedangkan BPJS TK (JHT 2% + JP 1%) dihitung sebagai potongan (pengurang).',
             '3. STATUS OFF & TANGGAL KELUAR: Jika karyawan berhenti bekerja, tulis STATUS "Off" dan isi TANGGAL KELUAR. Karyawan ini otomatis masuk ke metrik Laporan Off di Dashboard Admin.',
             '4. POTONGAN ABSENSI KELIPATAN: Admin dapat memasukkan nominal potongan absensi (misal 1x, 2x, 3x tarif harian) dan mencatat rinciannya di kolom KETERANGAN ABSENSI.',
             '5. PENCEGAHAN FORMAT RUSAK: NIK (16 digit) dan No Rekening wajib diberi awalan petik satu (\') agar tidak terpotong atau berubah format di Excel.',

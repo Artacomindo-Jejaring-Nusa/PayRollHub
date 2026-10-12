@@ -246,10 +246,10 @@ export const PayrollImportPage: React.FC = () => {
             <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1">
               <div className="text-[12px] font-bold text-blue-900 flex items-center gap-1.5">
                 <Coins className="w-4 h-4 text-blue-700" />
-                1. Rumus Gaji Pokok
+                1. Rumus Take Home Pay (THP)
               </div>
               <p className="text-[11.5px] text-blue-800 leading-relaxed">
-                <span className="font-semibold">Gaji Pokok = Harga Dasar - BPJS KES (5%) - BPJS TK (9.24%)</span>. Jika BPJS dikosongkan, dihitung otomatis.
+                <span className="font-semibold">THP = Gaji Pokok + BPJS KES - BPJS TK - Potongan Absensi - Potongan Lain</span>.
               </p>
             </div>
 

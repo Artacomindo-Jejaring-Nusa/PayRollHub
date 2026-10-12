@@ -118,10 +118,7 @@ export const LoginPage: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-headline-page text-[22px] font-semibold text-white tracking-tight">
-                          HRD Mandiri
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white border border-white/15 tracking-wide uppercase">
-                          {tenant.badgeText}
+                          {tenant.appName}
                         </span>
                       </div>
                       <span className="block text-[12px] text-slate-300 font-medium tracking-normal">
@@ -136,7 +133,7 @@ export const LoginPage: React.FC = () => {
               <div className="relative z-10 my-6 flex flex-col items-center justify-center">
                 <div className="relative w-full flex items-center justify-center">
                   <img
-                    alt={`Ilustrasi Autentikasi HRD Mandiri ${tenant.shortName}`}
+                    alt={`Ilustrasi Autentikasi ${tenant.appName}`}
                     className="w-auto max-h-[350px] object-contain drop-shadow-xl transition-transform duration-300 hover:scale-[1.02]"
                     src="/assets/auth-hero-wavy.png"
                     onError={(e) => {

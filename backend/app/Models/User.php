@@ -26,6 +26,7 @@ class User extends Authenticatable
         'gender',
         'company',
         'school_unit',
+        'attendance_location_id',
         'bank_name',
         'bank_account',
         'address',
@@ -33,6 +34,14 @@ class User extends Authenticatable
         'password',
         'role',
     ];
+
+    /**
+     * Lokasi absensi penugasan spesifik untuk karyawan ini.
+     */
+    public function attendanceLocation()
+    {
+        return $this->belongsTo(AttendanceLocation::class, 'attendance_location_id');
+    }
 
     /**
      * The attributes that should be hidden for serialization.

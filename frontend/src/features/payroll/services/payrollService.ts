@@ -14,6 +14,8 @@ export const payrollService = {
     province?: string;
     position?: string;
     period?: string;
+    start_period?: string;
+    end_period?: string;
     status?: string;
     company?: string;
     page?: number;

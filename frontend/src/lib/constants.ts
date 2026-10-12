@@ -1,4 +1,4 @@
-export const APP_NAME = 'HRD Mandiri';
+export const APP_NAME = 'RBS HRD - Global';
 export const COMPANY_NAME = 'RBS Global (PT. Rimbun Buana Sejahtera)';
 
 export const INDONESIAN_PROVINCES: string[] = [

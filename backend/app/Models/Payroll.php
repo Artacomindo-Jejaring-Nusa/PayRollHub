@@ -48,6 +48,7 @@ class Payroll extends Model
         'absence_rate',
         'absence_deduction',
         'absence_note',
+        'custom_deductions',
         'pph21',
         'take_home_pay',
         'bank_account',
@@ -68,6 +69,7 @@ class Payroll extends Model
             'basic_salary' => 'decimal:2',
             'allowance' => 'decimal:2',
             'deduction' => 'decimal:2',
+            'custom_deductions' => 'array',
             'absence_count' => 'integer',
             'absence_rate' => 'decimal:2',
             'absence_deduction' => 'decimal:2',
@@ -82,21 +84,18 @@ class Payroll extends Model
     protected static function booted(): void
     {
         static::saving(function (Payroll $payroll) {
-            // Auto compute salary from net_base_price if provided
-            if ((float) $payroll->net_base_price > 0) {
-                if ((float) $payroll->bpjs_kes <= 0) {
-                    $payroll->bpjs_kes = round((float) $payroll->net_base_price * 0.05, 2);
-                }
-                if ((float) $payroll->bpjs_tk <= 0) {
-                    $payroll->bpjs_tk = round((float) $payroll->net_base_price * 0.0924, 2);
-                }
-                // Gaji Pokok = Harga Dasar dipotong PPh & Fee - BPJS KES 5% - BPJS TK 9.24%
-                $payroll->basic_salary = (float) $payroll->net_base_price - (float) $payroll->bpjs_kes - (float) $payroll->bpjs_tk;
-            }
-
             // Auto calculate absence deduction if rate and count are specified
             if ((int) $payroll->absence_count > 0 && (float) $payroll->absence_rate > 0 && (float) $payroll->absence_deduction <= 0) {
                 $payroll->absence_deduction = (int) $payroll->absence_count * (float) $payroll->absence_rate;
+            }
+
+            // Sync custom deductions sum into deduction if custom_deductions is present
+            if (!empty($payroll->custom_deductions) && is_array($payroll->custom_deductions)) {
+                $customSum = 0;
+                foreach ($payroll->custom_deductions as $cd) {
+                    $customSum += (float) ($cd['amount'] ?? 0);
+                }
+                $payroll->deduction = $customSum;
             }
 
             // Sync status with resign_date
@@ -106,9 +105,11 @@ class Payroll extends Model
                 $payroll->status = 'active';
             }
 
-            // If take_home_pay is not explicitly provided or components changed, calculate: Basic Salary + Allowance - General Deduction - Absence Deduction - PPh21
+            // Formula Resmi THP: (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (BPJS TK + Potongan Absensi + Potongan Lainnya + PPh21)
             if (! $payroll->isDirty('take_home_pay') || (float) $payroll->take_home_pay <= 0) {
-                $thp = (float) $payroll->basic_salary + (float) $payroll->allowance - (float) $payroll->deduction - (float) $payroll->absence_deduction - (float) $payroll->pph21;
+                $totalEarnings = (float) $payroll->basic_salary + (float) $payroll->bpjs_kes + (float) $payroll->allowance;
+                $totalDeductions = (float) $payroll->bpjs_tk + (float) $payroll->absence_deduction + (float) $payroll->deduction + (float) $payroll->pph21;
+                $thp = $totalEarnings - $totalDeductions;
                 $payroll->take_home_pay = max(0, $thp);
             }
         });
@@ -194,6 +195,75 @@ class Payroll extends Model
             $candidates[] = "SP{$num}";
             if (in_array($trimmed, ['2026-08', '2026-03', '2026-09'])) {
                 $candidates[] = 'SP 1';
+            }
+        }
+
+        $candidates = array_unique($candidates);
+
+        return $query->where(function (Builder $q) use ($candidates) {
+            foreach ($candidates as $cand) {
+                $q->orWhere('period', $cand)
+                  ->orWhere('period', 'like', "%{$cand}%");
+            }
+        });
+    }
+
+    /**
+     * Extract month / index number (1 - 12) from various period strings.
+     */
+    public static function extractPeriodIndex(?string $period): ?int
+    {
+        if (blank($period) || $period === 'all') {
+            return null;
+        }
+
+        $clean = trim($period);
+        if (preg_match('/^SP\s*(\d+)$/i', $clean, $m)) {
+            return (int) $m[1];
+        }
+        if (preg_match('/^\d{4}-(\d{2})$/', $clean, $m)) {
+            return (int) $m[1];
+        }
+        if (preg_match('/^Surat\s+Pesanan\s*(\d+)/i', $clean, $m)) {
+            return (int) $m[1];
+        }
+        if (is_numeric($clean)) {
+            return (int) $clean;
+        }
+
+        return null;
+    }
+
+    /**
+     * Scope a query to filter by period range (e.g. from SP 1 to SP 10 or month range).
+     */
+    public function scopeByPeriodRange(Builder $query, ?string $startPeriod, ?string $endPeriod): Builder
+    {
+        $startIndex = self::extractPeriodIndex($startPeriod);
+        $endIndex = self::extractPeriodIndex($endPeriod);
+
+        if ($startIndex === null && $endIndex === null) {
+            return $query;
+        }
+
+        $min = $startIndex ?? 1;
+        $max = $endIndex ?? 12;
+        if ($min > $max) {
+            [$min, $max] = [$max, $min];
+        }
+
+        $candidates = [];
+        for ($i = $min; $i <= $max; $i++) {
+            $candidates[] = "SP {$i}";
+            $candidates[] = "SP{$i}";
+            $candidates[] = "Surat Pesanan {$i}";
+            $month = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+            $candidates[] = "2026-{$month}";
+            if ($i === 1) {
+                $candidates[] = '2026-08';
+                $candidates[] = '2026-03';
+                $candidates[] = '2026-09';
+                $candidates[] = '2026-01';
             }
         }
 

@@ -78,6 +78,7 @@ class PayrollService
             ->byProvince($request->input('province'))
             ->byPosition($request->input('position'))
             ->byPeriod($request->input('period'))
+            ->byPeriodRange($request->input('start_period'), $request->input('end_period'))
             ->byStatus($request->input('status'))
             ->byCompany($company);
 
@@ -133,6 +134,7 @@ class PayrollService
             ->byProvince($request->input('province'))
             ->byPosition($request->input('position'))
             ->byPeriod($request->input('period'))
+            ->byPeriodRange($request->input('start_period'), $request->input('end_period'))
             ->byStatus($request->input('status'))
             ->byCompany($company);
 

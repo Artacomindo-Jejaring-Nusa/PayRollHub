@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { employeeService } from '../services/employeeService';
 import { PayrollItem } from '../../../types/payroll';
 import { formatCurrency } from '../../../lib/utils';
-import { formatPeriodDisplay } from '../../../lib/period';
+import { formatPeriodDisplay, MONTH_PERIOD_OPTIONS, normalizePeriodToSP } from '../../../lib/period';
 import { Card } from '../../../components/ui/Card';
 import {
   FileText,
@@ -11,6 +11,8 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
+  Filter,
+  RotateCcw,
 } from 'lucide-react';
 
 export const EmployeePayrollsPage: React.FC = () => {
@@ -18,6 +20,12 @@ export const EmployeePayrollsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  // Filter Modes: 'all' (Semua), 'single' (Per Bulan/SP), 'range' (Rentang Periode/Tutup Absen)
+  const [filterMode, setFilterMode] = useState<'all' | 'single' | 'range'>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [startPeriod, setStartPeriod] = useState<string>('SP 1');
+  const [endPeriod, setEndPeriod] = useState<string>('SP 10');
 
   useEffect(() => {
     fetchPayrolls();
@@ -51,6 +59,47 @@ export const EmployeePayrollsPage: React.FC = () => {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  // Helper untuk mendapatkan index nomor periode (1 - 12)
+  const getPeriodNum = (periodStr?: string | null): number => {
+    if (!periodStr) return 1;
+    const norm = normalizePeriodToSP(periodStr);
+    const m = norm.match(/^SP\s*(\d+)$/i);
+    return m ? parseInt(m[1], 10) : 1;
+  };
+
+  const filteredPayrolls = useMemo(() => {
+    if (filterMode === 'all') {
+      return payrolls;
+    }
+
+    if (filterMode === 'single') {
+      if (!selectedMonth) return payrolls;
+      return payrolls.filter((p) => {
+        const norm = normalizePeriodToSP(p.period);
+        return (
+          norm.toLowerCase() === selectedMonth.toLowerCase() ||
+          p.period.toLowerCase() === selectedMonth.toLowerCase()
+        );
+      });
+    }
+
+    if (filterMode === 'range') {
+      const minIdx = Math.min(getPeriodNum(startPeriod), getPeriodNum(endPeriod));
+      const maxIdx = Math.max(getPeriodNum(startPeriod), getPeriodNum(endPeriod));
+
+      return payrolls.filter((p) => {
+        const idx = getPeriodNum(p.period);
+        return idx >= minIdx && idx <= maxIdx;
+      });
+    }
+
+    return payrolls;
+  }, [payrolls, filterMode, selectedMonth, startPeriod, endPeriod]);
+
+  const totalFilteredTHP = useMemo(() => {
+    return filteredPayrolls.reduce((sum, p) => sum + (Number(p.take_home_pay) || 0), 0);
+  }, [filteredPayrolls]);
+
   if (isLoading) {
     return (
       <div className="space-y-3 animate-pulse">
@@ -62,7 +111,7 @@ export const EmployeePayrollsPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="pb-2 border-b border-border-subtle">
         <h1 className="font-headline-page text-[22px] sm:text-[24px] font-bold text-text-primary tracking-tight">
@@ -73,6 +122,122 @@ export const EmployeePayrollsPage: React.FC = () => {
         </p>
       </div>
 
+      {/* Filter Toolbar: Per Bulan / Per Rentang Gajian */}
+      {payrolls.length > 0 && (
+        <div className="bg-surface-panel rounded-xl border border-border-subtle p-3.5 sm:p-4 space-y-3 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border-subtle">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-semibold text-text-primary flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-primary" />
+                <span>Pilih Tampilan:</span>
+              </span>
+              <div className="inline-flex rounded-lg bg-surface border border-border-subtle p-0.5 text-[12px]">
+                <button
+                  type="button"
+                  onClick={() => setFilterMode('all')}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                    filterMode === 'all'
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  Semua Slip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterMode('single');
+                    if (!selectedMonth && payrolls.length > 0) {
+                      setSelectedMonth(normalizePeriodToSP(payrolls[0].period));
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                    filterMode === 'single'
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  Per Bulan / Tutup Absen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterMode('range')}
+                  className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                    filterMode === 'range'
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  Rentang Gajian
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[12px] text-text-muted flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>
+                Menampilkan: <strong className="text-text-primary">{filteredPayrolls.length} Slip</strong>
+              </span>
+              <span>•</span>
+              <span>
+                Total THP: <strong className="text-primary font-mono">{formatCurrency(totalFilteredTHP)}</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Dynamic Filter Controls */}
+          {filterMode === 'single' && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-1">
+              <label className="text-[12px] text-text-muted font-medium shrink-0">
+                Pilih Periode / Bulan Tutup Absen:
+              </label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer max-w-xs"
+              >
+                <option value="">Semua Periode</option>
+                {MONTH_PERIOD_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {filterMode === 'range' && (
+            <div className="flex flex-wrap items-center gap-2.5 pt-1 text-[12px]">
+              <span className="text-text-muted font-medium">Dari Periode:</span>
+              <select
+                value={startPeriod}
+                onChange={(e) => setStartPeriod(e.target.value)}
+                className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer"
+              >
+                {MONTH_PERIOD_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
+              <span className="text-text-muted font-medium">s/d</span>
+
+              <select
+                value={endPeriod}
+                onChange={(e) => setEndPeriod(e.target.value)}
+                className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer"
+              >
+                {MONTH_PERIOD_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
       {payrolls.length === 0 ? (
         <Card className="p-8 text-center space-y-2 border-border-subtle bg-surface-panel">
           <FileText className="w-10 h-10 text-text-muted mx-auto" />
@@ -81,9 +246,28 @@ export const EmployeePayrollsPage: React.FC = () => {
             Data penggajian Anda belum diinput atau dipublikasikan oleh bagian HR / Administrasi.
           </p>
         </Card>
+      ) : filteredPayrolls.length === 0 ? (
+        <Card className="p-8 text-center space-y-3 border-border-subtle bg-surface-panel">
+          <Calendar className="w-10 h-10 text-text-muted mx-auto" />
+          <h3 className="text-[15px] font-semibold text-text-primary">Tidak Ada Slip untuk Periode Ini</h3>
+          <p className="text-[12px] text-text-muted max-w-sm mx-auto">
+            Tidak ditemukan catatan slip gaji untuk filter bulan atau rentang yang Anda pilih.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterMode('all');
+              setSelectedMonth('');
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[12px] font-semibold transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Tampilkan Semua Slip</span>
+          </button>
+        </Card>
       ) : (
         <div className="space-y-3">
-          {payrolls.map((item) => {
+          {filteredPayrolls.map((item) => {
             const isExpanded = expandedId === item.id;
             return (
               <Card
@@ -182,17 +366,15 @@ export const EmployeePayrollsPage: React.FC = () => {
                     </div>
 
                     {/* Potongan Detail */}
-                    {(Number(item.bpjs_kes || 0) > 0 ||
-                      Number(item.bpjs_tk || 0) > 0 ||
-                      Number(item.absence_deduction || 0) > 0) && (
+                    {(Number(item.bpjs_tk || 0) > 0 ||
+                      Number(item.absence_deduction || 0) > 0 ||
+                      (item.custom_deductions && item.custom_deductions.length > 0) ||
+                      Number(item.deduction || 0) > 0) && (
                       <div className="p-3 bg-surface-panel rounded-xl border border-border-subtle space-y-1.5">
                         <div className="font-medium text-text-primary text-[11.5px]">
                           Detail Potongan Terdaftar:
                         </div>
                         <div className="flex flex-wrap gap-4 text-text-muted text-[11.5px]">
-                          {Number(item.bpjs_kes || 0) > 0 && (
-                            <div>BPJS Kes: {formatCurrency(item.bpjs_kes)}</div>
-                          )}
                           {Number(item.bpjs_tk || 0) > 0 && (
                             <div>BPJS TK: {formatCurrency(item.bpjs_tk)}</div>
                           )}
@@ -201,6 +383,15 @@ export const EmployeePayrollsPage: React.FC = () => {
                               Ketidakhadiran: {formatCurrency(item.absence_deduction)} ({item.absence_count} hari)
                             </div>
                           )}
+                          {item.custom_deductions && item.custom_deductions.length > 0 ? (
+                            item.custom_deductions.map((cd, idx) => (
+                              <div key={idx}>
+                                {cd.name}: {formatCurrency(cd.amount)}
+                              </div>
+                            ))
+                          ) : Number(item.deduction || 0) > 0 ? (
+                            <div>Potongan Lainnya: {formatCurrency(item.deduction)}</div>
+                          ) : null}
                         </div>
                       </div>
                     )}

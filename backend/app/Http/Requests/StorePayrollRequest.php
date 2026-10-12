@@ -43,6 +43,9 @@ class StorePayrollRequest extends FormRequest
             'basic_salary' => ['required', 'numeric', 'min:0'],
             'allowance' => ['nullable', 'numeric', 'min:0'],
             'deduction' => ['nullable', 'numeric', 'min:0'],
+            'custom_deductions' => ['nullable', 'array'],
+            'custom_deductions.*.name' => ['nullable', 'string', 'max:150'],
+            'custom_deductions.*.amount' => ['nullable', 'numeric', 'min:0'],
             'absence_count' => ['nullable', 'integer', 'min:0'],
             'absence_rate' => ['nullable', 'numeric', 'min:0'],
             'absence_deduction' => ['nullable', 'numeric', 'min:0'],
@@ -58,22 +61,10 @@ class StorePayrollRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        $netBase = (float) ($this->net_base_price ?? 0);
+        $basicSalary = (float) ($this->basic_salary ?? 0);
         $bpjsKes = (float) ($this->bpjs_kes ?? 0);
         $bpjsTk = (float) ($this->bpjs_tk ?? 0);
-        $basicSalary = (float) ($this->basic_salary ?? 0);
-
-        if ($netBase > 0) {
-            if ($bpjsKes <= 0) {
-                $bpjsKes = round($netBase * 0.05, 2);
-            }
-            if ($bpjsTk <= 0) {
-                $bpjsTk = round($netBase * 0.0924, 2);
-            }
-            if ($basicSalary <= 0) {
-                $basicSalary = $netBase - $bpjsKes - $bpjsTk;
-            }
-        }
+        $netBase = (float) ($this->net_base_price ?? 0);
 
         $absenceCount = (int) ($this->absence_count ?? 0);
         $absenceRate = (float) ($this->absence_rate ?? 0);
@@ -82,13 +73,26 @@ class StorePayrollRequest extends FormRequest
             $absenceDeduction = $absenceCount * $absenceRate;
         }
 
+        // Backward compatibility: if basic_salary is omitted but net_base_price exists
+        if ($basicSalary <= 0 && $netBase > 0) {
+            $basicSalary = max(0, $netBase - $bpjsKes - $bpjsTk);
+        }
+
+        $deduction = (float) ($this->deduction ?? 0);
+        if (!empty($this->custom_deductions) && is_array($this->custom_deductions)) {
+            $customSum = collect($this->custom_deductions)->sum(fn($i) => (float)($i['amount'] ?? 0));
+            if ($customSum > 0 || empty($this->deduction)) {
+                $deduction = $customSum;
+            }
+        }
+
         $this->merge([
             'net_base_price' => $netBase,
             'bpjs_kes' => $bpjsKes,
             'bpjs_tk' => $bpjsTk,
             'basic_salary' => $basicSalary,
             'allowance' => $this->allowance ?? 0,
-            'deduction' => $this->deduction ?? 0,
+            'deduction' => $deduction,
             'absence_count' => $absenceCount,
             'absence_rate' => $absenceRate,
             'absence_deduction' => $absenceDeduction,

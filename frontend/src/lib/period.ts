@@ -20,6 +20,21 @@ export const SP_PERIOD_LIST: SPPeriodItem[] = [
   { code: 'SP 12', name: 'Surat Pesanan 12', fullLabel: 'SP 12 (Surat Pesanan 12)' },
 ];
 
+export const MONTH_PERIOD_OPTIONS = [
+  { code: 'SP 1', label: 'Januari 2026 (SP 1)' },
+  { code: 'SP 2', label: 'Februari 2026 (SP 2)' },
+  { code: 'SP 3', label: 'Maret 2026 (SP 3)' },
+  { code: 'SP 4', label: 'April 2026 (SP 4)' },
+  { code: 'SP 5', label: 'Mei 2026 (SP 5)' },
+  { code: 'SP 6', label: 'Juni 2026 (SP 6)' },
+  { code: 'SP 7', label: 'Juli 2026 (SP 7)' },
+  { code: 'SP 8', label: 'Agustus 2026 (SP 8)' },
+  { code: 'SP 9', label: 'September 2026 (SP 9)' },
+  { code: 'SP 10', label: 'Oktober 2026 (SP 10 — Tutup Absen)' },
+  { code: 'SP 11', label: 'November 2026 (SP 11)' },
+  { code: 'SP 12', label: 'Desember 2026 (SP 12)' },
+];
+
 export const normalizePeriodToSP = (period?: string | null): string => {
   if (!period) return 'SP 1';
   const clean = period.trim();

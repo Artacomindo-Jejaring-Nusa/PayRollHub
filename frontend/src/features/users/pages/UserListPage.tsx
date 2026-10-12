@@ -8,6 +8,9 @@ import { Select } from '../../../components/ui/Select';
 import { Badge } from '../../../components/ui/Badge';
 import { Modal } from '../../../components/ui/Modal';
 import { ConfirmDialog } from '../../../components/shared/ConfirmDialog';
+import { Pagination } from '../../../components/shared/Pagination';
+import { PayrollPaginationMeta } from '../../../types/payroll';
+import { useTenantTheme } from '../../../lib/theme';
 import {
   Users,
   Plus,
@@ -15,13 +18,26 @@ import {
   Trash2,
   Search,
   Loader2,
+  Filter,
 } from 'lucide-react';
 
 export const UserListPage: React.FC = () => {
   const { user: currentUser } = useAuthStore();
+  const { tenant } = useTenantTheme();
 
   const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [meta, setMeta] = useState<PayrollPaginationMeta>({
+    current_page: 1,
+    last_page: 1,
+    per_page: 10,
+    total: 0,
+    from: 0,
+    to: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   // Create / Edit modal state
@@ -44,14 +60,29 @@ export const UserListPage: React.FC = () => {
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await userService.getUsers({ search: search.trim() });
+      const response = await userService.getUsers({
+        search: search.trim() || undefined,
+        role: roleFilter || undefined,
+        page,
+        per_page: perPage,
+      });
       setUsers(response.data);
+      if (response.meta) {
+        setMeta({
+          current_page: response.meta.current_page,
+          last_page: response.meta.last_page,
+          per_page: response.meta.per_page,
+          total: response.meta.total,
+          from: response.meta.from ?? (response.meta.current_page - 1) * response.meta.per_page + 1,
+          to: response.meta.to ?? Math.min(response.meta.current_page * response.meta.per_page, response.meta.total),
+        });
+      }
     } catch (err) {
       console.error('Failed to load users:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [search]);
+  }, [search, roleFilter, page, perPage]);
 
   useEffect(() => {
     fetchUsers();
@@ -63,7 +94,7 @@ export const UserListPage: React.FC = () => {
     setFormEmail('');
     setFormPassword('');
     setFormRole('admin');
-    setFormCompany('rbs');
+    setFormCompany(tenant.id);
     setFormNik('');
     setFormSchoolUnit('');
     setFormErrors({});
@@ -143,11 +174,16 @@ export const UserListPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
-            Manajemen Pengguna & Hak Akses
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
+              Manajemen Pengguna & Hak Akses
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-[12px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+              Total {meta.total} Pengguna
+            </span>
+          </div>
           <p className="font-body-default text-body-default text-text-muted mt-1">
-            Kelola akun internal, pembagian role (Admin vs Viewer), dan kredensial login.
+            Kelola akun internal, pembagian role (Admin, Karyawan, User), dan kredensial login.
           </p>
         </div>
 
@@ -161,17 +197,39 @@ export const UserListPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Search Bar */}
+      {/* Search & Filter Bar */}
       <div className="bg-surface-panel rounded-xl border border-border-subtle p-4 shadow-sm">
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Cari nama atau email pengguna..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-10 pl-9 pr-4 bg-surface-panel rounded-lg text-body-default text-text-primary placeholder:text-text-muted border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px]"
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div className="sm:col-span-8 relative">
+            <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Cari nama, NIK, atau email pengguna..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full h-10 pl-9 pr-4 bg-surface-panel rounded-lg text-body-default text-text-primary placeholder:text-text-muted border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px]"
+            />
+          </div>
+
+          <div className="sm:col-span-4 relative">
+            <select
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setPage(1);
+              }}
+              className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] cursor-pointer"
+            >
+              <option value="">Semua Peran (Role)</option>
+              <option value="karyawan">📱 Karyawan (Portal)</option>
+              <option value="admin">🛡️ Admin Perusahaan</option>
+              <option value="user">👤 User (View & Search)</option>
+              <option value="super_admin">⭐ Super Admin</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -211,89 +269,104 @@ export const UserListPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                users.map((item, index) => (
-                  <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3.5 px-4 text-center text-text-muted font-mono text-[12px]">
-                      {index + 1}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="font-semibold text-text-primary">{item.name}</div>
-                      {item.school_unit && (
-                        <div className="text-[11px] text-emerald-800 font-medium flex items-center gap-1 mt-0.5">
-                          <span>🏫 {item.school_unit}</span>
-                        </div>
-                      )}
-                      {currentUser?.id === item.id && (
-                        <span className="text-[10px] text-primary font-medium">
-                          (Akun Anda Saat Ini)
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-600">
-                      <div className="font-mono text-[12px]">{item.email}</div>
-                      {item.nik && (
-                        <div className="text-[11px] text-text-muted mt-0.5">
-                          NIK: <span className="font-mono font-medium text-slate-700">{item.nik}</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <Badge
-                        variant={
-                          item.role === 'super_admin'
-                            ? 'super_admin'
-                            : item.role === 'admin'
-                            ? 'admin'
-                            : item.role === 'karyawan'
-                            ? 'karyawan'
-                            : 'viewer'
-                        }
-                      >
-                        {item.role === 'super_admin'
-                          ? '⭐ Super Admin'
-                          : item.role === 'admin'
-                          ? `Admin (${item.company?.toUpperCase() || 'RBS'})`
-                          : item.role === 'karyawan'
-                          ? 'Karyawan (Portal)'
-                          : 'User (View & Search)'}
-                      </Badge>
-                    </td>
-                    <td className="py-3.5 px-4 text-center text-text-muted text-[12px]">
-                      {item.created_at
-                        ? new Date(item.created_at).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })
-                        : '-'}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenEdit(item)}
-                          className="p-1.5 rounded text-text-muted hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                          title="Ubah Pengguna"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-
-                        {currentUser?.id !== item.id && (
-                          <button
-                            onClick={() => setDeleteTarget(item)}
-                            className="p-1.5 rounded text-text-muted hover:text-status-danger-text hover:bg-red-50 transition-colors"
-                            title="Hapus Pengguna"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                users.map((item, index) => {
+                  const rowNumber = (meta.current_page - 1) * meta.per_page + index + 1;
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-3.5 px-4 text-center text-text-muted font-mono text-[12px]">
+                        {rowNumber}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-text-primary">{item.name}</div>
+                        {item.school_unit && (
+                          <div className="text-[11px] text-emerald-800 font-medium flex items-center gap-1 mt-0.5">
+                            <span>🏫 {item.school_unit}</span>
+                          </div>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                        {currentUser?.id === item.id && (
+                          <span className="text-[10px] text-primary font-medium">
+                            (Akun Anda Saat Ini)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600">
+                        <div className="font-mono text-[12px]">{item.email}</div>
+                        {item.nik && (
+                          <div className="text-[11px] text-text-muted mt-0.5">
+                            NIK: <span className="font-mono font-medium text-slate-700">{item.nik}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <Badge
+                          variant={
+                            item.role === 'super_admin'
+                              ? 'super_admin'
+                              : item.role === 'admin'
+                              ? 'admin'
+                              : item.role === 'karyawan'
+                              ? 'karyawan'
+                              : 'viewer'
+                          }
+                        >
+                          {item.role === 'super_admin'
+                            ? '⭐ Super Admin'
+                            : item.role === 'admin'
+                            ? `Admin (${item.company?.toUpperCase() || 'RBS'})`
+                            : item.role === 'karyawan'
+                            ? 'Karyawan (Portal)'
+                            : 'User (View & Search)'}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-center text-text-muted text-[12px]">
+                        {item.created_at
+                          ? new Date(item.created_at).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenEdit(item)}
+                            className="p-1.5 rounded text-text-muted hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                            title="Ubah Pengguna"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+
+                          {currentUser?.id !== item.id && (
+                            <button
+                              onClick={() => setDeleteTarget(item)}
+                              className="p-1.5 rounded text-text-muted hover:text-status-danger-text hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Hapus Pengguna"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        <Pagination
+          meta={meta}
+          onPageChange={(p) => setPage(p)}
+          perPage={perPage}
+          onPerPageChange={(newPerPage) => {
+            setPerPage(newPerPage);
+            setPage(1);
+          }}
+          isLoading={isLoading}
+        />
       </div>
 
       {/* Create / Edit Modal */}
@@ -301,7 +374,7 @@ export const UserListPage: React.FC = () => {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editingUser ? 'Ubah Data Pengguna' : 'Tambah Pengguna Baru'}
-        description="Kelola akses staf ke sistem HRD Mandiri."
+        description={`Kelola akses staf dan akun pengguna untuk ${tenant.companyLegalName}.`}
       >
         <form onSubmit={handleModalSubmit} className="space-y-4">
           <Input

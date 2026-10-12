@@ -15,10 +15,12 @@ import {
   Calendar,
   Mail,
   Users,
+  LogOut,
 } from 'lucide-react';
+import { authService } from '../../auth/services/authService';
 
 export const EmployeeProfilePage: React.FC = () => {
-  const { setUser } = useAuthStore();
+  const { setUser, logout } = useAuthStore();
   const [profileData, setProfileData] = useState<EmployeeProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -350,6 +352,35 @@ export const EmployeeProfilePage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </Card>
+
+          {/* Card Zona Logout / Keluar Akun */}
+          <Card className="p-5 sm:p-6 border-rose-200/80 bg-rose-50/30">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-rose-950 flex items-center gap-2">
+                  <LogOut className="w-4 h-4 text-rose-600" />
+                  <span>Sesi & Keamanan Akun</span>
+                </h3>
+                <p className="text-xs text-rose-800/80 mt-1">
+                  Akhiri sesi kerja Anda pada perangkat ini dengan aman.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await authService.logout();
+                  } finally {
+                    logout();
+                  }
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer active:scale-95"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Keluar dari Akun (Logout)</span>
+              </button>
+            </div>
           </Card>
         </div>
       </div>

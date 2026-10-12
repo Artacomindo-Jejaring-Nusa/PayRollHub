@@ -335,10 +335,9 @@ class PayrollController extends Controller
                         'FUNGSI TENAGA KEPENDIDIKAN',
                         'TANGGAL MASUK',
                         'TANGGAL KELUAR',
-                        'HARGA DASAR (NET PPH & FEE)',
-                        'BPJS KES 5%',
-                        'BPJS TK 9.24%',
                         'GAJI POKOK',
+                        'BPJS KESEHATAN',
+                        'BPJS TK',
                         'POTONGAN ABSENSI',
                         'KETERANGAN ABSENSI',
                         'TOTAL DITERIMA (TAKE HOME PAY)',
@@ -358,10 +357,9 @@ class PayrollController extends Controller
                             $row->position ?? '-',
                             $row->join_date ?? '-',
                             $row->resign_date ?? '-',
-                            (float) $row->net_base_price,
+                            (float) $row->basic_salary,
                             (float) $row->bpjs_kes,
                             (float) $row->bpjs_tk,
-                            (float) $row->basic_salary,
                             (float) $row->absence_deduction,
                             $row->absence_note ?? '-',
                             'Rp ' . number_format((float) $row->take_home_pay, 0, ',', '.'),
@@ -422,10 +420,9 @@ class PayrollController extends Controller
                 'FUNGSI TENAGA KEPENDIDIKAN',
                 'TANGGAL MASUK',
                 'TANGGAL KELUAR',
-                'HARGA DASAR (NET PPH & FEE)',
-                'BPJS KES 5%',
-                'BPJS TK 9.24%',
                 'GAJI POKOK',
+                'BPJS KESEHATAN',
+                'BPJS TK',
                 'POTONGAN ABSENSI',
                 'KETERANGAN ABSENSI',
                 'TOTAL DITERIMA (TAKE HOME PAY)',
@@ -447,10 +444,9 @@ class PayrollController extends Controller
                     $row->position ?? '-',
                     $row->join_date ?? '-',
                     $row->resign_date ?? '-',
-                    (float) $row->net_base_price,
+                    (float) $row->basic_salary,
                     (float) $row->bpjs_kes,
                     (float) $row->bpjs_tk,
-                    (float) $row->basic_salary,
                     (float) $row->absence_deduction,
                     $row->absence_note ?? '-',
                     (float) $row->take_home_pay,
@@ -462,14 +458,14 @@ class PayrollController extends Controller
             if (!empty($rows)) {
                 $sheet->fromArray($rows, null, 'A2');
             }
-            $sheet->getStyle('A1:S1')->applyFromArray([
+            $sheet->getStyle('A1:R1')->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
                 'fill' => [
                     'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
                     'startColor' => ['rgb' => '004AC6'],
                 ],
             ]);
-            foreach (range('A', 'S') as $col) {
+            foreach (range('A', 'R') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
         } else {

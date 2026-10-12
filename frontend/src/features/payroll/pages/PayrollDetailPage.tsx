@@ -94,7 +94,7 @@ export const PayrollDetailPage: React.FC = () => {
   // Company display logic
   const isRiama = payroll.company === 'rimamandiri' || tenant.id === 'rimamandiri';
   const companyTitle = isRiama ? 'PT. Riama Mandiri Pratama' : 'PT. Rimbun Buana Sejahtera';
-  const brandName = isRiama ? 'Riama Mandiri Pratama' : 'RBS Global';
+  const brandName = isRiama ? 'Riama Mandiri Pratama' : 'RBS HRD - Global';
   const domainName = isRiama ? 'riamamandiripratama.com' : 'rimbunbuanasejahtera.com';
 
   return (
@@ -164,7 +164,7 @@ export const PayrollDetailPage: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="font-headline-page text-[20px] font-bold text-primary tracking-tight">
-                    HRD Mandiri
+                    {isRiama ? 'HRD Riama Mandiri' : 'RBS HRD - Global'}
                   </h2>
                   <span className="text-[12px] text-text-muted font-medium">
                     {brandName} • {companyTitle}
@@ -283,141 +283,193 @@ export const PayrollDetailPage: React.FC = () => {
           <>
             <div className="space-y-4 mb-6">
               <h3 className="font-title-card text-[15px] font-bold text-text-primary uppercase tracking-wide">
-                Rincian Komponen Gaji Sesuai Formula Database
+                Rincian Komponen Gaji Sesuai Format Resmi Perusahaan
               </h3>
 
-              <div className="border border-border-subtle rounded-xl overflow-hidden">
+              <div className="border border-border-subtle rounded-xl overflow-hidden shadow-xs">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-primary text-white text-[12px] font-semibold uppercase">
-                      <th className="py-3 px-4">Komponen Gaji / Potongan</th>
-                      <th className="py-3 px-4 text-center">Dasar Rumus</th>
-                      <th className="py-3 px-4 text-right">Nominal (IDR)</th>
+                      <th className="py-3 px-4">Rincian Komponen Gaji</th>
+                      <th className="py-3 px-4 text-center">Tipe</th>
+                      <th className="py-3 px-4 text-right">Jumlah (IDR)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-row text-[13.5px]">
-                    {/* Col N: Net Base Price */}
-                    {payroll.net_base_price !== null && payroll.net_base_price !== undefined && (
-                      <tr className="bg-slate-50/50">
-                        <td className="py-2.5 px-4 font-medium text-text-primary">
-                          Harga Dasar di potong PPh & Fee manajemen
-                        </td>
-                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
-                          Kolom N
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-slate-800">
-                          {payroll.formatted_net_base_price}
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* Col Q: BPJS Kes 5% */}
-                    {payroll.bpjs_kes !== null && payroll.bpjs_kes !== undefined && (
-                      <tr>
-                        <td className="py-2.5 px-4 font-medium text-text-secondary pl-6">
-                          ↳ BPJS Kesehatan (5%)
-                        </td>
-                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
-                          Kolom Q (5%)
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                          -{payroll.formatted_bpjs_kes}
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* Col T: BPJS TK 9.24% */}
-                    {payroll.bpjs_tk !== null && payroll.bpjs_tk !== undefined && (
-                      <tr>
-                        <td className="py-2.5 px-4 font-medium text-text-secondary pl-6">
-                          ↳ BPJS Ketenagakerjaan (9,24%)
-                        </td>
-                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
-                          Kolom T (9.24%)
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-slate-600">
-                          -{payroll.formatted_bpjs_tk}
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* Col U: Gaji Pokok */}
-                    <tr className="bg-blue-50/50 font-semibold">
-                      <td className="py-3 px-4 text-text-primary">
-                        Gaji Pokok Bersih (Hak Jasa Kependidikan)
+                    {/* 1. Gaji Pokok */}
+                    <tr className="bg-white font-medium">
+                      <td className="py-2.5 px-4 font-semibold text-text-primary">
+                        Gaji Pokok
                       </td>
-                      <td className="py-3 px-4 text-center text-[12px] text-primary font-mono">
-                        Col N - Q - T
+                      <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
+                        Pokok
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-primary text-[14.5px]">
+                      <td className="py-2.5 px-4 text-right font-mono font-semibold text-text-primary">
                         {payroll.formatted_basic_salary}
                       </td>
                     </tr>
 
-                    {/* Allowance */}
-                    {payroll.allowance > 0 && (
+                    {/* 2. Tunjangan BPJS Kesehatan */}
+                    <tr>
+                      <td className="py-2.5 px-4 text-text-secondary pl-6">
+                        Tunjangan BPJS Kesehatan
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-emerald-700 font-mono">
+                        Penambah
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-emerald-600 font-medium">
+                        {payroll.bpjs_kes && Number(payroll.bpjs_kes) > 0 ? `+${payroll.formatted_bpjs_kes}` : 'Rp -'}
+                      </td>
+                    </tr>
+
+                    {/* 3. Tunjangan Jabatan / Lainnya */}
+                    <tr>
+                      <td className="py-2.5 px-4 text-text-secondary pl-6">
+                        Tunjangan Jabatan & Lembur
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-emerald-700 font-mono">
+                        Penambah
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-emerald-600 font-medium">
+                        {payroll.allowance && Number(payroll.allowance) > 0 ? `+${payroll.formatted_allowance}` : 'Rp -'}
+                      </td>
+                    </tr>
+
+                    {/* 4. Tunjangan Hari Raya */}
+                    <tr>
+                      <td className="py-2.5 px-4 text-text-secondary pl-6">
+                        Tunjangan Hari Raya (THR)
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
+                        Penambah
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-text-muted">
+                        Rp -
+                      </td>
+                    </tr>
+
+                    {/* Subtotal Gaji Sebelum Potongan */}
+                    <tr className="bg-slate-100/70 font-semibold border-t border-b border-slate-300">
+                      <td className="py-2.5 px-4 text-text-primary">
+                        Total Gaji sebelum potongan
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-primary font-mono">
+                        Subtotal
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-primary text-[14px]">
+                        {formatCurrency(Number(payroll.basic_salary || 0) + Number(payroll.bpjs_kes || 0) + Number(payroll.allowance || 0))}
+                      </td>
+                    </tr>
+
+                    {/* Header Bagian Potongan */}
+                    <tr className="bg-rose-50/30">
+                      <td colSpan={3} className="py-2 px-4 font-bold text-rose-800 text-[12.5px] uppercase tracking-wide">
+                        Potongan
+                      </td>
+                    </tr>
+
+                    {/* BPJS TK JHT (2%) */}
+                    <tr>
+                      <td className="py-2.5 px-4 text-rose-700 pl-6">
+                        BPJS TK JHT (2%)
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
+                        Pengurang (2%)
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
+                        {payroll.bpjs_tk && Number(payroll.bpjs_tk) > 0 
+                          ? `-${formatCurrency(Math.round(Number(payroll.basic_salary > 0 ? Number(payroll.basic_salary) * 0.02 : Number(payroll.bpjs_tk) * (2/3))))}`
+                          : 'Rp -'}
+                      </td>
+                    </tr>
+
+                    {/* BPJS TK JP (1%) */}
+                    <tr>
+                      <td className="py-2.5 px-4 text-rose-700 pl-6">
+                        BPJS TK JP (1%)
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
+                        Pengurang (1%)
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
+                        {payroll.bpjs_tk && Number(payroll.bpjs_tk) > 0 
+                          ? `-${formatCurrency(Math.round(Number(payroll.bpjs_tk) - Math.round(Number(payroll.basic_salary > 0 ? Number(payroll.basic_salary) * 0.02 : Number(payroll.bpjs_tk) * (2/3)))))}`
+                          : 'Rp -'}
+                      </td>
+                    </tr>
+
+                    {/* PPh 21 */}
+                    <tr>
+                      <td className="py-2.5 px-4 text-rose-700 pl-6">
+                        Pph 21
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
+                        Pajak
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
+                        {payroll.pph21 && Number(payroll.pph21) > 0 ? `-${payroll.formatted_pph21 || formatCurrency(payroll.pph21)}` : 'Rp -'}
+                      </td>
+                    </tr>
+
+                    {/* Absensi */}
+                    <tr>
+                      <td className="py-2.5 px-4 text-rose-700 pl-6">
+                        Absensi {payroll.absence_count && Number(payroll.absence_count) > 0 ? `(${payroll.absence_count}x)` : ''}
+                        {payroll.absence_note && (
+                          <span className="text-[11px] text-rose-500 font-normal block">
+                            Ket: {payroll.absence_note}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
+                        Pengurang
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
+                        {payroll.absence_deduction && Number(payroll.absence_deduction) > 0 ? `-${payroll.formatted_absence_deduction}` : 'Rp -'}
+                      </td>
+                    </tr>
+
+                    {/* Potongan Kustom / Lainnya jika ada */}
+                    {payroll.custom_deductions && payroll.custom_deductions.length > 0 ? (
+                      payroll.custom_deductions.map((cd, idx) => (
+                        <tr key={idx}>
+                          <td className="py-2.5 px-4 text-rose-700 pl-6">
+                            {cd.name || 'Potongan Kustom'}
+                          </td>
+                          <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
+                            Pengurang
+                          </td>
+                          <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
+                            -{formatCurrency(cd.amount)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : payroll.deduction && Number(payroll.deduction) > 0 ? (
                       <tr>
-                        <td className="py-2.5 px-4 font-medium text-text-primary">
-                          Tunjangan Tambahan & Lembur
-                        </td>
-                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
-                          Penambahan
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-emerald-600 font-medium">
-                          +{payroll.formatted_allowance}
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* Col V: Potongan Absensi */}
-                    {payroll.absence_deduction && Number(payroll.absence_deduction) > 0 ? (
-                      <tr className="bg-rose-50/40">
-                        <td className="py-2.5 px-4 font-medium text-rose-700">
-                          <div>Potongan Absensi ({payroll.absence_count || 0}x)</div>
-                          {payroll.absence_note && (
-                            <div className="text-[11px] text-rose-600 font-normal">
-                              Ket: {payroll.absence_note}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
-                          Kolom V ({payroll.absence_count}x @ {formatCurrency(payroll.absence_rate || 50000)})
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-semibold">
-                          -{payroll.formatted_absence_deduction}
-                        </td>
-                      </tr>
-                    ) : null}
-
-                    {/* Col S: PPh21 */}
-                    {payroll.pph21 && Number(payroll.pph21) > 0 ? (
-                      <tr className="bg-amber-50/40">
-                        <td className="py-2.5 px-4 font-medium text-amber-800">
-                          Pajak Penghasilan (PPh 21)
-                        </td>
-                        <td className="py-2.5 px-4 text-center text-[12px] text-amber-700 font-mono">
-                          Kolom S
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-amber-800 font-semibold">
-                          -{payroll.formatted_pph21 || formatCurrency(payroll.pph21)}
-                        </td>
-                      </tr>
-                    ) : null}
-
-                    {/* General Deduction */}
-                    {payroll.deduction > 0 && (
-                      <tr>
-                        <td className="py-2.5 px-4 font-medium text-status-danger-text">
+                        <td className="py-2.5 px-4 text-rose-700 pl-6">
                           Potongan Lainnya
                         </td>
-                        <td className="py-2.5 px-4 text-center text-[12px] text-text-muted font-mono">
-                          Pengurangan
+                        <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
+                          Pengurang
                         </td>
-                        <td className="py-2.5 px-4 text-right font-mono text-status-danger-text font-medium">
+                        <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
                           -{payroll.formatted_deduction}
                         </td>
                       </tr>
-                    )}
+                    ) : null}
+
+                    {/* Subtotal Total Potongan */}
+                    <tr className="bg-rose-100/50 font-semibold border-t border-b border-rose-300">
+                      <td className="py-2.5 px-4 text-rose-900">
+                        Total Potongan
+                      </td>
+                      <td className="py-2.5 px-4 text-center text-[12px] text-rose-700 font-mono">
+                        Subtotal
+                      </td>
+                      <td className="py-2.5 px-4 text-right font-mono text-rose-700 text-[14px]">
+                        -{formatCurrency(Number(payroll.bpjs_tk || 0) + Number(payroll.absence_deduction || 0) + Number(payroll.deduction || 0) + Number(payroll.pph21 || 0))}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -458,7 +510,7 @@ export const PayrollDetailPage: React.FC = () => {
         {/* Footer & Signature */}
         <div className="pt-10 flex justify-between items-end border-t border-border-row mt-8 text-[12px]">
           <div className="text-text-muted space-y-1">
-            <p>Dicetak otomatis melalui sistem HRD Mandiri — {brandName}.</p>
+            <p>Dicetak otomatis melalui sistem {brandName}.</p>
             <p>ID Transaksi: #{payroll.id} • Dibuat: {payroll.created_at?.slice(0, 10)}</p>
           </div>
 

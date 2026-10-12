@@ -4,6 +4,8 @@ import {
   AttendanceRecord,
   OfficeSetting,
   AttendanceSummary,
+  AttendanceLocation,
+  SchoolUnitOption,
 } from '../types/attendance';
 
 export const attendanceService = {
@@ -13,8 +15,34 @@ export const attendanceService = {
     return response.data.data;
   },
 
-  checkIn: async (coords: { latitude: number; longitude: number; notes?: string }): Promise<any> => {
-    const response = await api.post('/employee/attendance/check-in', coords);
+  checkIn: async (payload: {
+    attendance_type?: 'masuk' | 'libur' | 'dinas_luar';
+    latitude?: number;
+    longitude?: number;
+    location_id?: number;
+    notes?: string;
+    photo?: File | string | null;
+  }): Promise<any> => {
+    if (payload.photo instanceof File) {
+      const formData = new FormData();
+      if (payload.attendance_type) formData.append('attendance_type', payload.attendance_type);
+      if (payload.latitude !== undefined && payload.latitude !== null) {
+        formData.append('latitude', String(payload.latitude));
+      }
+      if (payload.longitude !== undefined && payload.longitude !== null) {
+        formData.append('longitude', String(payload.longitude));
+      }
+      if (payload.location_id) formData.append('location_id', String(payload.location_id));
+      if (payload.notes) formData.append('notes', payload.notes);
+      formData.append('photo', payload.photo);
+
+      const response = await api.post('/employee/attendance/check-in', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    }
+
+    const response = await api.post('/employee/attendance/check-in', payload);
     return response.data;
   },
 
@@ -28,6 +56,145 @@ export const attendanceService = {
       params: { month, page },
     });
     return response.data.data;
+  },
+
+  // Locations APIs (100+ Master Lokasi Radius)
+  getActiveLocations: async (company?: string): Promise<AttendanceLocation[]> => {
+    const response = await api.get('/attendance/locations', { params: { company } });
+    return response.data.data;
+  },
+
+  getAdminLocations: async (params?: {
+    search?: string;
+    type?: string;
+    company?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<{ data: AttendanceLocation[]; meta: any }> => {
+    const response = await api.get('/admin/attendance-locations', { params });
+    return { data: response.data.data, meta: response.data.meta };
+  },
+
+  createLocation: async (data: Partial<AttendanceLocation>): Promise<AttendanceLocation> => {
+    const response = await api.post('/admin/attendance-locations', data);
+    return response.data.data;
+  },
+
+  updateLocation: async (id: number, data: Partial<AttendanceLocation>): Promise<AttendanceLocation> => {
+    const response = await api.put(`/admin/attendance-locations/${id}`, data);
+    return response.data.data;
+  },
+
+  deleteLocation: async (id: number): Promise<void> => {
+    await api.delete(`/admin/attendance-locations/${id}`);
+  },
+
+  getSchoolUnits: async (company?: string): Promise<SchoolUnitOption[]> => {
+    const response = await api.get('/admin/attendance-locations/school-units', {
+      params: { company },
+    });
+    return response.data.data;
+  },
+
+  syncFromSchoolUnits: async (company?: string): Promise<any> => {
+    const response = await api.post('/admin/attendance-locations/sync-from-school-units', {
+      company,
+    });
+    return response.data;
+  },
+
+  getLocationEmployees: async (locationId: number): Promise<{
+    location: AttendanceLocation;
+    assigned_employees: any[];
+    all_employees: any[];
+  }> => {
+    const response = await api.get(`/admin/attendance-locations/${locationId}/employees`);
+    return response.data.data;
+  },
+
+  assignLocationEmployees: async (locationId: number, userIds: number[]): Promise<any> => {
+    const response = await api.post(`/admin/attendance-locations/${locationId}/assign-employees`, {
+      user_ids: userIds,
+    });
+    return response.data;
+  },
+
+  downloadLocationTemplate: async (): Promise<void> => {
+    const response = await api.get('/admin/attendance-locations/template', {
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'template_import_lokasi_absensi.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  downloadLocationTemplateUrl: (): string => {
+    const baseUrl = api.defaults.baseURL || '/api';
+    return `${baseUrl}/attendance-locations/template`;
+  },
+
+  previewImportLocations: async (file: File, company?: string): Promise<any> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (company) formData.append('company', company);
+    const response = await api.post('/admin/attendance-locations/import/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  importLocations: async (file: File, company?: string): Promise<any> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (company) formData.append('company', company);
+    const response = await api.post('/admin/attendance-locations/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  exportLocations: async (company?: string): Promise<void> => {
+    const response = await api.get('/admin/attendance-locations/export', {
+      params: { company },
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], {
+      type: 'text/csv;charset=utf-8;',
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `master_lokasi_absensi_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  exportLocationsUrl: (company?: string): string => {
+    const baseUrl = api.defaults.baseURL || '/api';
+    const params = new URLSearchParams();
+    if (company) params.append('company', company);
+    return `${baseUrl}/admin/attendance-locations/export?${params.toString()}`;
+  },
+
+  clearAllLocations: async (company?: string): Promise<any> => {
+    const response = await api.delete('/admin/attendance-locations/clear-all', {
+      data: { company },
+    });
+    return response.data;
   },
 
   // Admin Portal APIs

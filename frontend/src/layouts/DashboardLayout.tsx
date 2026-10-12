@@ -42,6 +42,7 @@ export const DashboardLayout: React.FC = () => {
   }, []);
 
   const isTopNavLayout = tenantId === 'rimamandiri';
+  const isRima = tenantId === 'rimamandiri';
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -77,6 +78,7 @@ export const DashboardLayout: React.FC = () => {
       icon: <ClipboardList className="w-4 h-4" />,
       adminOnly: false,
       badge: isWorkReportUnlocked ? undefined : '🔒',
+      isHold: true, // Fitur Laporan Kerja di-hold sementara (dapat diaktifkan kembali sewaktu-waktu)
     },
     {
       label: 'Pengumuman',
@@ -104,6 +106,10 @@ export const DashboardLayout: React.FC = () => {
   const isAdmin = user?.role === 'admin' || isSuperAdmin;
 
   const visibleNavItems = navItems.filter((item) => {
+    // Sembunyikan item yang statusnya di-hold sementara
+    if ((item as any).isHold) {
+      return false;
+    }
     if (item.superAdminOnly) {
       return isSuperAdmin;
     }
@@ -132,17 +138,19 @@ export const DashboardLayout: React.FC = () => {
           <div className="w-full px-3 sm:px-4 lg:px-6 h-16 flex items-center justify-between gap-2">
             {/* Brand Logo & Title */}
             <div className="flex items-center space-x-2 sm:space-x-2.5 flex-shrink-0">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
+              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${isRima ? 'from-emerald-600 to-teal-700 shadow-emerald-700/20' : 'from-primary to-blue-700 shadow-primary/20'} flex items-center justify-center text-white shadow-md shrink-0`}>
                 <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="font-headline-page text-[15px] sm:text-[16px] font-bold text-text-primary tracking-tight whitespace-nowrap">
-                    HRD Mandiri
+                    {tenant.appName}
                   </span>
-                  <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wide whitespace-nowrap">
-                    {tenant.badgeText}
-                  </span>
+                  {isRima && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[9.5px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase tracking-wide whitespace-nowrap">
+                      {tenant.badgeText}
+                    </span>
+                  )}
                 </div>
                 <span className="hidden 2xl:block text-[10.5px] text-text-muted font-medium truncate max-w-[160px]">
                   {tenant.companyLegalName}
@@ -349,14 +357,14 @@ export const DashboardLayout: React.FC = () => {
       {/* Mobile Header Bar */}
       <div className="lg:hidden bg-surface-panel border-b border-border-subtle px-4 py-3 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center space-x-2.5">
-          <div className="w-9 h-9 rounded-lg bg-primary-container flex items-center justify-center text-white shadow-sm">
+          <div className={`w-9 h-9 rounded-lg ${isRima ? 'bg-emerald-600' : 'bg-primary-container'} flex items-center justify-center text-white shadow-sm`}>
             <Wallet className="w-5 h-5" />
           </div>
           <div>
             <span className="font-headline-page text-[15px] font-semibold text-text-primary tracking-tight">
-              HRD Mandiri
+              {tenant.appName}
             </span>
-            <span className="block text-[11px] text-text-muted font-medium">{tenant.shortName}</span>
+            <span className="block text-[11px] text-text-muted font-medium">{tenant.companyLegalName}</span>
           </div>
         </div>
 
@@ -381,17 +389,17 @@ export const DashboardLayout: React.FC = () => {
         {/* Brand Header */}
         <div className="p-6 border-b border-border-row">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-container to-primary flex items-center justify-center text-white shadow-md shadow-primary-container/20">
+            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${isRima ? 'from-emerald-600 to-teal-700 shadow-emerald-700/20' : 'from-primary-container to-primary shadow-primary-container/20'} flex items-center justify-center text-white shadow-md`}>
               <Wallet className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-headline-page text-[18px] font-bold text-text-primary tracking-tight">
-                  HRD Mandiri
+                  {tenant.appName}
                 </span>
               </div>
               <span className="block text-[12px] text-text-muted font-medium">
-                {tenant.shortName}
+                {tenant.companyLegalName}
               </span>
             </div>
           </div>

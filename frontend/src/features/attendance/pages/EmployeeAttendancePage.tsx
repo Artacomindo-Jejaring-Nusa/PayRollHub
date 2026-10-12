@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Clock,
   MapPin,
@@ -10,12 +10,25 @@ import {
   Compass,
   Building,
   Info,
+  SunMedium,
+  Briefcase,
+  Navigation,
+  Camera,
+  Car,
+  RotateCcw,
+  Eye,
+  X,
+  FileText,
 } from 'lucide-react';
 import {
   attendanceService,
   calculateDistanceMeters,
 } from '../services/attendanceService';
-import { TodayAttendanceData, AttendanceRecord } from '../types/attendance';
+import {
+  TodayAttendanceData,
+  AttendanceRecord,
+  AttendanceLocation,
+} from '../types/attendance';
 
 export const EmployeeAttendancePage: React.FC = () => {
   // Server & Attendance State
@@ -26,6 +39,21 @@ export const EmployeeAttendancePage: React.FC = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  // Mode: 'masuk' (radius 100+ lokasi + foto selfie) | 'dinas_luar' (bebas radius + catatan & foto) | 'libur' (bebas radius)
+  const [attendanceMode, setAttendanceMode] = useState<'masuk' | 'dinas_luar' | 'libur'>('masuk');
+  const [holidayNotes, setHolidayNotes] = useState<string>('Hari Libur Terjadwal / Off Rutin');
+  const [dinasNotes, setDinasNotes] = useState<string>('');
+  const [checkInNotes, setCheckInNotes] = useState<string>('');
+
+  // Camera & Photo State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dinasFileInputRef = useRef<HTMLInputElement>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  // Modal Lightbox Foto Preview
+  const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -34,7 +62,9 @@ export const EmployeeAttendancePage: React.FC = () => {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [isDetectingGps, setIsDetectingGps] = useState(true);
-  const [liveDistance, setLiveDistance] = useState<number | null>(null);
+
+  // Selected Target Location (from 100+ locations)
+  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
 
   // Live Clock State
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -61,6 +91,18 @@ export const EmployeeAttendancePage: React.FC = () => {
       const data = await attendanceService.getTodayAttendance();
       setTodayData(data);
 
+      // Jika user sudah absen libur atau dinas hari ini, sesuaikan tab
+      if (data.attendance?.attendance_type === 'libur' || data.attendance?.status === 'holiday') {
+        setAttendanceMode('libur');
+      } else if (data.attendance?.attendance_type === 'dinas_luar') {
+        setAttendanceMode('dinas_luar');
+      }
+
+      // Default selected location ke assigned_location jika belum dipilih
+      if (data.assigned_location && !selectedLocationId) {
+        setSelectedLocationId(data.assigned_location.id);
+      }
+
       const historyData = await attendanceService.getEmployeeHistory(selectedMonth);
       setHistory(historyData.data || []);
     } catch (err: any) {
@@ -72,7 +114,7 @@ export const EmployeeAttendancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, selectedLocationId]);
 
   useEffect(() => {
     fetchData();
@@ -96,23 +138,12 @@ export const EmployeeAttendancePage: React.FC = () => {
         setCoords({ lat, lng });
         setGpsError(null);
         setIsDetectingGps(false);
-
-        // Hitung jarak ke kantor jika setting kantor sudah ada
-        if (todayData?.office_setting) {
-          const dist = calculateDistanceMeters(
-            lat,
-            lng,
-            todayData.office_setting.latitude,
-            todayData.office_setting.longitude
-          );
-          setLiveDistance(dist);
-        }
       },
       (error) => {
         setIsDetectingGps(false);
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            setGpsError('Izin akses lokasi (GPS) ditolak. Silakan izinkan browser mengakses lokasi.');
+            setGpsError('Izin akses lokasi (GPS) ditolak. Silakan izinkan browser mengakses lokasi perangkat.');
             break;
           case error.POSITION_UNAVAILABLE:
             setGpsError('Informasi lokasi GPS tidak tersedia pada perangkat saat ini.');
@@ -130,34 +161,94 @@ export const EmployeeAttendancePage: React.FC = () => {
         maximumAge: 10000,
       }
     );
-  }, [todayData]);
+  }, []);
 
   useEffect(() => {
     requestLocation();
   }, [requestLocation]);
 
-  // Recalculate distance when todayData or coords update
-  useEffect(() => {
-    if (coords && todayData?.office_setting) {
-      const dist = calculateDistanceMeters(
-        coords.lat,
-        coords.lng,
-        todayData.office_setting.latitude,
-        todayData.office_setting.longitude
-      );
-      setLiveDistance(dist);
+  // Handle Ambil Foto Kamera / Upload
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setMessage({ text: 'Ukuran foto terlalu besar (maksimal 10MB).', type: 'error' });
+        return;
+      }
+      setPhotoFile(file);
+      const url = URL.createObjectURL(file);
+      setPhotoPreview(url);
     }
-  }, [coords, todayData]);
+  };
 
-  const maxRadius = todayData?.office_setting?.radius_meters || 100;
+  const handleResetPhoto = () => {
+    if (photoPreview && photoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreview);
+    }
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (dinasFileInputRef.current) dinasFileInputRef.current.value = '';
+  };
+
+  // Kalkulasi Jarak Terhadap Seluruh 100+ Lokasi Aktif
+  const locationsWithDistance = useMemo(() => {
+    const list = todayData?.locations || [];
+    if (!coords) {
+      return list.map((loc) => ({ ...loc, distance_meters: undefined }));
+    }
+    return list.map((loc) => {
+      const dist = calculateDistanceMeters(coords.lat, coords.lng, loc.latitude, loc.longitude);
+      return {
+        ...loc,
+        distance_meters: dist,
+      };
+    }).sort((a, b) => (a.distance_meters || 0) - (b.distance_meters || 0));
+  }, [todayData?.locations, coords]);
+
+  // Lokasi terdekat otomatis
+  const nearestLocation: (AttendanceLocation & { distance_meters?: number }) | null = useMemo(() => {
+    if (locationsWithDistance.length === 0) return null;
+    return locationsWithDistance[0];
+  }, [locationsWithDistance]);
+
+  // Lokasi yang sedang aktif dipilih (prioritas utama: assigned_location sekolah penugasan karyawan)
+  const activeTargetLocation = useMemo(() => {
+    if (todayData?.assigned_location) {
+      const foundAssigned = locationsWithDistance.find((loc) => loc.id === todayData.assigned_location?.id);
+      if (foundAssigned) return foundAssigned;
+      if (coords) {
+        const dist = calculateDistanceMeters(coords.lat, coords.lng, todayData.assigned_location.latitude, todayData.assigned_location.longitude);
+        return { ...todayData.assigned_location, distance_meters: dist };
+      }
+      return todayData.assigned_location;
+    }
+    if (selectedLocationId) {
+      const found = locationsWithDistance.find((loc) => loc.id === selectedLocationId);
+      if (found) return found;
+    }
+    return nearestLocation;
+  }, [todayData?.assigned_location, coords, selectedLocationId, locationsWithDistance, nearestLocation]);
+
+  // Evaluasi Radius untuk Absen Masuk
+  const liveDistance = activeTargetLocation?.distance_meters ?? null;
+  const maxRadius = activeTargetLocation?.radius_meters || todayData?.office_setting?.radius_meters || 100;
   const isWithinRadius = liveDistance !== null && liveDistance <= maxRadius;
+
   const hasCheckedIn = !!todayData?.attendance?.check_in_time;
   const hasCheckedOut = !!todayData?.attendance?.check_out_time;
+  const isHolidayCheckedIn = todayData?.attendance?.attendance_type === 'libur' || todayData?.attendance?.status === 'holiday';
+  const isDinasCheckedIn = todayData?.attendance?.attendance_type === 'dinas_luar';
 
-  // Handle Absen Masuk
-  const handleCheckIn = async () => {
+  // Handle Absen Masuk (Validasi Radius 100+ Lokasi + Wajib Foto Selfie)
+  const handleCheckInMasuk = async () => {
     if (!coords) {
-      setMessage({ text: 'Lokasi GPS belum terdeteksi. Silakan aktifkan GPS.', type: 'error' });
+      setMessage({ text: 'Lokasi GPS belum terdeteksi. Silakan aktifkan GPS terlebih dahulu.', type: 'error' });
+      return;
+    }
+
+    if (!photoFile) {
+      setMessage({ text: 'Foto bukti selfie kehadiran wajib diambil sebelum melakukan absen masuk.', type: 'error' });
       return;
     }
 
@@ -165,14 +256,75 @@ export const EmployeeAttendancePage: React.FC = () => {
       setActionLoading(true);
       setMessage(null);
       const res = await attendanceService.checkIn({
+        attendance_type: 'masuk',
         latitude: coords.lat,
         longitude: coords.lng,
+        location_id: activeTargetLocation?.id,
+        notes: checkInNotes.trim() || undefined,
+        photo: photoFile,
       });
-      setMessage({ text: res.message || 'Absen masuk berhasil!', type: 'success' });
+      setMessage({ text: res.message || 'Absen masuk berhasil tercatat!', type: 'success' });
+      handleResetPhoto();
       fetchData();
     } catch (err: any) {
       setMessage({
         text: err.response?.data?.message || 'Gagal melakukan absen masuk.',
+        type: 'error',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Absen Perjalanan Dinas (Point 5: Bebas Radius GPS)
+  const handleCheckInDinas = async () => {
+    if (!dinasNotes.trim()) {
+      setMessage({ text: 'Catatan/agenda keperluan perjalanan dinas wajib diisi.', type: 'error' });
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setMessage(null);
+      const res = await attendanceService.checkIn({
+        attendance_type: 'dinas_luar',
+        latitude: coords?.lat,
+        longitude: coords?.lng,
+        notes: dinasNotes.trim(),
+        photo: photoFile,
+      });
+      setMessage({ text: res.message || 'Absen Perjalanan Dinas berhasil dicatat! Selamat bertugas.', type: 'success' });
+      handleResetPhoto();
+      fetchData();
+    } catch (err: any) {
+      setMessage({
+        text: err.response?.data?.message || 'Gagal mencatat absen perjalanan dinas.',
+        type: 'error',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Absen Libur (Point 3: Bebas Radius GPS)
+  const handleCheckInLibur = async () => {
+    try {
+      setActionLoading(true);
+      setMessage(null);
+      const res = await attendanceService.checkIn({
+        attendance_type: 'libur',
+        latitude: coords?.lat,
+        longitude: coords?.lng,
+        notes: holidayNotes.trim() || 'Hari Libur / Off Terjadwal',
+      });
+      setMessage({
+        text: res.message || 'Absen Libur berhasil dicatat. Selamat berlibur!',
+        type: 'success',
+      });
+      fetchData();
+    } catch (err: any) {
+      setMessage({
+        text: err.response?.data?.message || 'Gagal mencatat absen libur.',
         type: 'error',
       });
     } finally {
@@ -194,7 +346,7 @@ export const EmployeeAttendancePage: React.FC = () => {
         latitude: coords.lat,
         longitude: coords.lng,
       });
-      setMessage({ text: res.message || 'Absen pulang berhasil!', type: 'success' });
+      setMessage({ text: res.message || 'Absen pulang berhasil tercatat!', type: 'success' });
       fetchData();
     } catch (err: any) {
       setMessage({
@@ -207,16 +359,16 @@ export const EmployeeAttendancePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-10">
+    <div className="space-y-6 max-w-5xl mx-auto pb-12">
       {/* Header Page */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-text-primary flex items-center gap-2.5">
             <Clock className="w-6 h-6 text-primary" />
-            <span>Absensi Kehadiran</span>
+            <span>Presensi & Absensi Karyawan</span>
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Absensi mandiri berbasis verifikasi radius lokasi kantor (Cepat, otomatis, tanpa foto muka).
+            Mendukung 100+ titik lokasi kerja (Radius Geofencing) & Opsi Absen Libur tanpa batasan radius.
           </p>
         </div>
 
@@ -252,133 +404,563 @@ export const EmployeeAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* Main Grid: Live Radar Card & Action Buttons */}
+      {/* Navigation Switch Mode: Absen Masuk vs Perjalanan Dinas vs Absen Libur */}
+      {!hasCheckedIn && (
+        <div className="bg-surface-panel border border-border-subtle p-1.5 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-2 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => {
+              setAttendanceMode('masuk');
+              handleResetPhoto();
+            }}
+            className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              attendanceMode === 'masuk'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
+            }`}
+          >
+            <Briefcase className="w-4 h-4 shrink-0" />
+            <span className="truncate">Absen Masuk (Radius + Foto)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAttendanceMode('dinas_luar');
+              handleResetPhoto();
+            }}
+            className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              attendanceMode === 'dinas_luar'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
+            }`}
+          >
+            <Car className="w-4 h-4 shrink-0" />
+            <span className="truncate">Perjalanan Dinas (Bebas Radius)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAttendanceMode('libur');
+              handleResetPhoto();
+            }}
+            className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              attendanceMode === 'libur'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
+            }`}
+          >
+            <SunMedium className="w-4 h-4 shrink-0" />
+            <span className="truncate">Absen Libur / Off (Bebas Radius)</span>
+          </button>
+        </div>
+      )}
+
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column (8 cols): GPS Radar & Action Box */}
+        {/* Left Column (7 cols) */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Geofence Radar Status Card */}
-          <div className="bg-surface-panel border border-border-subtle rounded-2xl p-5 shadow-xs relative overflow-hidden">
-            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
-              <div className="flex items-center gap-2 text-text-primary font-semibold text-[14.5px]">
-                <Compass className="w-4 h-4 text-primary" />
-                <span>Radar Lokasi & Radius Kantor</span>
-              </div>
-              <button
-                type="button"
-                onClick={requestLocation}
-                disabled={isDetectingGps}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-medium text-text-secondary hover:text-primary hover:bg-surface-container rounded-lg border border-border-subtle transition-all cursor-pointer disabled:opacity-50"
-                title="Segarkan koordinat GPS"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
-                <span>{isDetectingGps ? 'Mendeteksi...' : 'Cek Ulang GPS'}</span>
-              </button>
-            </div>
-
-            <div className="py-4 space-y-4">
-              {/* Office Target Info */}
-              <div className="flex items-start gap-3 bg-surface-container/60 border border-border-subtle/70 rounded-xl p-3">
-                <Building className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11.5px] text-text-muted font-medium">Titik Lokasi Kantor:</div>
-                  <div className="text-[13px] font-semibold text-text-primary truncate">
-                    {todayData?.office_setting?.office_name || 'Kantor Pusat'}
-                  </div>
-                  <div className="text-[11px] text-text-muted mt-0.5 font-mono">
-                    Maks. Radius: <strong>{maxRadius} Meter</strong> | Jam Masuk: <strong>{todayData?.office_setting?.work_start_time || '08:00'}</strong>
-                  </div>
+          {/* TAB 1: ABSEN MASUK DENGAN RADIUS 100+ LOKASI & FOTO SELFIE */}
+          {attendanceMode === 'masuk' && !isHolidayCheckedIn && !isDinasCheckedIn && (
+            <div className="bg-surface-panel border border-border-subtle rounded-2xl p-5 shadow-xs relative overflow-hidden">
+              <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+                <div className="flex items-center gap-2 text-text-primary font-semibold text-[14.5px]">
+                  <Compass className="w-4 h-4 text-primary" />
+                  <span>Radius Absensi (100+ Titik Sekolah & Kantor)</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={requestLocation}
+                  disabled={isDetectingGps}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-medium text-text-secondary hover:text-primary hover:bg-surface-container rounded-lg border border-border-subtle transition-all cursor-pointer disabled:opacity-50"
+                  title="Segarkan koordinat GPS"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
+                  <span>{isDetectingGps ? 'Mendeteksi...' : 'Cek Ulang GPS'}</span>
+                </button>
               </div>
 
-              {/* Status Radius Visual */}
-              {isDetectingGps ? (
-                <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-4 flex items-center gap-3">
-                  <RefreshCw className="w-5 h-5 text-amber-600 animate-spin shrink-0" />
-                  <div className="text-[12.5px] text-amber-800">
-                    <strong className="block font-semibold">Sedang mencari sinyal satelit GPS...</strong>
-                    Pastikan GPS aktif dan Anda mengizinkan izin lokasi pada peramban.
+              <div className="py-4 space-y-4">
+                {/* Info Penugasan Sekolah Terkunci Otomatis */}
+                {todayData?.assigned_location ? (
+                  <div className="bg-emerald-50/90 border border-emerald-200/90 rounded-2xl p-4 shadow-2xs space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-600/10 border border-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
+                          <Building className="w-5 h-5 text-emerald-700" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+                              Lokasi Sekolah Penugasan Anda
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white shadow-2xs">
+                              Terkunci Otomatis
+                            </span>
+                          </div>
+                          <div className="text-sm font-bold text-text-primary mt-1">
+                            {todayData.assigned_location.name} {todayData.assigned_location.code ? `[${todayData.assigned_location.code}]` : ''}
+                          </div>
+                          <div className="text-xs text-text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>Batas Radius: <strong className="text-emerald-700 font-semibold">{todayData.assigned_location.radius_meters} Meter</strong></span>
+                            {todayData.assigned_location.address && (
+                              <span>Alamat: {todayData.assigned_location.address}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[11.5px] text-emerald-800/80 bg-white/70 rounded-xl px-3 py-2 border border-emerald-200/60 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>
+                        Lokasi absensi Anda telah otomatis disesuaikan dengan data unit sekolah Anda. Anda <strong>tidak perlu lagi memilih lokasi manual</strong>.
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ) : gpsError ? (
-                <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="text-[12.5px] text-rose-800">
-                    <strong className="block font-semibold">Akses GPS Terkendala</strong>
-                    {gpsError}
+                ) : (
+                  /* Dropdown Selector Lokasi jika belum terdaftar unit sekolah */
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-semibold text-text-secondary flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-primary" />
+                        <span>Target Lokasi Absensi ({todayData?.total_locations || locationsWithDistance.length} Lokasi Tersedia):</span>
+                      </span>
+                      {nearestLocation?.distance_meters !== undefined && (
+                        <span className="text-[11px] text-primary font-medium">
+                          Terdekat: {nearestLocation.name.substring(0, 24)}... ({nearestLocation.distance_meters}m)
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      value={activeTargetLocation?.id || ''}
+                      onChange={(e) => setSelectedLocationId(Number(e.target.value))}
+                      disabled={hasCheckedIn}
+                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-70"
+                    >
+                      {locationsWithDistance.map((loc) => (
+                        <option key={loc.id} value={loc.id}>
+                          {loc.name} {loc.code ? `[${loc.code}]` : ''} - Radius {loc.radius_meters}m
+                          {loc.distance_meters !== undefined ? ` (Jarak: ${loc.distance_meters} m)` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              ) : isWithinRadius ? (
-                <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-4 flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                  <div className="text-[12.5px] text-emerald-800">
-                    <strong className="block font-semibold text-emerald-900">
-                      ✓ Anda Berada di Dalam Radius Kantor ({liveDistance} meter)
-                    </strong>
-                    Jarak Anda berada di dalam batas toleransi ({maxRadius} meter). Tombol absensi aktif.
+                )}
+
+                {/* Status Visual Jarak & Radius */}
+                {isDetectingGps ? (
+                  <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-4 flex items-center gap-3">
+                    <RefreshCw className="w-5 h-5 text-amber-600 animate-spin shrink-0" />
+                    <div className="text-[12.5px] text-amber-800">
+                      <strong className="block font-semibold">Mendeteksi Posisi Satelit GPS...</strong>
+                      Pastikan izin akses lokasi peramban diizinkan.
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="text-[12.5px] text-rose-800">
-                    <strong className="block font-semibold text-rose-900">
-                      ⚠ Di Luar Radius Kantor (Jarak: {liveDistance !== null ? `${liveDistance} meter` : '-'})
-                    </strong>
-                    Batas maksimum kantor adalah <strong>{maxRadius} meter</strong>. Silakan mendekat ke lokasi kantor untuk melakukan absensi.
+                ) : gpsError ? (
+                  <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="text-[12.5px] text-rose-800">
+                      <strong className="block font-semibold">Akses GPS Terkendala</strong>
+                      {gpsError}
+                    </div>
                   </div>
+                ) : isWithinRadius ? (
+                  <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-4 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="text-[12.5px] text-emerald-800">
+                      <strong className="block font-semibold text-emerald-900">
+                        ✓ Berada di Dalam Radius Lokasi ({liveDistance} meter)
+                      </strong>
+                      Lokasi: <strong>{activeTargetLocation?.name}</strong>. Jarak Anda berada di dalam batas toleransi ({maxRadius} meter). Ambil foto selfie untuk absen masuk.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-rose-50/80 border border-rose-200/80 rounded-xl p-4 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="text-[12.5px] text-rose-800">
+                      <strong className="block font-semibold text-rose-900">
+                        ⚠ Di Luar Radius Lokasi (Jarak: {liveDistance !== null ? `${liveDistance} meter` : '-'})
+                      </strong>
+                      Batas radius untuk <strong>{activeTargetLocation?.name}</strong> adalah <strong>{maxRadius} meter</strong>. Silakan mendekat ke lokasi untuk melakukan absensi masuk.
+                    </div>
+                  </div>
+                )}
+
+                {/* Point 4: Foto Selfie Bukti Kehadiran (Wajib untuk Absen Masuk) */}
+                {!hasCheckedIn && (
+                  <div className="space-y-2 pt-2 border-t border-border-subtle">
+                    <label className="text-[12px] font-semibold text-text-secondary flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Camera className="w-3.5 h-3.5 text-primary" />
+                        <span>Foto Selfie Kehadiran <span className="text-rose-500 font-bold">*Wajib</span>:</span>
+                      </span>
+                      {photoPreview && (
+                        <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Foto Berhasil Diambil
+                        </span>
+                      )}
+                    </label>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="user"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
+
+                    {!photoPreview ? (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-4 px-4 rounded-xl border-2 border-dashed border-primary/30 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-all flex flex-col sm:flex-row items-center justify-center gap-3 text-primary font-medium text-xs cursor-pointer group"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0">
+                          <Camera className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="text-center sm:text-left">
+                          <div className="font-semibold text-text-primary text-[13px]">Buka Kamera / Ambil Foto Selfie</div>
+                          <div className="text-[11px] text-text-muted">Ketuk di sini untuk foto selfie langsung dari kamera perangkat Anda</div>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-3.5 p-3 bg-surface-container rounded-xl border border-border-subtle">
+                        <div className="relative group shrink-0">
+                          <img
+                            src={photoPreview}
+                            alt="Selfie Kehadiran"
+                            className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border border-border-subtle shadow-xs cursor-pointer"
+                            onClick={() => setPreviewModalUrl(photoPreview)}
+                          />
+                          <div
+                            onClick={() => setPreviewModalUrl(photoPreview)}
+                            className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity cursor-pointer"
+                            title="Perbesar foto"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-text-primary truncate">
+                            {photoFile?.name || 'Foto Selfie Kehadiran'}
+                          </div>
+                          <div className="text-[11px] text-text-muted mt-0.5">
+                            {photoFile ? `${(photoFile.size / 1024).toFixed(0)} KB • ` : ''}Siap dikirim bersama absen masuk
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleResetPhoto}
+                            className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Ambil Ulang Foto Selfie</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Input Catatan Opsional saat Masuk */}
+                {!hasCheckedIn && (
+                  <div>
+                    <label className="text-[11.5px] font-medium text-text-muted block mb-1">
+                      Catatan Masuk (Opsional):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Mengikuti rapat pagi / piket unit..."
+                      value={checkInNotes}
+                      onChange={(e) => setCheckInNotes(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons: Absen Masuk & Absen Pulang */}
+              <div className="pt-2 border-t border-border-subtle">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <button
+                    type="button"
+                    onClick={handleCheckInMasuk}
+                    disabled={actionLoading || isDetectingGps || !isWithinRadius || !photoFile || hasCheckedIn}
+                    className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
+                      hasCheckedIn
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-not-allowed opacity-90'
+                        : isWithinRadius && photoFile
+                        ? 'bg-emerald-700 hover:bg-emerald-800 text-white active:scale-98'
+                        : 'bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{hasCheckedIn ? '✓ Sudah Absen Masuk' : 'Absen Masuk (Foto + Radius)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCheckOut}
+                    disabled={
+                      actionLoading ||
+                      isDetectingGps ||
+                      (!isDinasCheckedIn && !isWithinRadius) ||
+                      !hasCheckedIn ||
+                      hasCheckedOut
+                    }
+                    className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
+                      hasCheckedOut
+                        ? 'bg-blue-100 text-blue-800 border border-blue-200 cursor-not-allowed opacity-90'
+                        : hasCheckedIn && (isDinasCheckedIn || isWithinRadius)
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white active:scale-98'
+                        : 'bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>{hasCheckedOut ? '✓ Sudah Absen Pulang' : 'Absen Pulang'}</span>
+                  </button>
                 </div>
-              )}
+
+                {!hasCheckedIn && isWithinRadius && !photoFile && (
+                  <p className="text-[11.5px] text-amber-600 font-medium mt-2 text-center">
+                    ⚠️ Ambil foto selfie kehadiran di atas terlebih dahulu untuk mengaktifkan tombol Absen Masuk.
+                  </p>
+                )}
+              </div>
             </div>
+          )}
 
-            {/* Attendance Buttons */}
-            <div className="pt-2 border-t border-border-subtle grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* Button Absen Masuk */}
-              <button
-                type="button"
-                onClick={handleCheckIn}
-                disabled={actionLoading || isDetectingGps || !isWithinRadius || hasCheckedIn}
-                className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
-                  hasCheckedIn
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-not-allowed opacity-90'
-                    : isWithinRadius
-                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white active:scale-98'
-                    : 'bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed opacity-60'
-                }`}
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{hasCheckedIn ? '✓ Sudah Absen Masuk' : 'Absen Masuk'}</span>
-              </button>
+          {/* TAB 2: PERJALANAN DINAS (POINT 5: BEBAS RADIUS GPS) */}
+          {(attendanceMode === 'dinas_luar' || isDinasCheckedIn) && !isHolidayCheckedIn && (
+            <div className="bg-surface-panel border border-indigo-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+              <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+                <div className="flex items-center gap-2.5 text-indigo-900 font-semibold text-[15px]">
+                  <Car className="w-5 h-5 text-indigo-600" />
+                  <span>Absen Perjalanan Dinas / Tugas Luar (Bebas Radius)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestLocation}
+                  disabled={isDetectingGps}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-medium text-text-secondary hover:text-indigo-600 hover:bg-surface-container rounded-lg border border-border-subtle transition-all cursor-pointer disabled:opacity-50"
+                  title="Segarkan koordinat GPS"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
+                  <span>{isDetectingGps ? 'Mendeteksi...' : 'Cek Ulang GPS'}</span>
+                </button>
+              </div>
 
-              {/* Button Absen Pulang */}
-              <button
-                type="button"
-                onClick={handleCheckOut}
-                disabled={
-                  actionLoading ||
-                  isDetectingGps ||
-                  !isWithinRadius ||
-                  !hasCheckedIn ||
-                  hasCheckedOut
-                }
-                className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
-                  hasCheckedOut
-                    ? 'bg-blue-100 text-blue-800 border border-blue-200 cursor-not-allowed opacity-90'
-                    : hasCheckedIn && isWithinRadius
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white active:scale-98'
-                    : 'bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed opacity-60'
-                }`}
-              >
-                <LogOut className="w-4 h-4" />
-                <span>{hasCheckedOut ? '✓ Sudah Absen Pulang' : 'Absen Pulang'}</span>
-              </button>
+              <div className="py-4 space-y-4">
+                {/* Ketentuan Perjalanan Dinas */}
+                <div className="bg-indigo-50/80 border border-indigo-200/80 rounded-xl p-4 text-xs text-indigo-950 leading-relaxed space-y-2">
+                  <div className="font-semibold text-sm flex items-center gap-1.5 text-indigo-900">
+                    <Info className="w-4 h-4 text-indigo-600" />
+                    <span>Ketentuan Absen Perjalanan Dinas:</span>
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 text-indigo-900">
+                    <li>
+                      <strong>Bebas Batasan Radius:</strong> Anda dapat melakukan absensi dari lokasi penugasan dinas mana pun tanpa terkendala batas radius kantor/sekolah.
+                    </li>
+                    <li>
+                      <strong>Titik GPS Tetap Dicatat:</strong> Posisi koordinat GPS Anda saat ini ({coords ? `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` : 'mendeteksi lokasi...'}) tetap tersimpan rapi sebagai bukti autentik keberadaan.
+                    </li>
+                    <li>
+                      <strong>Keperluan Dinas:</strong> Wajib mencantumkan agenda dinas luar dan disarankan melampirkan foto bukti kegiatan lapangan.
+                    </li>
+                  </ul>
+                </div>
+
+                {!hasCheckedIn ? (
+                  <div className="space-y-4">
+                    {/* Input Catatan Keperluan Dinas (Wajib) */}
+                    <div>
+                      <label className="text-xs font-semibold text-text-secondary block mb-1">
+                        Keperluan / Agenda Perjalanan Dinas <span className="text-rose-500 font-bold">*Wajib</span>:
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={dinasNotes}
+                        onChange={(e) => setDinasNotes(e.target.value)}
+                        placeholder="Contoh: Kunjungan koordinasi ke Dinas Pendidikan / Supervisi unit sekolah cabang..."
+                        className="w-full px-3.5 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    {/* Lampiran Foto Kegiatan Dinas (Opsional/Direkomendasikan) */}
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-semibold text-text-secondary flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Foto Kegiatan / Lokasi Dinas (Opsional):</span>
+                        </span>
+                        {photoPreview && (
+                          <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Foto Terlampir
+                          </span>
+                        )}
+                      </label>
+
+                      <input
+                        ref={dinasFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handlePhotoChange}
+                        className="hidden"
+                      />
+
+                      {!photoPreview ? (
+                        <button
+                          type="button"
+                          onClick={() => dinasFileInputRef.current?.click()}
+                          className="w-full py-3 px-4 rounded-xl border border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/40 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 text-indigo-700 font-medium text-xs cursor-pointer"
+                        >
+                          <Camera className="w-4 h-4 text-indigo-600" />
+                          <span>Ambil / Unggah Foto Bukti Tugas Lapangan</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-3.5 p-3 bg-surface-container rounded-xl border border-border-subtle">
+                          <img
+                            src={photoPreview}
+                            alt="Foto Bukti Dinas"
+                            className="w-16 h-16 object-cover rounded-xl border border-border-subtle shadow-xs cursor-pointer"
+                            onClick={() => setPreviewModalUrl(photoPreview)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-text-primary truncate">
+                              {photoFile?.name || 'Foto Bukti Dinas'}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleResetPhoto}
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:underline cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Ganti / Ambil Ulang</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons: Kirim Absen Dinas */}
+                    <button
+                      type="button"
+                      onClick={handleCheckInDinas}
+                      disabled={actionLoading || !dinasNotes.trim()}
+                      className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Car className="w-4 h-4" />
+                      <span>{actionLoading ? 'Mencatat Absen...' : 'Kirim Absen Perjalanan Dinas'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-sm font-semibold">
+                          ✓ Absen Perjalanan Dinas Tercatat Hari Ini
+                        </strong>
+                        <span className="text-xs text-indigo-800 mt-0.5 block">
+                          Tercatat pada pukul {todayData?.attendance?.check_in_time?.substring(0, 5)} WIB. Catatan: &quot;{todayData?.attendance?.notes}&quot;
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Tombol Absen Pulang Dinas */}
+                    {!hasCheckedOut && (
+                      <button
+                        type="button"
+                        onClick={handleCheckOut}
+                        disabled={actionLoading}
+                        className="w-full h-12 bg-rose-600 hover:bg-rose-700 active:scale-98 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>{actionLoading ? 'Menyimpan...' : 'Absen Pulang (Selesai Dinas)'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Light & Fast Server Note */}
-          <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/60 text-blue-800 text-[12px] flex items-start gap-2.5">
-            <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+          {/* TAB 3: ABSEN LIBUR / OFF (POINT 3: BEBAS RADIUS GPS) */}
+          {(attendanceMode === 'libur' || isHolidayCheckedIn) && (
+            <div className="bg-surface-panel border border-amber-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-border-subtle text-amber-900 font-semibold text-[15px]">
+                <SunMedium className="w-5 h-5 text-amber-600" />
+                <span>Absen Libur / Hari Off Terjadwal (Bebas Radius)</span>
+              </div>
+
+              <div className="py-4 space-y-4">
+                <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-4 text-xs text-amber-900 leading-relaxed space-y-2">
+                  <div className="font-semibold text-sm flex items-center gap-1.5 text-amber-950">
+                    <Info className="w-4 h-4 text-amber-600" />
+                    <span>Ketentuan Absen Libur:</span>
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 text-amber-800">
+                    <li>
+                      <strong>Tidak memerlukan radius GPS</strong>: Anda dapat melakukan absensi libur dari rumah atau lokasi mana pun.
+                    </li>
+                    <li>
+                      <strong>Tercatat otomatis di rekapitulasi</strong>: Status hari libur akan terekam sehingga tidak terhitung sebagai alpa/mangkir pada slip gaji.
+                    </li>
+                    <li>
+                      <strong>Tidak perlu absen pulang</strong>: Setelah konfirmasi absen libur, kewajiban absensi Anda untuk hari ini telah selesai.
+                    </li>
+                  </ul>
+                </div>
+
+                {!hasCheckedIn ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-semibold text-text-secondary block mb-1">
+                        Keterangan Libur:
+                      </label>
+                      <input
+                        type="text"
+                        value={holidayNotes}
+                        onChange={(e) => setHolidayNotes(e.target.value)}
+                        placeholder="Contoh: Hari Libur Terjadwal / Shift Off / Libur Nasional"
+                        className="w-full px-3.5 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleCheckInLibur}
+                      disabled={actionLoading}
+                      className="w-full h-12 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                    >
+                      <SunMedium className="w-4 h-4" />
+                      <span>{actionLoading ? 'Mencatat Absen...' : 'Konfirmasi Absen Libur Hari Ini'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block text-sm font-semibold">
+                        ✓ Anda Telah Melakukan Absen Libur Hari Ini
+                      </strong>
+                      <span className="text-xs text-emerald-800 mt-0.5 block">
+                        Tercatat pada pukul {todayData?.attendance?.check_in_time?.substring(0, 5)} WIB. Anda tidak perlu melakukan absen pulang. Selamat beristirahat!
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Quick Notice Card */}
+          <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/70 text-blue-900 text-[12px] flex items-start gap-2.5">
+            <Navigation className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <strong>Sistem Cepat & Hemat Server:</strong> Absensi menggunakan verifikasi presisi GPS tanpa foto selfie, menghemat ruang penyimpanan server hingga 100% dan proses selesai dalam 1 detik.
+              <strong>Sistem Multi-Lokasi Presisi & Fleksibel:</strong> Tersedia 100+ titik Sekolah Rakyat & Kantor (Radius + Foto Selfie Kehadiran), Mode Perjalanan Dinas tanpa batasan radius, serta Absen Libur Terjadwal.
             </div>
           </div>
         </div>
@@ -388,14 +970,60 @@ export const EmployeeAttendancePage: React.FC = () => {
           <div className="bg-surface-panel border border-border-subtle rounded-2xl p-5 shadow-xs">
             <h2 className="font-semibold text-text-primary text-[14.5px] pb-3 border-b border-border-subtle flex items-center gap-2">
               <Calendar className="w-4 h-4 text-primary" />
-              <span>Ringkasan Kehadiran Hari Ini</span>
+              <span>Status Kehadiran Hari Ini</span>
             </h2>
 
             <div className="mt-4 space-y-3.5">
-              {/* Check-In Detail */}
-              <div className="p-3.5 rounded-xl bg-surface-container/50 border border-border-subtle">
+              {/* Jenis Presensi Badge */}
+              <div className="p-3.5 rounded-xl bg-surface-container/60 border border-border-subtle">
                 <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                  Jam Absen Masuk
+                  Jenis Presensi
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-sm font-bold text-text-primary flex items-center gap-1.5">
+                    {todayData?.attendance?.attendance_type === 'libur' ? (
+                      <>
+                        <SunMedium className="w-4 h-4 text-amber-600" />
+                        <span>Absen Libur / Off</span>
+                      </>
+                    ) : todayData?.attendance?.attendance_type === 'dinas_luar' ? (
+                      <>
+                        <Car className="w-4 h-4 text-indigo-600" />
+                        <span>Perjalanan Dinas</span>
+                      </>
+                    ) : (
+                      <>
+                        <Briefcase className="w-4 h-4 text-primary" />
+                        <span>Absen Masuk Kerja</span>
+                      </>
+                    )}
+                  </div>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                      todayData?.attendance?.attendance_type === 'libur'
+                        ? 'bg-amber-100 text-amber-800'
+                        : todayData?.attendance?.attendance_type === 'dinas_luar'
+                        ? 'bg-indigo-100 text-indigo-800'
+                        : hasCheckedIn
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-surface-container text-text-muted border border-border-subtle'
+                    }`}
+                  >
+                    {todayData?.attendance?.attendance_type === 'libur'
+                      ? 'Libur Terjadwal'
+                      : todayData?.attendance?.attendance_type === 'dinas_luar'
+                      ? 'Dinas Luar'
+                      : hasCheckedIn
+                      ? 'Hadir'
+                      : 'Belum Absen'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Check-In Detail */}
+              <div className="p-3.5 rounded-xl bg-surface-container/60 border border-border-subtle">
+                <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                  Jam Check-in
                 </div>
                 <div className="mt-1 flex items-baseline justify-between">
                   <div className="text-xl font-bold font-mono text-text-primary">
@@ -406,47 +1034,86 @@ export const EmployeeAttendancePage: React.FC = () => {
                   {todayData?.attendance?.check_in_time && (
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10.5px] font-semibold ${
-                        todayData.attendance.check_in_status === 'late'
+                        todayData.attendance.attendance_type === 'libur'
+                          ? 'bg-amber-100 text-amber-800'
+                          : todayData.attendance.attendance_type === 'dinas_luar'
+                          ? 'bg-indigo-100 text-indigo-800'
+                          : todayData.attendance.check_in_status === 'late'
                           ? 'bg-rose-100 text-rose-800'
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      {todayData.attendance.check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu'}
+                      {todayData.attendance.attendance_type === 'libur'
+                        ? 'Libur'
+                        : todayData.attendance.attendance_type === 'dinas_luar'
+                        ? 'Dinas Luar'
+                        : todayData.attendance.check_in_status === 'late'
+                        ? 'Terlambat'
+                        : 'Tepat Waktu'}
                     </span>
                   )}
                 </div>
+                {todayData?.attendance?.location_name && (
+                  <div className="text-[11px] text-text-muted mt-1.5 flex items-center gap-1 font-medium">
+                    <MapPin className="w-3 h-3 text-primary shrink-0" />
+                    <span>{todayData.attendance.location_name}</span>
+                  </div>
+                )}
                 {todayData?.attendance?.check_in_distance_meters !== null && todayData?.attendance?.check_in_distance_meters !== undefined && (
-                  <div className="text-[11px] text-text-muted mt-1 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-text-muted" />
-                    <span>Jarak saat absen: {todayData.attendance.check_in_distance_meters} m dari kantor</span>
+                  <div className="text-[10.5px] text-text-muted mt-0.5">
+                    Jarak saat absen: {todayData.attendance.check_in_distance_meters} m dari titik lokasi
                   </div>
                 )}
               </div>
 
+              {/* Foto Bukti Kehadiran Hari Ini */}
+              {(todayData?.attendance?.photo_full_url || todayData?.attendance?.photo_url) && (
+                <div className="p-3.5 rounded-xl bg-surface-container/60 border border-border-subtle">
+                  <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-2">
+                    Foto Bukti Kehadiran
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={todayData.attendance.photo_full_url || todayData.attendance.photo_url || ''}
+                      alt="Foto Bukti Kehadiran"
+                      className="w-14 h-14 rounded-xl object-cover border border-border-subtle shadow-2xs cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setPreviewModalUrl(todayData.attendance?.photo_full_url || todayData.attendance?.photo_url || null)}
+                    />
+                    <div>
+                      <div className="text-xs font-semibold text-text-primary">Foto Terverifikasi</div>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewModalUrl(todayData.attendance?.photo_full_url || todayData.attendance?.photo_url || null)}
+                        className="text-[11px] text-primary hover:underline mt-0.5 flex items-center gap-1 font-medium cursor-pointer"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>Lihat Ukuran Penuh</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Check-Out Detail */}
-              <div className="p-3.5 rounded-xl bg-surface-container/50 border border-border-subtle">
-                <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
-                  Jam Absen Pulang
-                </div>
-                <div className="mt-1 flex items-baseline justify-between">
-                  <div className="text-xl font-bold font-mono text-text-primary">
-                    {todayData?.attendance?.check_out_time
-                      ? todayData.attendance.check_out_time.substring(0, 5) + ' WIB'
-                      : '--:--'}
+              {todayData?.attendance?.attendance_type !== 'libur' && (
+                <div className="p-3.5 rounded-xl bg-surface-container/60 border border-border-subtle">
+                  <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                    Jam Check-out (Pulang)
                   </div>
-                  {todayData?.attendance?.check_out_time && (
-                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-blue-100 text-blue-800">
-                      Selesai
-                    </span>
-                  )}
-                </div>
-                {todayData?.attendance?.check_out_distance_meters !== null && todayData?.attendance?.check_out_distance_meters !== undefined && (
-                  <div className="text-[11px] text-text-muted mt-1 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-text-muted" />
-                    <span>Jarak saat pulang: {todayData.attendance.check_out_distance_meters} m dari kantor</span>
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <div className="text-xl font-bold font-mono text-text-primary">
+                      {todayData?.attendance?.check_out_time
+                        ? todayData.attendance.check_out_time.substring(0, 5) + ' WIB'
+                        : '--:--'}
+                    </div>
+                    {todayData?.attendance?.check_out_time && (
+                      <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-blue-100 text-blue-800">
+                        Selesai
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -457,7 +1124,7 @@ export const EmployeeAttendancePage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-border-subtle">
           <div>
             <h3 className="font-semibold text-text-primary text-[15px]">Riwayat Kehadiran Bulan Ini</h3>
-            <p className="text-xs text-text-muted mt-0.5">Daftar rekapitulasi kehadiran Anda.</p>
+            <p className="text-xs text-text-muted mt-0.5">Daftar rekapitulasi kehadiran, dinas luar, dan absen libur Anda.</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -477,60 +1144,142 @@ export const EmployeeAttendancePage: React.FC = () => {
             <thead>
               <tr className="border-b border-border-subtle text-text-muted font-semibold bg-surface-container/30">
                 <th className="py-2.5 px-3">Tanggal</th>
+                <th className="py-2.5 px-3">Jenis Absen</th>
+                <th className="py-2.5 px-3">Lokasi / Unit</th>
                 <th className="py-2.5 px-3">Jam Masuk</th>
-                <th className="py-2.5 px-3">Jarak Masuk</th>
+                <th className="py-2.5 px-3">Jarak</th>
                 <th className="py-2.5 px-3">Jam Pulang</th>
-                <th className="py-2.5 px-3">Jarak Pulang</th>
                 <th className="py-2.5 px-3">Status</th>
+                <th className="py-2.5 px-3">Foto Bukti</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-text-muted">
+                  <td colSpan={8} className="py-8 text-center text-text-muted">
                     Memuat riwayat kehadiran...
                   </td>
                 </tr>
               ) : history.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-text-muted">
+                  <td colSpan={8} className="py-8 text-center text-text-muted">
                     Belum ada riwayat kehadiran pada bulan {selectedMonth}.
                   </td>
                 </tr>
               ) : (
-                history.map((row) => (
-                  <tr key={row.id} className="hover:bg-surface-container/20 transition-colors">
-                    <td className="py-3 px-3 font-medium text-text-primary">{row.date}</td>
-                    <td className="py-3 px-3 font-mono font-medium">
-                      {row.check_in_time ? row.check_in_time.substring(0, 5) : '-'}
-                    </td>
-                    <td className="py-3 px-3 text-text-muted">
-                      {row.check_in_distance_meters !== null ? `${row.check_in_distance_meters} m` : '-'}
-                    </td>
-                    <td className="py-3 px-3 font-mono font-medium">
-                      {row.check_out_time ? row.check_out_time.substring(0, 5) : '-'}
-                    </td>
-                    <td className="py-3 px-3 text-text-muted">
-                      {row.check_out_distance_meters !== null ? `${row.check_out_distance_meters} m` : '-'}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          row.check_in_status === 'late'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {row.check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu'}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                history.map((row) => {
+                  const isLibur = row.attendance_type === 'libur' || row.status === 'holiday';
+                  const isDinas = row.attendance_type === 'dinas_luar';
+                  const photoSrc = row.photo_full_url || row.photo_url;
+                  return (
+                    <tr key={row.id} className="hover:bg-surface-container/20 transition-colors">
+                      <td className="py-3 px-3 font-medium text-text-primary">{row.date}</td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            isLibur
+                              ? 'bg-amber-100 text-amber-800'
+                              : isDinas
+                              ? 'bg-indigo-100 text-indigo-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {isLibur ? 'Libur / Off' : isDinas ? 'Dinas Luar' : 'Masuk'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-text-secondary">
+                        {row.location_name || (row.location?.name ?? '-')}
+                      </td>
+                      <td className="py-3 px-3 font-mono font-medium">
+                        {row.check_in_time ? row.check_in_time.substring(0, 5) : '-'}
+                      </td>
+                      <td className="py-3 px-3 text-text-muted">
+                        {row.check_in_distance_meters !== null ? `${row.check_in_distance_meters} m` : '-'}
+                      </td>
+                      <td className="py-3 px-3 font-mono font-medium">
+                        {row.check_out_time ? row.check_out_time.substring(0, 5) : '-'}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            isLibur
+                              ? 'bg-amber-100 text-amber-800'
+                              : isDinas
+                              ? 'bg-indigo-100 text-indigo-800'
+                              : row.check_in_status === 'late'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {isLibur
+                            ? 'Libur'
+                            : isDinas
+                            ? 'Dinas Luar'
+                            : row.check_in_status === 'late'
+                            ? 'Terlambat'
+                            : 'Tepat Waktu'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        {photoSrc ? (
+                          <div
+                            onClick={() => setPreviewModalUrl(photoSrc)}
+                            className="flex items-center gap-1 text-primary hover:underline cursor-pointer group"
+                            title="Klik untuk melihat foto"
+                          >
+                            <img
+                              src={photoSrc}
+                              alt="Bukti"
+                              className="w-7 h-7 rounded-lg object-cover border border-border-subtle group-hover:scale-105 transition-transform"
+                            />
+                            <Eye className="w-3 h-3 text-text-muted group-hover:text-primary" />
+                          </div>
+                        ) : (
+                          <span className="text-text-muted">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal Lightbox Foto Preview */}
+      {previewModalUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setPreviewModalUrl(null)}
+        >
+          <div
+            className="relative max-w-lg w-full bg-surface-panel rounded-2xl overflow-hidden shadow-2xl border border-border-subtle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-3.5 border-b border-border-subtle bg-surface-container">
+              <div className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-primary" />
+                <span>Pratinjau Foto Bukti Kehadiran</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewModalUrl(null)}
+                className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-panel transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-2 bg-black/90 flex items-center justify-center max-h-[75vh] overflow-hidden">
+              <img
+                src={previewModalUrl}
+                alt="Foto Kehadiran"
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-md"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

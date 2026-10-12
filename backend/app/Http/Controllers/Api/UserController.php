@@ -49,7 +49,11 @@ class UserController extends Controller
         )
         ->latest('id');
 
-        $users = $query->paginate(10)->withQueryString();
+        $perPage = (int) $request->input('per_page', 10);
+        if ($perPage <= 0) $perPage = 10;
+        if ($perPage > 200) $perPage = 200;
+
+        $users = $query->paginate($perPage)->withQueryString();
 
         return response()->json([
             'status' => 'success',
@@ -59,6 +63,8 @@ class UserController extends Controller
                 'last_page' => $users->lastPage(),
                 'per_page' => $users->perPage(),
                 'total' => $users->total(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
             ],
         ]);
     }

@@ -1,3 +1,8 @@
+export interface CustomDeductionItem {
+  name: string;
+  amount: number;
+}
+
 export interface PayrollItem {
   id: number;
   row_no?: string | number | null;
@@ -23,6 +28,7 @@ export interface PayrollItem {
   basic_salary: number;   // Gaji Pokok = net_base_price - bpjs_kes - bpjs_tk
   allowance: number;
   deduction: number;
+  custom_deductions?: CustomDeductionItem[] | null;
   pph21?: number;         // PPh 21
 
   // Absence deduction fields
@@ -109,6 +115,7 @@ export interface PayrollFormData {
   basic_salary: number | string;
   allowance?: number | string;
   deduction?: number | string;
+  custom_deductions?: Array<{ name: string; amount: number | string }>;
 
   absence_count?: number | string;
   absence_rate?: number | string;

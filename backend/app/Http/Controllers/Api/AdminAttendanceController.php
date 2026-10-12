@@ -26,7 +26,7 @@ class AdminAttendanceController extends Controller
 
         $query = Attendance::with(['user' => function ($q) {
             $q->select('id', 'name', 'email', 'nik', 'company', 'phone', 'role', 'school_unit');
-        }]);
+        }, 'location']);
 
         // Strict company isolation:
         $targetCompany = $currentUser->isSuperAdmin()
@@ -45,9 +45,15 @@ class AdminAttendanceController extends Controller
 
         if ($status && $status !== 'all') {
             if ($status === 'late') {
-                $query->where('check_in_status', 'late');
+                $query->where('check_in_status', 'late')->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
             } elseif ($status === 'on_time') {
-                $query->where('check_in_status', 'on_time');
+                $query->where('check_in_status', 'on_time')->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
+            } elseif ($status === 'holiday' || $status === 'libur') {
+                $query->where(function ($q) {
+                    $q->where('attendance_type', 'libur')->orWhere('status', 'holiday');
+                });
+            } elseif ($status === 'dinas_luar' || $status === 'business_trip') {
+                $query->where('attendance_type', 'dinas_luar');
             } else {
                 $query->where('status', $status);
             }
@@ -93,13 +99,17 @@ class AdminAttendanceController extends Controller
 
         $totalEmployees = $usersQuery->count();
         $todayAttendances = $attendanceQuery->get();
-        $totalPresent = $todayAttendances->count();
-        $totalOnTime = $todayAttendances->where('check_in_status', 'on_time')->count();
-        $totalLate = $todayAttendances->where('check_in_status', 'late')->count();
-        $totalNotCheckedIn = max(0, $totalEmployees - $totalPresent);
+        
+        $totalHoliday = $todayAttendances->where('attendance_type', 'libur')->count();
+        $totalBusinessTrip = $todayAttendances->where('attendance_type', 'dinas_luar')->count();
+        $presentAttendances = $todayAttendances->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
+        $totalPresent = $presentAttendances->count();
+        $totalOnTime = $presentAttendances->where('check_in_status', 'on_time')->count();
+        $totalLate = $presentAttendances->where('check_in_status', 'late')->count();
+        $totalNotCheckedIn = max(0, $totalEmployees - ($totalPresent + $totalHoliday + $totalBusinessTrip));
 
         $avgDistance = $totalPresent > 0
-            ? round($todayAttendances->avg('check_in_distance_meters'), 1)
+            ? round($presentAttendances->avg('check_in_distance_meters'), 1)
             : 0;
 
         return response()->json([
@@ -109,6 +119,8 @@ class AdminAttendanceController extends Controller
                 'company' => $targetCompany ?: 'all',
                 'total_employees' => $totalEmployees,
                 'total_present' => $totalPresent,
+                'total_business_trip' => $totalBusinessTrip,
+                'total_holiday' => $totalHoliday,
                 'total_on_time' => $totalOnTime,
                 'total_late' => $totalLate,
                 'total_not_checked_in' => $totalNotCheckedIn,
@@ -222,29 +234,47 @@ class AdminAttendanceController extends Controller
                 'NIK',
                 'Nama Karyawan',
                 'Jabatan',
+                'Jenis Absen',
+                'Lokasi / Unit',
                 'Jam Masuk',
                 'Jarak Masuk (Meter)',
                 'Status Masuk',
                 'Jam Pulang',
                 'Jarak Pulang (Meter)',
                 'Status Kehadiran',
+                'Foto Bukti',
                 'Catatan',
             ]);
 
             $no = 1;
             foreach ($attendances as $row) {
+                $jenisAbsen = match ($row->attendance_type) {
+                    'libur' => 'Libur / Off',
+                    'dinas_luar' => 'Perjalanan Dinas',
+                    default => 'Masuk Kerja',
+                };
+                $lokasi = $row->location_name ?: ($row->location->name ?? '-');
+                $statusKehadiran = $row->attendance_type === 'libur'
+                    ? 'Libur'
+                    : ($row->attendance_type === 'dinas_luar'
+                        ? 'Dinas Luar'
+                        : ($row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status))));
+
                 fputcsv($handle, [
                     $no++,
                     $row->date ? Carbon::parse($row->date)->format('Y-m-d') : '-',
                     $row->user->nik ?? '-',
                     $row->user->name ?? '-',
                     $row->user->position ?? '-',
+                    $jenisAbsen,
+                    $lokasi,
                     $row->check_in_time ? substr($row->check_in_time, 0, 5) : '-',
                     $row->check_in_distance_meters !== null ? $row->check_in_distance_meters . ' m' : '-',
-                    $row->check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu',
+                    $row->attendance_type === 'libur' ? 'Libur' : ($row->attendance_type === 'dinas_luar' ? 'Dinas Luar' : ($row->check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu')),
                     $row->check_out_time ? substr($row->check_out_time, 0, 5) : '-',
                     $row->check_out_distance_meters !== null ? $row->check_out_distance_meters . ' m' : '-',
-                    $row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status)),
+                    $statusKehadiran,
+                    $row->photo_full_url ?: ($row->photo_url ?: '-'),
                     $row->notes ?? '-',
                 ]);
             }

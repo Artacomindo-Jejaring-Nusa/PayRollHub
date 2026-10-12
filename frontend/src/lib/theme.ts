@@ -7,6 +7,7 @@ export interface TenantConfig {
   name: string;
   companyLegalName: string;
   shortName: string;
+  appName: string;
   tagline: string;
   portalTitle: string;
   badgeText: string;
@@ -24,8 +25,9 @@ export const TENANT_CONFIGS: Record<TenantId, TenantConfig> = {
     name: 'PT. Rimbun Buana Sejahtera',
     companyLegalName: 'PT. Rimbun Buana Sejahtera',
     shortName: 'RBS Global',
+    appName: 'RBS HRD - Global',
     tagline: 'Sistem Penggajian & HRD Sekolah Rakyat RBS Global',
-    portalTitle: 'Portal Administrasi Gaji RBS Global',
+    portalTitle: 'Portal Administrasi Gaji RBS HRD - Global',
     badgeText: 'RBS Global',
     domainHint: 'rimbunbuanasejahtera.com',
     primaryColor: '#004ac6',
@@ -39,6 +41,7 @@ export const TENANT_CONFIGS: Record<TenantId, TenantConfig> = {
     name: 'PT. Riama Mandiri Pratama',
     companyLegalName: 'PT. Riama Mandiri Pratama',
     shortName: 'Riama Mandiri Pratama',
+    appName: 'HRD Riama Mandiri',
     tagline: 'Sistem Manajemen Kompensasi & Operasional PT. Riama Mandiri Pratama',
     portalTitle: 'Portal Administrasi Gaji Riama Mandiri Pratama',
     badgeText: 'Riama Mandiri',
@@ -126,7 +129,7 @@ export const applyTenantThemeToDom = (tenantId: TenantId) => {
     localStorage.setItem('payrollhub_active_tenant', tenantId);
     const config = TENANT_CONFIGS[tenantId];
     if (config) {
-      document.title = `${config.portalTitle} — HRD Mandiri`;
+      document.title = `${config.portalTitle} — ${config.appName}`;
     }
   }
 };

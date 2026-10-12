@@ -247,9 +247,10 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                     ->first();
             }
 
-            // If Excel provided calculated Take Home Pay, use it; otherwise compute
+            // If Excel provided calculated Take Home Pay, use it; otherwise compute:
+            // Formula Resmi: (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (BPJS TK + Potongan Absensi + Potongan Lain + PPh21)
             $parsedThp = $rawThp !== null ? $cleanNumber($rawThp) : 0;
-            $takeHomePay = $parsedThp > 0 ? $parsedThp : max(0, $basicSalary + $allowance - $deduction - $absenceDeduction - $pph21);
+            $takeHomePay = $parsedThp > 0 ? $parsedThp : max(0, ($basicSalary + $bpjsKes + $allowance) - ($bpjsTk + $absenceDeduction + $deduction + $pph21));
 
             $payrollData = [
                 'row_no' => $rowNo,

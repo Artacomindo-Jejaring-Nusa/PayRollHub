@@ -40,10 +40,13 @@ export const EmployeeLayout: React.FC = () => {
       path: '/employee/reports',
       icon: ClipboardList,
       badge: isWorkReportUnlocked ? undefined : '🔒',
+      isHold: true, // Di-hold sementara
     },
     { label: 'Pengumuman', path: '/employee/announcements', icon: Bell },
     { label: 'Profil Saya', path: '/employee/profile', icon: User },
   ];
+
+  const visibleNavItems = navItems.filter((item) => !(item as any).isHold);
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'K';
 
@@ -94,15 +97,15 @@ export const EmployeeLayout: React.FC = () => {
 
             <div className="h-6 w-px bg-border-subtle" />
 
-            {/* Logout Button */}
+            {/* Logout Button (Always clearly visible on Mobile & Desktop) */}
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium text-rose-600 hover:text-rose-700 bg-rose-50/70 hover:bg-rose-100/80 rounded-lg transition-all border border-rose-200/80 hover:border-rose-300 shadow-2xs cursor-pointer active:scale-95"
-              title="Keluar Akun"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-[12.5px] font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-all border border-rose-200 shadow-2xs cursor-pointer active:scale-95 shrink-0"
+              title="Keluar dari Akun"
             >
-              <LogOut className="w-3.5 h-3.5 text-rose-500" />
-              <span className="hidden sm:inline font-medium">Keluar</span>
+              <LogOut className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              <span className="font-semibold text-[11px] sm:text-xs">Keluar</span>
             </button>
           </div>
         </div>
@@ -110,7 +113,7 @@ export const EmployeeLayout: React.FC = () => {
         {/* Tier 2: Dedicated Navigation Tab Bar (Desktop & Tablet) */}
         <div className="hidden md:block border-t border-border-subtle bg-surface-panel/80 backdrop-blur-xs">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-2.5 py-2.5 sm:py-3 overflow-x-auto">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
@@ -149,7 +152,7 @@ export const EmployeeLayout: React.FC = () => {
       {/* 3. MOBILE BOTTOM NAVIGATION (Only for screens < 768px)        */}
       {/* ============================================================== */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-surface-panel border-t border-border-subtle z-40 px-3 py-2 shadow-lg flex items-center justify-around">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
@@ -171,6 +174,17 @@ export const EmployeeLayout: React.FC = () => {
             </NavLink>
           );
         })}
+
+        {/* Quick Logout for Mobile Bottom Navigation */}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[11px] text-rose-600 hover:text-rose-700 font-semibold active:scale-95 transition-all cursor-pointer"
+          title="Keluar dari Akun"
+        >
+          <LogOut className="w-5 h-5 mb-1 text-rose-500" />
+          <span>Keluar</span>
+        </button>
       </nav>
     </div>
   );

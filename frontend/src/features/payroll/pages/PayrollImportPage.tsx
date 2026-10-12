@@ -50,6 +50,9 @@ export const PayrollImportPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [previewFilter, setPreviewFilter] = useState<'all' | 'new' | 'update' | 'duplicate'>('all');
+  const [showUpdatedDetails, setShowUpdatedDetails] = useState(false);
+  const [showDuplicateDetails, setShowDuplicateDetails] = useState(true);
   const [previewPage, setPreviewPage] = useState(1);
   const rowsPerPage = 8;
 
@@ -64,6 +67,7 @@ export const PayrollImportPage: React.FC = () => {
     setImportResult(null);
     setPreviewData(null);
     setPreviewPage(1);
+    setPreviewFilter('all');
 
     const validExtensions = ['.xlsx', '.xls', '.csv'];
     const fileName = file.name.toLowerCase();
@@ -105,6 +109,8 @@ export const PayrollImportPage: React.FC = () => {
 
   const handlePeriodChange = async (newPeriod: string) => {
     setImportPeriod(newPeriod);
+    setPreviewFilter('all');
+    setPreviewPage(1);
     if (selectedFile) {
       await fetchPreview(selectedFile, newPeriod, importCompany);
     }
@@ -112,6 +118,8 @@ export const PayrollImportPage: React.FC = () => {
 
   const handleCompanyChange = async (newCompany: string) => {
     setImportCompany(newCompany);
+    setPreviewFilter('all');
+    setPreviewPage(1);
     if (selectedFile) {
       await fetchPreview(selectedFile, importPeriod, newCompany);
     }
@@ -169,12 +177,37 @@ export const PayrollImportPage: React.FC = () => {
     return 'Rp ' + Number(val || 0).toLocaleString('id-ID');
   };
 
-  // Pagination for preview rows
-  const totalPreviewRows = previewData?.rows.length || 0;
-  const totalPages = Math.ceil(totalPreviewRows / rowsPerPage) || 1;
-  const paginatedRows = previewData
-    ? previewData.rows.slice((previewPage - 1) * rowsPerPage, previewPage * rowsPerPage)
-    : [];
+  // Duplicate and Update metrics
+  const previewTotal = previewData?.total_rows || 0;
+  const previewUpdates = previewData?.updated_count ?? previewData?.rows.filter((r) => r.is_update).length ?? 0;
+  const previewNews = previewData ? previewData.rows.filter((r) => !r.is_update).length : 0;
+  const previewDupAccounts = previewData?.duplicate_account_count ?? previewData?.rows.filter((r) => r.is_duplicate_bank_account).length ?? 0;
+  const previewDupNiks = previewData?.duplicate_nik_count ?? previewData?.rows.filter((r) => r.is_duplicate_nik).length ?? 0;
+  const previewDuplicates = previewData ? previewData.rows.filter((r) => r.is_duplicate_bank_account || r.is_duplicate_nik).length : 0;
+
+  // Filtered rows for preview
+  const filteredRows = React.useMemo(() => {
+    if (!previewData) return [];
+    if (previewFilter === 'new') {
+      return previewData.rows.filter((r) => !r.is_update);
+    }
+    if (previewFilter === 'update') {
+      return previewData.rows.filter((r) => r.is_update);
+    }
+    if (previewFilter === 'duplicate') {
+      return previewData.rows.filter((r) => r.is_duplicate_bank_account || r.is_duplicate_nik);
+    }
+    return previewData.rows;
+  }, [previewData, previewFilter]);
+
+  const totalFilteredRows = filteredRows.length;
+  const totalPages = Math.ceil(totalFilteredRows / rowsPerPage) || 1;
+  const paginatedRows = filteredRows.slice((previewPage - 1) * rowsPerPage, previewPage * rowsPerPage);
+
+  const handleFilterChange = (filter: 'all' | 'new' | 'update' | 'duplicate') => {
+    setPreviewFilter(filter);
+    setPreviewPage(1);
+  };
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
@@ -578,46 +611,172 @@ export const PayrollImportPage: React.FC = () => {
                 <div className="space-y-4 pt-4">
                   {/* KPI Summary Stats */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div
+                      onClick={() => handleFilterChange('all')}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        previewFilter === 'all'
+                          ? 'bg-slate-100 border-slate-400 ring-2 ring-slate-300'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                      }`}
+                    >
                       <span className="text-[11px] font-semibold text-slate-600 block uppercase">
                         Total Baris
                       </span>
                       <span className="font-mono text-[18px] font-bold text-slate-800">
-                        {previewData.total_rows} Data
+                        {previewTotal} Data
                       </span>
+                      <span className="text-[10.5px] text-slate-500 block mt-0.5">Semua data spreadsheet</span>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <div
+                      onClick={() => handleFilterChange('new')}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        previewFilter === 'new'
+                          ? 'bg-emerald-100/80 border-emerald-400 ring-2 ring-emerald-300'
+                          : 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100/50'
+                      }`}
+                    >
                       <span className="text-[11px] font-semibold text-emerald-700 block uppercase">
-                        Pegawai Aktif
+                        + Data Baru
                       </span>
                       <span className="font-mono text-[18px] font-bold text-emerald-700">
-                        {previewData.active_count} Pegawai
+                        {previewNews} Data
                       </span>
+                      <span className="text-[10.5px] text-emerald-600 block mt-0.5">Karyawan baru di SP ini</span>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
-                      <span className="text-[11px] font-semibold text-rose-700 block uppercase">
-                        Pegawai Off
+                    <div
+                      onClick={() => handleFilterChange('update')}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        previewFilter === 'update'
+                          ? 'bg-blue-100/80 border-blue-400 ring-2 ring-blue-300'
+                          : 'bg-blue-50 border-blue-200 hover:bg-blue-100/50'
+                      }`}
+                    >
+                      <span className="text-[11px] font-semibold text-blue-700 block uppercase flex items-center justify-between">
+                        <span>🔄 Diperbarui</span>
+                        {previewUpdates > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-blue-200 text-blue-800">
+                            {previewUpdates}
+                          </span>
+                        )}
                       </span>
-                      <span className="font-mono text-[18px] font-bold text-rose-700">
-                        {previewData.off_count} Pegawai
+                      <span className="font-mono text-[18px] font-bold text-blue-800">
+                        {previewUpdates} Data
                       </span>
+                      <span className="text-[10.5px] text-blue-600 block mt-0.5">Menimpa data cocok</span>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                      <span className="text-[11px] font-semibold text-blue-700 block uppercase">
-                        Estimasi THP
+                    <div
+                      onClick={() => handleFilterChange('duplicate')}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                        previewFilter === 'duplicate'
+                          ? 'bg-amber-100/80 border-amber-400 ring-2 ring-amber-300'
+                          : previewDuplicates > 0
+                          ? 'bg-amber-50 border-amber-300 hover:bg-amber-100/50'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100/50'
+                      }`}
+                    >
+                      <span className="text-[11px] font-semibold text-amber-800 block uppercase flex items-center justify-between">
+                        <span>⚠️ Duplikat / Kembar</span>
+                        {previewDuplicates > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-200 text-amber-900">
+                            {previewDuplicates}
+                          </span>
+                        )}
                       </span>
-                      <span className="font-mono text-[14px] font-bold text-blue-800 truncate block" title={formatRupiah(previewData.total_estimated_thp)}>
-                        {formatRupiah(previewData.total_estimated_thp)}
+                      <span className="font-mono text-[18px] font-bold text-amber-800">
+                        {previewDuplicates} Baris
+                      </span>
+                      <span className="text-[10.5px] text-amber-700 block mt-0.5">
+                        {previewDupAccounts} Rek / {previewDupNiks} NIK
                       </span>
                     </div>
                   </div>
 
+                  {/* Quick Filter Buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-1.5 overflow-x-auto text-[11.5px]">
+                      <button
+                        onClick={() => handleFilterChange('all')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                          previewFilter === 'all'
+                            ? 'bg-slate-800 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        Semua ({previewTotal})
+                      </button>
+
+                      <button
+                        onClick={() => handleFilterChange('new')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                          previewFilter === 'new'
+                            ? 'bg-emerald-700 text-white shadow-xs'
+                            : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        }`}
+                      >
+                        + Data Baru ({previewNews})
+                      </button>
+
+                      <button
+                        onClick={() => handleFilterChange('update')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                          previewFilter === 'update'
+                            ? 'bg-blue-700 text-white shadow-xs'
+                            : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                        }`}
+                      >
+                        🔄 Akan Di-Update ({previewUpdates})
+                      </button>
+
+                      <button
+                        onClick={() => handleFilterChange('duplicate')}
+                        className={`px-2.5 py-1 rounded-lg font-medium transition-colors flex items-center gap-1 ${
+                          previewFilter === 'duplicate'
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : previewDuplicates > 0
+                            ? 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Duplikat ({previewDuplicates})
+                      </button>
+                    </div>
+
+                    <div className="text-[11.5px] font-mono text-text-muted">
+                      Est. THP: <span className="font-bold text-slate-800">{formatRupiah(previewData.total_estimated_thp)}</span>
+                    </div>
+                  </div>
+
+                  {/* Warning banner if duplicate exists */}
+                  {previewDuplicates > 0 && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-[11.5px] text-amber-900 flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <span className="font-bold text-amber-950">
+                          Perhatian Potensi Duplikasi:
+                        </span>
+                        <p className="text-amber-800 leading-relaxed">
+                          Terdeteksi{' '}
+                          <strong className="text-amber-950 font-semibold">{previewDupAccounts} nomor rekening kembar</strong> (digunakan lebih dari 1 karyawan), dan{' '}
+                          <strong className="text-amber-950 font-semibold">{previewDupNiks} NIK kembar / bentrok</strong>. Data berpotensi menimpa data sebelumnya atau tertukar saat pembayaran payroll. Klik tab{' '}
+                          <button
+                            onClick={() => handleFilterChange('duplicate')}
+                            className="underline font-bold text-amber-900 hover:text-amber-950"
+                          >
+                            "Duplikat"
+                          </button>{' '}
+                          untuk memeriksa rincian baris terkait.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Warnings if any */}
                   {previewData.warnings && previewData.warnings.length > 0 && (
-                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11.5px] text-amber-800 space-y-1">
+                    <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 text-[11.5px] text-amber-800 space-y-1">
                       <div className="font-semibold text-amber-900 flex items-center gap-1.5">
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
                         Catatan Pemeriksaan ({previewData.warnings.length} catatan):
@@ -641,7 +800,7 @@ export const PayrollImportPage: React.FC = () => {
                           <tr>
                             <th className="px-2.5 py-2 w-10 text-center">No</th>
                             <th className="px-2.5 py-2 w-20">Status</th>
-                            <th className="px-2.5 py-2 w-16">Aksi</th>
+                            <th className="px-2.5 py-2 w-24">Aksi / Hasil</th>
                             <th className="px-2.5 py-2 font-mono">NIK</th>
                             <th className="px-2.5 py-2">Nama Pegawai</th>
                             <th className="px-2.5 py-2">Wilayah</th>
@@ -654,87 +813,159 @@ export const PayrollImportPage: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-subtle text-text-primary whitespace-nowrap">
-                          {paginatedRows.map((row, idx) => (
-                            <tr
-                              key={idx}
-                              className={
-                                row.status === 'off'
-                                  ? 'bg-rose-50/50 hover:bg-rose-50/80'
-                                  : idx % 2 === 0
-                                  ? 'bg-white hover:bg-slate-50/80'
-                                  : 'bg-slate-50/30 hover:bg-slate-50/80'
-                              }
-                            >
-                              <td className="px-2.5 py-2 text-center text-text-muted font-mono">
-                                {row.row_no || (previewPage - 1) * rowsPerPage + idx + 1}
-                              </td>
-
-                              {/* Status */}
-                              <td className="px-2.5 py-2">
-                                {row.status === 'off' ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-rose-100 text-rose-800">
-                                    Off {row.resign_date ? `(${row.resign_date})` : ''}
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-emerald-100 text-emerald-800">
-                                    Aktif
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* Action */}
-                              <td className="px-2.5 py-2">
-                                {row.is_existing ? (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
-                                    Update
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">
-                                    + Baru
-                                  </span>
-                                )}
-                              </td>
-
-                              <td className="px-2.5 py-2 font-mono text-text-muted">
-                                {row.nik || <span className="text-amber-600 italic">Kosong</span>}
-                              </td>
-
-                              <td className="px-2.5 py-2 font-semibold text-text-primary">
-                                {row.employee_name}
-                              </td>
-
-                              <td className="px-2.5 py-2">{row.province}</td>
-                              <td className="px-2.5 py-2 text-text-muted">{row.school_unit || '-'}</td>
-                              <td className="px-2.5 py-2 text-text-muted">{row.position || '-'}</td>
-
-                              {/* Gaji Pokok */}
-                              <td className="px-2.5 py-2 text-right font-mono font-medium text-primary">
-                                {formatRupiah(row.basic_salary)}
-                              </td>
-
-                              {/* Potongan Absensi */}
-                              <td className="px-2.5 py-2 text-right font-mono">
-                                {row.absence_deduction > 0 ? (
-                                  <span className="text-rose-600 font-semibold" title={row.absence_note || ''}>
-                                    -{formatRupiah(row.absence_deduction)}
-                                  </span>
-                                ) : (
-                                  <span className="text-text-muted">0</span>
-                                )}
-                              </td>
-
-                              {/* THP */}
-                              <td className="px-2.5 py-2 text-right font-mono font-bold text-emerald-700">
-                                {formatRupiah(row.take_home_pay)}
-                              </td>
-
-                              {/* Rekening Bank */}
-                              <td className="px-2.5 py-2 text-text-muted font-mono">
-                                {row.bank_name ? `${row.bank_name} ` : ''}
-                                {row.bank_account || '-'}
+                          {paginatedRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={12} className="px-4 py-8 text-center text-text-muted">
+                                Tidak ada data pada filter "{previewFilter === 'new' ? 'Data Baru' : previewFilter === 'update' ? 'Akan Diperbarui' : previewFilter === 'duplicate' ? 'Duplikat' : 'Semua'}".
                               </td>
                             </tr>
-                          ))}
+                          ) : (
+                            paginatedRows.map((row, idx) => (
+                              <tr
+                                key={idx}
+                                className={
+                                  row.is_duplicate_bank_account || row.is_duplicate_nik
+                                    ? 'bg-amber-50/60 hover:bg-amber-100/60'
+                                    : row.is_update
+                                    ? 'bg-blue-50/40 hover:bg-blue-100/40'
+                                    : row.status === 'off'
+                                    ? 'bg-rose-50/50 hover:bg-rose-50/80'
+                                    : idx % 2 === 0
+                                    ? 'bg-white hover:bg-slate-50/80'
+                                    : 'bg-slate-50/30 hover:bg-slate-50/80'
+                                }
+                              >
+                                <td className="px-2.5 py-2 text-center text-text-muted font-mono">
+                                  {row.row_no || (previewPage - 1) * rowsPerPage + idx + 1}
+                                </td>
+
+                                {/* Status */}
+                                <td className="px-2.5 py-2">
+                                  {row.status === 'off' ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-rose-100 text-rose-800">
+                                      Off {row.resign_date ? `(${row.resign_date})` : ''}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-emerald-100 text-emerald-800">
+                                      Aktif
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Action / Update detection */}
+                                <td className="px-2.5 py-2">
+                                  {row.is_update ? (
+                                    <div className="space-y-0.5">
+                                      <span
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800 cursor-help"
+                                        title={row.match_reason || 'Data diperbarui'}
+                                      >
+                                        <RefreshCw className="w-2.5 h-2.5 text-blue-700" />
+                                        Update
+                                      </span>
+                                      <div
+                                        className="text-[9.5px] text-blue-700 max-w-[120px] truncate"
+                                        title={row.match_reason || ''}
+                                      >
+                                        {row.match_reason?.includes('database') ? 'Di database' : 'Ganda di file'}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">
+                                      + Baru
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* NIK */}
+                                <td className="px-2.5 py-2 font-mono">
+                                  {row.is_duplicate_nik ? (
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-amber-950 font-bold">{row.nik}</span>
+                                        <span
+                                          className="px-1 py-0.2 rounded text-[8.5px] font-bold bg-amber-200 text-amber-900 cursor-help"
+                                          title={row.duplicate_nik_info || 'NIK ganda'}
+                                        >
+                                          Ganda
+                                        </span>
+                                      </div>
+                                      <div
+                                        className="text-[9px] text-amber-700 max-w-[140px] truncate"
+                                        title={row.duplicate_nik_info || ''}
+                                      >
+                                        {row.duplicate_nik_info}
+                                      </div>
+                                    </div>
+                                  ) : row.nik ? (
+                                    <span className="text-text-muted">{row.nik}</span>
+                                  ) : (
+                                    <span className="text-amber-600 italic">Kosong</span>
+                                  )}
+                                </td>
+
+                                <td className="px-2.5 py-2 font-semibold text-text-primary">
+                                  {row.employee_name}
+                                </td>
+
+                                <td className="px-2.5 py-2">{row.province}</td>
+                                <td className="px-2.5 py-2 text-text-muted">{row.school_unit || '-'}</td>
+                                <td className="px-2.5 py-2 text-text-muted">{row.position || '-'}</td>
+
+                                {/* Gaji Pokok */}
+                                <td className="px-2.5 py-2 text-right font-mono font-medium text-primary">
+                                  {formatRupiah(row.basic_salary)}
+                                </td>
+
+                                {/* Potongan Absensi */}
+                                <td className="px-2.5 py-2 text-right font-mono">
+                                  {row.absence_deduction > 0 ? (
+                                    <span className="text-rose-600 font-semibold" title={row.absence_note || ''}>
+                                      -{formatRupiah(row.absence_deduction)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-text-muted">0</span>
+                                  )}
+                                </td>
+
+                                {/* THP */}
+                                <td className="px-2.5 py-2 text-right font-mono font-bold text-emerald-700">
+                                  {formatRupiah(row.take_home_pay)}
+                                </td>
+
+                                {/* Rekening Bank */}
+                                <td className="px-2.5 py-2 font-mono">
+                                  {row.is_duplicate_bank_account ? (
+                                    <div className="space-y-0.5">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-amber-950 font-bold">
+                                          {row.bank_name ? `${row.bank_name} ` : ''}
+                                          {row.bank_account}
+                                        </span>
+                                        <span
+                                          className="px-1 py-0.2 rounded text-[8.5px] font-bold bg-amber-200 text-amber-900 cursor-help"
+                                          title={row.duplicate_bank_account_info || 'Rekening kembar'}
+                                        >
+                                          Kembar
+                                        </span>
+                                      </div>
+                                      <div
+                                        className="text-[9px] text-amber-700 max-w-[160px] truncate"
+                                        title={row.duplicate_bank_account_info || ''}
+                                      >
+                                        {row.duplicate_bank_account_info}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span className="text-text-muted">
+                                      {row.bank_name ? `${row.bank_name} ` : ''}
+                                      {row.bank_account || '-'}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -743,9 +974,13 @@ export const PayrollImportPage: React.FC = () => {
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-t border-border-subtle text-[11px] text-text-muted">
                         <div>
-                          Menampilkan {(previewPage - 1) * rowsPerPage + 1} -{' '}
-                          {Math.min(previewPage * rowsPerPage, totalPreviewRows)} dari{' '}
-                          {totalPreviewRows} baris
+                          Menampilkan {filteredRows.length > 0 ? (previewPage - 1) * rowsPerPage + 1 : 0} -{' '}
+                          {Math.min(previewPage * rowsPerPage, totalFilteredRows)} dari {totalFilteredRows} baris
+                          {previewFilter !== 'all' && (
+                            <span className="ml-1 text-primary font-medium">
+                              (Filter: {previewFilter === 'new' ? 'Data Baru' : previewFilter === 'update' ? 'Akan Diperbarui' : 'Duplikat'})
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1">
                           <button
@@ -840,8 +1075,13 @@ export const PayrollImportPage: React.FC = () => {
             </div>
 
             <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
-              <span className="text-[12px] font-medium text-blue-800 uppercase block">
-                Data Diperbarui (Update)
+              <span className="text-[12px] font-medium text-blue-800 uppercase block flex items-center justify-between">
+                <span>Data Diperbarui (Update)</span>
+                {importResult.updated_count > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-blue-200 text-blue-900">
+                    {importResult.updated_count}
+                  </span>
+                )}
               </span>
               <span className="font-display-kpi text-[26px] font-bold text-blue-700 font-mono">
                 {importResult.updated_count} Data
@@ -863,6 +1103,114 @@ export const PayrollImportPage: React.FC = () => {
               </span>
             </div>
           </div>
+
+          {/* Section: Rekening Kembar Warning */}
+          {importResult.duplicate_account_rows && importResult.duplicate_account_rows.length > 0 && (
+            <div className="p-4 rounded-xl bg-amber-50/90 border border-amber-300 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-[13.5px] text-amber-950">
+                      Peringatan Rekening Kembar: {importResult.duplicate_account_rows.length} Karyawan Terdeteksi
+                    </h4>
+                    <p className="text-[11.5px] text-amber-800">
+                      Nomor rekening berikut digunakan oleh lebih dari 1 karyawan. Mohon pastikan dan cross-check rekening sebelum payroll ditransfer.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowDuplicateDetails(!showDuplicateDetails)}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200/80 rounded-lg flex items-center gap-1 transition-colors"
+                >
+                  {showDuplicateDetails ? 'Tutup Rincian' : 'Buka Rincian'}
+                  {showDuplicateDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {showDuplicateDetails && (
+                <div className="border border-amber-200 rounded-lg overflow-hidden bg-white max-h-56 overflow-y-auto shadow-2xs">
+                  <table className="w-full text-left text-[11.5px]">
+                    <thead className="bg-amber-100/70 text-amber-900 font-semibold border-b border-amber-200 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-1.5 w-12 text-center">No</th>
+                        <th className="px-3 py-1.5">Nama Karyawan</th>
+                        <th className="px-3 py-1.5">Sekolah / Unit</th>
+                        <th className="px-3 py-1.5 font-mono">No. Rekening</th>
+                        <th className="px-3 py-1.5">Keterangan Kembar</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-100">
+                      {importResult.duplicate_account_rows.map((dup, i) => (
+                        <tr key={i} className="hover:bg-amber-50/50">
+                          <td className="px-3 py-1.5 text-center text-text-muted">{dup.row_no || i + 1}</td>
+                          <td className="px-3 py-1.5 font-semibold text-slate-800">{dup.employee_name}</td>
+                          <td className="px-3 py-1.5 text-text-muted">{dup.school_unit || '-'}</td>
+                          <td className="px-3 py-1.5 font-mono font-semibold text-amber-900">
+                            {dup.bank_name ? `${dup.bank_name} ` : ''}{dup.bank_account}
+                          </td>
+                          <td className="px-3 py-1.5 text-amber-800 text-[11px]">{dup.info}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Section: Rincian Data Diperbarui (Update) */}
+          {importResult.updated_rows && importResult.updated_rows.length > 0 && (
+            <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <RefreshCw className="w-5 h-5 text-blue-700 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-[13.5px] text-blue-950">
+                      Transparansi Data yang Diperbarui ({importResult.updated_rows.length} Data)
+                    </h4>
+                    <p className="text-[11.5px] text-blue-800">
+                      Data ini tidak dibuat baru karena cocok dengan data database periode terkait atau menimpa baris sebelumnya di file.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowUpdatedDetails(!showUpdatedDetails)}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:text-blue-950 bg-blue-100 hover:bg-blue-200/80 rounded-lg flex items-center gap-1 transition-colors"
+                >
+                  {showUpdatedDetails ? 'Tutup Rincian' : 'Buka Rincian'}
+                  {showUpdatedDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              {showUpdatedDetails && (
+                <div className="border border-blue-200 rounded-lg overflow-hidden bg-white max-h-56 overflow-y-auto shadow-2xs">
+                  <table className="w-full text-left text-[11.5px]">
+                    <thead className="bg-blue-100/70 text-blue-900 font-semibold border-b border-blue-200 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-1.5 w-12 text-center">No</th>
+                        <th className="px-3 py-1.5">Nama Karyawan</th>
+                        <th className="px-3 py-1.5 font-mono">NIK</th>
+                        <th className="px-3 py-1.5">Sekolah / Unit</th>
+                        <th className="px-3 py-1.5">Alasan Pembaruan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-blue-100">
+                      {importResult.updated_rows.map((item, i) => (
+                        <tr key={i} className="hover:bg-blue-50/50">
+                          <td className="px-3 py-1.5 text-center text-text-muted">{item.row_no || i + 1}</td>
+                          <td className="px-3 py-1.5 font-semibold text-slate-800">{item.employee_name}</td>
+                          <td className="px-3 py-1.5 font-mono text-text-muted">{item.nik || '-'}</td>
+                          <td className="px-3 py-1.5 text-text-muted">{item.school_unit || '-'}</td>
+                          <td className="px-3 py-1.5 text-blue-900 font-medium text-[11px]">{item.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Any Errors / Skipped Rows */}
           {importResult.errors && importResult.errors.length > 0 && (

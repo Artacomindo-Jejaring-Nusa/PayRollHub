@@ -153,12 +153,43 @@ export interface PayrollFormData {
   replacement_date?: string | null;
 }
 
+export interface PayrollImportRowUpdateDetail {
+  row_no?: string | number | null;
+  employee_name: string;
+  school_unit?: string | null;
+  nik?: string | null;
+  bank_account?: string | null;
+  reason: string;
+}
+
+export interface PayrollImportDuplicateAccountDetail {
+  row_no?: string | number | null;
+  employee_name: string;
+  school_unit?: string | null;
+  bank_account: string;
+  bank_name?: string | null;
+  info: string;
+}
+
+export interface PayrollImportDuplicateNikDetail {
+  row_no?: string | number | null;
+  employee_name: string;
+  school_unit?: string | null;
+  nik: string;
+  info: string;
+}
+
 export interface PayrollImportResult {
   imported_count: number;
   updated_count: number;
   active_count?: number;
   off_count?: number;
   total_estimated_thp?: number;
+  duplicate_account_count?: number;
+  duplicate_nik_count?: number;
+  updated_rows?: PayrollImportRowUpdateDetail[];
+  duplicate_account_rows?: PayrollImportDuplicateAccountDetail[];
+  duplicate_nik_rows?: PayrollImportDuplicateNikDetail[];
   errors: string[];
   warnings?: string[];
 }
@@ -188,6 +219,12 @@ export interface PayrollImportPreviewRow {
   bank_name?: string | null;
   is_existing?: boolean;
   existing_id?: number | null;
+  is_update?: boolean;
+  match_reason?: string;
+  is_duplicate_nik?: boolean;
+  duplicate_nik_info?: string | null;
+  is_duplicate_bank_account?: boolean;
+  duplicate_bank_account_info?: string | null;
 }
 
 export interface PayrollImportPreviewData {
@@ -197,6 +234,13 @@ export interface PayrollImportPreviewData {
   active_count: number;
   off_count: number;
   total_estimated_thp: number;
+  imported_count?: number;
+  updated_count?: number;
+  duplicate_account_count?: number;
+  duplicate_nik_count?: number;
+  updated_rows?: PayrollImportRowUpdateDetail[];
+  duplicate_account_rows?: PayrollImportDuplicateAccountDetail[];
+  duplicate_nik_rows?: PayrollImportDuplicateNikDetail[];
   rows: PayrollImportPreviewRow[];
   warnings: string[];
   errors: string[];

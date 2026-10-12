@@ -628,6 +628,13 @@ class PayrollController extends Controller
                 'active_count' => $import->getActiveCount(),
                 'off_count' => $import->getOffCount(),
                 'total_estimated_thp' => $import->getTotalEstimatedThp(),
+                'imported_count' => $import->getImportedCount(),
+                'updated_count' => $import->getUpdatedCount(),
+                'duplicate_account_count' => $import->getDuplicateAccountCount(),
+                'duplicate_nik_count' => $import->getDuplicateNikCount(),
+                'updated_rows' => $import->getUpdatedRows(),
+                'duplicate_account_rows' => $import->getDuplicateAccountRows(),
+                'duplicate_nik_rows' => $import->getDuplicateNikRows(),
                 'rows' => $import->getPreviewRows(),
                 'warnings' => $import->getWarnings(),
                 'errors' => $import->getErrors(),
@@ -671,6 +678,8 @@ class PayrollController extends Controller
                 'total_saved' => $totalSaved,
                 'imported_count' => $import->getImportedCount(),
                 'updated_count' => $import->getUpdatedCount(),
+                'duplicate_account_count' => $import->getDuplicateAccountCount(),
+                'duplicate_nik_count' => $import->getDuplicateNikCount(),
                 'file_name' => $request->file('file')?->getClientOriginalName(),
             ],
             company: $company
@@ -698,6 +707,11 @@ class PayrollController extends Controller
                 'active_count' => $import->getActiveCount(),
                 'off_count' => $import->getOffCount(),
                 'total_estimated_thp' => $import->getTotalEstimatedThp(),
+                'duplicate_account_count' => $import->getDuplicateAccountCount(),
+                'duplicate_nik_count' => $import->getDuplicateNikCount(),
+                'updated_rows' => $import->getUpdatedRows(),
+                'duplicate_account_rows' => $import->getDuplicateAccountRows(),
+                'duplicate_nik_rows' => $import->getDuplicateNikRows(),
                 'errors' => $import->getErrors(),
                 'warnings' => $import->getWarnings(),
             ],
@@ -722,7 +736,14 @@ class PayrollController extends Controller
                 return 'DATA_PENGGAJIAN';
             }
 
-            $monthNum = substr($period, 5, 2);
+            // Support SP 1 .. SP 12 or YYYY-MM
+            $monthNum = null;
+            if (preg_match('/(?:SP\s*|SP-)(\d+)/i', $period, $m)) {
+                $monthNum = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+            } elseif (preg_match('/^\d{4}-(\d{2})$/', $period, $m)) {
+                $monthNum = $m[1];
+            }
+
             $monthNames = [
                 '01' => ['Januari', 'Jan', 'JANUARI', 'JAN'],
                 '02' => ['Februari', 'Feb', 'FEBRUARI', 'FEB'],
@@ -738,7 +759,7 @@ class PayrollController extends Controller
                 '12' => ['Desember', 'Des', 'DESEMBER', 'DES'],
             ];
 
-            if (!empty($monthNames[$monthNum])) {
+            if ($monthNum && !empty($monthNames[$monthNum])) {
                 foreach ($monthNames[$monthNum] as $mName) {
                     if (in_array($mName, $sheetNames)) {
                         return $mName;

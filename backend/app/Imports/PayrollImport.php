@@ -26,6 +26,12 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
     protected bool $isPreview = false;
     protected int|string $targetSheet = 0;
 
+    protected int $duplicateAccountCount = 0;
+    protected int $duplicateNikCount = 0;
+    protected array $updatedRows = [];
+    protected array $duplicateAccountRows = [];
+    protected array $duplicateNikRows = [];
+
     public function __construct(?string $defaultPeriod = null, bool $isPreview = false, int|string|null $targetSheet = null, ?string $defaultCompany = 'rbs')
     {
         $this->defaultPeriod = $defaultPeriod ?: date('Y-m');
@@ -72,6 +78,7 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
 
         $cacheByNik = [];
         $cacheByNameSchool = [];
+        $cacheByBankAccount = [];
 
         foreach ($existingRecords as $rec) {
             $pPeriod = (string) $rec->period;
@@ -81,6 +88,77 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             if (!empty($rec->employee_name) && !empty($rec->school_unit)) {
                 $k = $pPeriod . '|' . mb_strtolower(trim($rec->employee_name)) . '|' . mb_strtolower(trim($rec->school_unit));
                 $cacheByNameSchool[$k] = $rec;
+            }
+            if (!empty($rec->bank_account)) {
+                $cleanAcc = trim((string) $rec->bank_account);
+                if ($cleanAcc !== '-' && $cleanAcc !== '0' && strlen($cleanAcc) >= 3) {
+                    $cacheByBankAccount[$cleanAcc][] = $rec;
+                }
+            }
+        }
+
+        // Pass 1: Pre-scan $rows to detect occurrences in the file (duplicate NIK / bank accounts)
+        $fileNikOccurrences = [];
+        $fileAccountOccurrences = [];
+
+        $scanIndex = 1;
+        foreach ($rows as $r) {
+            $scanIndex++;
+            $rNo = strtolower(trim((string) ($r['no'] ?? $r['no_'] ?? '')));
+            $rName = trim((string) ($r['nama_lengkap'] ?? $r['nama_pekerja'] ?? $r['nama_pekerja_'] ?? $r['nama_karyawan'] ?? $r['nama'] ?? $r['employee_name'] ?? ''));
+            $rRawName = strtolower($rName);
+
+            if (
+                str_starts_with($rNo, '#') ||
+                str_contains($rNo, 'petunjuk') ||
+                str_contains($rNo, 'panduan') ||
+                str_contains($rNo, 'catatan') ||
+                str_contains($rRawName, 'petunjuk pengisian') ||
+                str_contains($rRawName, 'panduan') ||
+                str_contains($rRawName, 'catatan penting')
+            ) {
+                continue;
+            }
+
+            $rNik = $r['nik'] ?? $r['nik_'] ?? $r['nik_karyawan'] ?? $r[2] ?? $r['2'] ?? null;
+            $rNik = !empty($rNik) ? trim((string) $rNik) : null;
+            if ($rNik !== null) {
+                $rNik = ltrim($rNik, "'");
+                if ($rNik === '' || $rNik === '-' || $rNik === '0') {
+                    $rNik = null;
+                }
+            }
+
+            $rBank = $r['no_rekening'] ?? $r['nomor_rekening'] ?? $r['no_rekening_'] ?? $r['rekening'] ?? $r['bank_account'] ?? null;
+            $rBank = !empty($rBank) ? trim((string) $rBank) : null;
+            if ($rBank !== null) {
+                $rBank = ltrim($rBank, "'");
+                if ($rBank === '' || $rBank === '-' || $rBank === '0') {
+                    $rBank = null;
+                }
+            }
+
+            $rSchool = $r['sekolah_rakyat_permanen'] ?? $r['nama_sekolah'] ?? $r['sekolah'] ?? $r['sekolah_rakyat'] ?? $r['asal_sekolah'] ?? $r['school_unit'] ?? $r['unit'] ?? null;
+            $rSchool = !empty($rSchool) ? trim((string) $rSchool) : null;
+
+            if (empty($rName) && empty($rNik)) {
+                continue;
+            }
+
+            if (!empty($rNik)) {
+                $fileNikOccurrences[$rNik][] = [
+                    'row' => $scanIndex,
+                    'name' => $rName,
+                    'school' => $rSchool,
+                ];
+            }
+
+            if (!empty($rBank)) {
+                $fileAccountOccurrences[$rBank][] = [
+                    'row' => $scanIndex,
+                    'name' => $rName,
+                    'school' => $rSchool,
+                ];
             }
         }
 
@@ -343,7 +421,24 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             //    do NOT overwrite! Treat as separate new employee!
             // 2. If NIK is empty: match by Name + School Unit.
             $existing = null;
+            $isUpdate = false;
+            $matchReason = 'Data baru (belum ada di database)';
+            $isDuplicateNik = false;
+            $duplicateNikInfo = null;
+
             if (!empty($nik)) {
+                // Cek apakah NIK muncul ganda di file Excel ini
+                if (isset($fileNikOccurrences[$nik]) && count($fileNikOccurrences[$nik]) > 1) {
+                    $isDuplicateNik = true;
+                    $otherRows = [];
+                    foreach ($fileNikOccurrences[$nik] as $occ) {
+                        if ($occ['row'] !== $rowIndex) {
+                            $otherRows[] = "Baris {$occ['row']} ({$occ['name']})";
+                        }
+                    }
+                    $duplicateNikInfo = "NIK '{$nik}' muncul lebih dari 1x di file Excel ini: " . implode(', ', $otherRows);
+                }
+
                 $candidates = $cacheByNik[$period . '|' . $nik] ?? [];
                 if (!is_array($candidates)) {
                     $candidates = [$candidates];
@@ -368,9 +463,19 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                     }
                 }
 
-                if (!$existing && !empty($candidates)) {
+                if ($existing) {
+                    $isUpdate = true;
+                    $isExistingInDb = ($existing instanceof Payroll);
+                    if ($isExistingInDb) {
+                        $matchReason = "Memperbarui data {$existing->employee_name} (NIK: {$nik}) yang sudah terdaftar di database {$period}.";
+                    } else {
+                        $matchReason = "Menimpa data pada baris sebelumnya dengan NIK sama ({$nik}) di file Excel ini.";
+                    }
+                } elseif (!empty($candidates)) {
+                    $isDuplicateNik = true;
                     $firstCandName = $candidates[0]->employee_name ?? 'karyawan lain';
-                    $this->warnings[] = "Baris {$rowIndex} ({$name}): Menggunakan NIK '{$nik}' yang sama dengan {$firstCandName}, namun nama berbeda. Tetap disimpan sebagai karyawan baru agar data tidak tertimpa.";
+                    $duplicateNikInfo = "NIK '{$nik}' sama dengan {$firstCandName} di database, namun nama berbeda (Tetap disimpan terpisah agar tidak tertimpa).";
+                    $this->warnings[] = "Baris {$rowIndex} ({$name}): {$duplicateNikInfo}";
                 }
             } elseif (!empty($schoolUnit)) {
                 $k = $period . '|' . mb_strtolower($name) . '|' . mb_strtolower($schoolUnit);
@@ -381,6 +486,47 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                         ->where('school_unit', $schoolUnit)
                         ->where('period', $period)
                         ->first();
+                }
+                if ($existing) {
+                    $isUpdate = true;
+                    $isExistingInDb = ($existing instanceof Payroll);
+                    if ($isExistingInDb) {
+                        $matchReason = "Memperbarui data {$existing->employee_name} ({$schoolUnit}) yang cocok di database (tanpa NIK).";
+                    } else {
+                        $matchReason = "Menimpa data pada baris sebelumnya dengan Nama & Sekolah sama di file Excel ini.";
+                    }
+                }
+            }
+
+            // Cek duplikasi Nomor Rekening Bank
+            $isDuplicateAccount = false;
+            $duplicateAccountInfo = null;
+            if (!empty($bankAccount) && $bankAccount !== '-' && $bankAccount !== '0' && strlen($bankAccount) >= 3) {
+                $fileClashes = [];
+                if (!empty($fileAccountOccurrences[$bankAccount])) {
+                    foreach ($fileAccountOccurrences[$bankAccount] as $occ) {
+                        if ($occ['row'] !== $rowIndex && mb_strtolower(trim($occ['name'])) !== mb_strtolower(trim($name))) {
+                            $fileClashes[] = "{$occ['name']}" . ($occ['school'] ? " [{$occ['school']}]" : '') . " (Baris {$occ['row']})";
+                        }
+                    }
+                }
+
+                $dbClashes = [];
+                if (!empty($cacheByBankAccount[$bankAccount])) {
+                    foreach ($cacheByBankAccount[$bankAccount] as $dbRec) {
+                        if (mb_strtolower(trim($dbRec->employee_name)) !== mb_strtolower(trim($name))) {
+                            $dbClashes[] = "{$dbRec->employee_name} (" . ($dbRec->school_unit ?: $dbRec->period) . ")";
+                        }
+                    }
+                }
+
+                if (!empty($fileClashes) || !empty($dbClashes)) {
+                    $isDuplicateAccount = true;
+                    $allClashes = array_values(array_unique(array_merge($fileClashes, $dbClashes)));
+                    $duplicateAccountInfo = "No. Rekening ({$bankAccount}) kembar dengan: " . implode(', ', array_slice($allClashes, 0, 3));
+                    if (count($allClashes) > 3) {
+                        $duplicateAccountInfo .= " dan " . (count($allClashes) - 3) . " lainnya";
+                    }
                 }
             }
 
@@ -437,14 +583,61 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             }
             $this->totalEstimatedThp += $takeHomePay;
 
+            if ($isDuplicateAccount) {
+                $this->duplicateAccountCount++;
+                $this->duplicateAccountRows[] = [
+                    'row_no' => $rowNo ?: $rowIndex,
+                    'employee_name' => $name,
+                    'school_unit' => $schoolUnit,
+                    'bank_account' => $bankAccount,
+                    'bank_name' => $bankName,
+                    'info' => $duplicateAccountInfo,
+                ];
+            }
+
+            if ($isDuplicateNik) {
+                $this->duplicateNikCount++;
+                $this->duplicateNikRows[] = [
+                    'row_no' => $rowNo ?: $rowIndex,
+                    'employee_name' => $name,
+                    'school_unit' => $schoolUnit,
+                    'nik' => $nik,
+                    'info' => $duplicateNikInfo,
+                ];
+            }
+
+            if ($isUpdate) {
+                $this->updatedRows[] = [
+                    'row_no' => $rowNo ?: $rowIndex,
+                    'employee_name' => $name,
+                    'school_unit' => $schoolUnit,
+                    'nik' => $nik,
+                    'bank_account' => $bankAccount,
+                    'reason' => $matchReason,
+                ];
+            }
+
             $isExistingInDb = ($existing instanceof Payroll);
             $existingId = $isExistingInDb ? $existing->id : (is_object($existing) && isset($existing->id) ? $existing->id : null);
 
             if ($this->isPreview) {
+                if ($isUpdate) {
+                    $this->updatedCount++;
+                } else {
+                    $this->importedCount++;
+                }
+
                 $this->previewRows[] = array_merge($payrollData, [
-                    'is_existing' => $isExistingInDb,
+                    'is_existing' => (bool) $isExistingInDb,
                     'existing_id' => $existingId,
+                    'is_update' => (bool) $isUpdate,
+                    'match_reason' => $matchReason,
+                    'is_duplicate_nik' => (bool) $isDuplicateNik,
+                    'duplicate_nik_info' => $duplicateNikInfo,
+                    'is_duplicate_bank_account' => (bool) $isDuplicateAccount,
+                    'duplicate_bank_account_info' => $duplicateAccountInfo,
                 ]);
+
                 if (!$existing) {
                     $previewCacheItem = (object) array_merge($payrollData, ['id' => null]);
                     if (!empty($nik)) {
@@ -508,6 +701,31 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
     public function getTotalEstimatedThp(): float
     {
         return $this->totalEstimatedThp;
+    }
+
+    public function getDuplicateAccountCount(): int
+    {
+        return $this->duplicateAccountCount;
+    }
+
+    public function getDuplicateNikCount(): int
+    {
+        return $this->duplicateNikCount;
+    }
+
+    public function getUpdatedRows(): array
+    {
+        return $this->updatedRows;
+    }
+
+    public function getDuplicateAccountRows(): array
+    {
+        return $this->duplicateAccountRows;
+    }
+
+    public function getDuplicateNikRows(): array
+    {
+        return $this->duplicateNikRows;
     }
 
     public function getErrors(): array

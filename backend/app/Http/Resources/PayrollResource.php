@@ -45,13 +45,19 @@ class PayrollResource extends JsonResource
             'basic_salary' => $canViewFinancials ? (float) $this->basic_salary : 0,
             'allowance' => $canViewFinancials ? (float) $this->allowance : 0,
             'deduction' => $canViewFinancials ? (float) $this->deduction : 0,
+            'attended_days' => $canViewFinancials ? (int) ($this->attended_days ?? 0) : 0,
+            'holiday_days' => $canViewFinancials ? (int) ($this->holiday_days ?? 0) : 0,
             'custom_deductions' => $canViewFinancials ? ($this->custom_deductions ?? []) : [],
             'absence_count' => $canViewFinancials ? (int) $this->absence_count : 0,
             'absence_rate' => $canViewFinancials ? (float) $this->absence_rate : 0,
             'absence_deduction' => $canViewFinancials ? (float) $this->absence_deduction : 0,
             'absence_note' => $canViewFinancials ? $this->absence_note : null,
             'pph21' => $canViewFinancials ? (float) $this->pph21 : 0,
-            'take_home_pay' => $canViewFinancials ? (float) $this->take_home_pay : 0,
+            'take_home_pay' => $canViewFinancials ? (function () {
+                $earnings = (float) $this->basic_salary + (float) $this->bpjs_kes + (float) $this->allowance;
+                $deductions = (float) $this->absence_deduction + (float) $this->deduction + (float) $this->pph21;
+                return $earnings > 0 ? max(0, $earnings - $deductions) : (float) $this->take_home_pay;
+            })() : 0,
             'bank_account' => $canViewFinancials ? $this->bank_account : null,
             'bank_name' => $canViewFinancials ? $this->bank_name : null,
             'formatted_pph21' => $canViewFinancials ? ('Rp ' . number_format((float) $this->pph21, 0, ',', '.')) : '-',
@@ -62,7 +68,12 @@ class PayrollResource extends JsonResource
             'formatted_allowance' => $canViewFinancials ? ('Rp ' . number_format((float) $this->allowance, 0, ',', '.')) : '-',
             'formatted_deduction' => $canViewFinancials ? ('Rp ' . number_format((float) $this->deduction, 0, ',', '.')) : '-',
             'formatted_absence_deduction' => $canViewFinancials ? ('Rp ' . number_format((float) $this->absence_deduction, 0, ',', '.')) : '-',
-            'formatted_take_home_pay' => $canViewFinancials ? ('Rp ' . number_format((float) $this->take_home_pay, 0, ',', '.')) : '-',
+            'formatted_take_home_pay' => $canViewFinancials ? (function () {
+                $earnings = (float) $this->basic_salary + (float) $this->bpjs_kes + (float) $this->allowance;
+                $deductions = (float) $this->absence_deduction + (float) $this->deduction + (float) $this->pph21;
+                $thp = $earnings > 0 ? max(0, $earnings - $deductions) : (float) $this->take_home_pay;
+                return 'Rp ' . number_format($thp, 0, ',', '.');
+            })() : '-',
             'bpjs_tk_jht' => $canViewFinancials ? (float) ($this->bpjs_tk_jht ?? 0) : 0,
             'bpjs_tk_jp' => $canViewFinancials ? (float) ($this->bpjs_tk_jp ?? 0) : 0,
             'formatted_bpjs_tk_jht' => $canViewFinancials ? ('Rp ' . number_format((float) ($this->bpjs_tk_jht ?? 0), 0, ',', '.')) : '-',

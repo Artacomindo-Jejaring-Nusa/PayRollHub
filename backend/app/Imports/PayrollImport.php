@@ -207,9 +207,10 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
 
             $rowNo = !empty($rowNo) ? trim((string) $rowNo) : null;
             $period = trim((string) $period);
-            if (empty($period)) {
+            if (empty($period) || strtolower($period) === 'periode' || $period === '-') {
                 $period = $this->defaultPeriod;
             }
+            $period = self::normalizePeriod($period);
 
             if (empty($name)) {
                 $this->errors[] = "Baris {$rowIndex}: Nama karyawan wajib diisi.";
@@ -522,5 +523,24 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
     public function getPreviewRows(): array
     {
         return $this->previewRows;
+    }
+
+    public static function normalizePeriod(?string $period): string
+    {
+        if (empty($period)) {
+            return 'SP 1';
+        }
+        $clean = trim((string) $period);
+
+        if (preg_match('/^SP\s*(\d+)$/i', $clean, $m)) {
+            return 'SP ' . (int) $m[1];
+        }
+        if (preg_match('/^\d{4}-(\d{2})$/', $clean, $m)) {
+            return 'SP ' . (int) $m[1];
+        }
+        if (preg_match('/^surat\s+pesanan\s+(\d+)$/i', $clean, $m)) {
+            return 'SP ' . (int) $m[1];
+        }
+        return $clean;
     }
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useTenantTheme } from '../../../lib/theme';
 import { payrollService } from '../services/payrollService';
+import { attendanceService } from '../../attendance/services/attendanceService';
 import { INDONESIAN_PROVINCES } from '../../../lib/constants';
 import { formatCurrency } from '../../../lib/utils';
 import { SP_PERIOD_LIST, normalizePeriodToSP } from '../../../lib/period';
@@ -78,6 +79,12 @@ export const PayrollFormPage: React.FC = () => {
   const [bpjsTk, setBpjsTk] = useState<number | string>(0);
   const [netBasePrice, setNetBasePrice] = useState<number | string>('');
 
+  // Point 15: Jumlah Absen Masuk & Jumlah Libur (Kotak 4)
+  const [attendedDays, setAttendedDays] = useState<number | string>(0);
+  const [holidayDays, setHolidayDays] = useState<number | string>(0);
+  const [syncingAttendance, setSyncingAttendance] = useState(false);
+  const [attendanceSyncNotice, setAttendanceSyncNotice] = useState<string | null>(null);
+
   // Potongan Absensi & Take Home Pay (Kotak 4)
   const [absenceCount, setAbsenceCount] = useState<number>(0);
   const [absenceRate, setAbsenceRate] = useState<number>(50000);
@@ -120,6 +127,47 @@ export const PayrollFormPage: React.FC = () => {
     const val = parseFloat(valStr) || 0;
     if (val > 0 && (!bpjsKes || Number(bpjsKes) === 0)) {
       handleApplyProvinceRules(province);
+    }
+  };
+
+  // Point 15: Helper tarik data absensi karyawan otomatis dari modul kehadiran
+  const handleSyncAttendance = async () => {
+    if (!employeeName.trim()) {
+      alert('Silakan isi Nama Lengkap Karyawan terlebih dahulu untuk menarik data absensi.');
+      return;
+    }
+    try {
+      setSyncingAttendance(true);
+      setAttendanceSyncNotice(null);
+      const res = await attendanceService.getRecapByEmployee({
+        sp_period: period,
+        search: employeeName.trim(),
+      });
+      const cleanTargetName = employeeName.trim().toLowerCase();
+      const cleanTargetNik = nik ? nik.trim() : '';
+      const found = res.items?.find(
+        (item: any) =>
+          (cleanTargetNik && item.nik && item.nik.trim() === cleanTargetNik) ||
+          (item.name && item.name.toLowerCase().includes(cleanTargetName)) ||
+          cleanTargetName.includes((item.name || '').toLowerCase())
+      );
+
+      if (found) {
+        setAttendedDays(found.total_present ?? 0);
+        setHolidayDays(found.total_holiday ?? 0);
+        setAttendanceSyncNotice(
+          `✓ Data absensi berhasil ditarik untuk ${period}: ${found.total_present} hari masuk, ${found.total_holiday} hari libur.`
+        );
+      } else {
+        setAttendanceSyncNotice(
+          `Catatan: Tidak ditemukan log presensi otomatis atas nama "${employeeName}" pada ${period}. Silakan masukkan jumlah absen masuk & libur secara manual.`
+        );
+      }
+    } catch (err) {
+      console.error('Error syncing attendance:', err);
+      setAttendanceSyncNotice('Gagal menghubungkan ke data absensi. Silakan isi secara manual.');
+    } finally {
+      setSyncingAttendance(false);
     }
   };
 
@@ -208,6 +256,9 @@ export const PayrollFormPage: React.FC = () => {
             setReplacementNote(data.replacement_note ?? '');
           }
 
+          setAttendedDays(data.attended_days ?? 0);
+          setHolidayDays(data.holiday_days ?? 0);
+
           setAbsenceCount(data.absence_count ?? 0);
           setAbsenceRate(data.absence_rate ?? 50000);
           setAbsenceDeduction(data.absence_deduction ?? 0);
@@ -280,6 +331,8 @@ export const PayrollFormPage: React.FC = () => {
       replacement_date: isReplacing ? replacementDate.trim() || undefined : undefined,
       replacement_note: isReplacing ? replacementNote.trim() || undefined : undefined,
 
+      attended_days: parseInt(String(attendedDays), 10) || 0,
+      holiday_days: parseInt(String(holidayDays), 10) || 0,
       absence_count: absenceCount || 0,
       absence_rate: absenceRate || 0,
       absence_deduction: numAbsence,
@@ -293,6 +346,7 @@ export const PayrollFormPage: React.FC = () => {
           name: cd.name.trim() || 'Potongan Kustom',
           amount: parseFloat(String(cd.amount)) || 0,
         })),
+      take_home_pay: takeHomePay,
       bank_account: bankAccount.trim() || undefined,
       bank_name: bankName.trim() || undefined,
     };
@@ -862,26 +916,91 @@ export const PayrollFormPage: React.FC = () => {
           {/* ======================================================== */}
           <Card className="p-6 flex flex-col justify-between space-y-4 border border-border-subtle shadow-sm hover:border-slate-300 transition-colors">
             <div className="space-y-4">
-              <div className="flex items-center gap-2 pb-3 border-b border-border-row">
-                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-                  <CalendarX className="w-4 h-4" />
+              <div className="flex items-center justify-between pb-3 border-b border-border-row flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                    <CalendarX className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-title-card text-[15px] font-bold text-text-primary">
+                      4. Potongan Absensi & Take Home Pay
+                    </h2>
+                    <p className="text-[11px] text-text-muted">
+                      Hari masuk, libur, tarif potongan absensi, potongan lain, & gaji bersih
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="font-title-card text-[15px] font-bold text-text-primary">
-                    4. Potongan Absensi & Take Home Pay
-                  </h2>
-                  <p className="text-[11px] text-text-muted">
-                    Kelipatan absensi (1x, 2x, 3x...), tunjangan & gaji bersih
-                  </p>
-                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSyncAttendance}
+                  disabled={syncingAttendance}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title={`Tarik data hari masuk & libur otomatis dari data absensi ${period}`}
+                >
+                  <RefreshCw className={`w-3 h-3 ${syncingAttendance ? 'animate-spin' : ''}`} />
+                  <span>{syncingAttendance ? 'Menghubungkan...' : 'Tarik dari Rekap Absensi'}</span>
+                </button>
               </div>
 
+              {attendanceSyncNotice && (
+                <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-200 text-[11.5px] text-emerald-800 flex items-center justify-between gap-2">
+                  <span>{attendanceSyncNotice}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttendanceSyncNotice(null)}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-3.5">
-                {/* Kelipatan & Tarif */}
+                {/* Point 15: Field Jumlah Absen Masuk & Jumlah Libur */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-text-secondary mb-1">
+                      Jumlah Absen Masuk (Hari)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      value={attendedDays}
+                      onChange={(e) => setAttendedDays(e.target.value)}
+                      className="w-full h-10 px-3 bg-white rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] font-mono font-medium"
+                    />
+                    <span className="text-[10px] text-text-muted mt-0.5 block">
+                      Total presensi hadir kerja masuk selama periode {period}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-semibold text-text-secondary mb-1">
+                      Jumlah Libur (Hari)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      value={holidayDays}
+                      onChange={(e) => setHolidayDays(e.target.value)}
+                      className="w-full h-10 px-3 bg-white rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] font-mono font-medium"
+                    />
+                    <span className="text-[10px] text-text-muted mt-0.5 block">
+                      Total hari libur / off selama periode {period}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Point 16: Potongan Absensi Tarif per Hari & Kelipatan */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-[12px] font-semibold text-text-secondary mb-1">
-                      Kelipatan Absensi *
+                      Kelipatan Absensi (Hari Tidak Masuk) *
                     </label>
                     <select
                       value={absenceCount}
@@ -889,21 +1008,21 @@ export const PayrollFormPage: React.FC = () => {
                       className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] font-medium cursor-pointer"
                     >
                       <option value={0}>0x (Tidak Ada Potongan)</option>
-                      <option value={1}>1x (1 Hari Absen)</option>
-                      <option value={2}>2x (2 Hari Absen)</option>
-                      <option value={3}>3x (3 Hari Absen)</option>
-                      <option value={4}>4x (4 Hari Absen)</option>
-                      <option value={5}>5x (5 Hari Absen)</option>
-                      <option value={6}>6x (6 Hari Absen)</option>
-                      <option value={7}>7x (7 Hari Absen)</option>
-                      <option value={8}>8x (8 Hari Absen)</option>
-                      <option value={9}>9x (9 Hari Absen)</option>
-                      <option value={10}>10x (10 Hari Absen)</option>
+                      <option value={1}>1x (1 Hari Absen / Alpa)</option>
+                      <option value={2}>2x (2 Hari Absen / Alpa)</option>
+                      <option value={3}>3x (3 Hari Absen / Alpa)</option>
+                      <option value={4}>4x (4 Hari Absen / Alpa)</option>
+                      <option value={5}>5x (5 Hari Absen / Alpa)</option>
+                      <option value={6}>6x (6 Hari Absen / Alpa)</option>
+                      <option value={7}>7x (7 Hari Absen / Alpa)</option>
+                      <option value={8}>8x (8 Hari Absen / Alpa)</option>
+                      <option value={9}>9x (9 Hari Absen / Alpa)</option>
+                      <option value={10}>10x (10 Hari Absen / Alpa)</option>
                     </select>
                   </div>
 
                   <Input
-                    label="Tarif per Hari (Rp)"
+                    label="Potongan Tarif per Hari (Rp) *"
                     type="number"
                     min="0"
                     step="any"

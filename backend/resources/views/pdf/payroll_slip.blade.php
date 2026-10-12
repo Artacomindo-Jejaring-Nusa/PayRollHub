@@ -350,6 +350,11 @@
                     @if((int)($payroll->absence_count ?? 0) > 0)
                         ({{ $payroll->absence_count }}x)
                     @endif
+                    @if(!empty($payroll->attended_days) || !empty($payroll->holiday_days))
+                        <div style="font-size: 8.5px; color: #555555; margin-top: 1px;">
+                            (Hadir: {{ $payroll->attended_days ?? 0 }} hari, Libur: {{ $payroll->holiday_days ?? 0 }} hari)
+                        </div>
+                    @endif
                 </td>
                 <td class="col-rp">Rp</td>
                 <td class="col-amount">{{ $absenceDeduction > 0 ? number_format($absenceDeduction, 0, ',', '.') : '-' }}</td>

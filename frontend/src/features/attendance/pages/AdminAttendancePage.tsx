@@ -74,6 +74,39 @@ export const AdminAttendancePage: React.FC = () => {
   const [employeeRecapData, setEmployeeRecapData] = useState<EmployeeRecapItem[]>([]);
   const [employeeRecapLoading, setEmployeeRecapLoading] = useState<boolean>(false);
 
+  // Point 13: Pemilihan Karyawan untuk Laporan Absensi Berdasarkan SP
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+
+  const handleToggleSelectEmployee = (userId: number) => {
+    setSelectedEmployeeIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleToggleSelectAllRecap = () => {
+    const allIds = employeeRecapData.map((e) => e.user_id);
+    const isAllSelected = allIds.length > 0 && allIds.every((id) => selectedEmployeeIds.includes(id));
+    if (isAllSelected) {
+      setSelectedEmployeeIds((prev) => prev.filter((id) => !allIds.includes(id)));
+    } else {
+      setSelectedEmployeeIds((prev) => Array.from(new Set([...prev, ...allIds])));
+    }
+  };
+
+  const handleToggleSelectAllDetail = () => {
+    const pageUserIds = Array.from(new Set(attendances.map((a) => a.user_id).filter(Boolean))) as number[];
+    const isAllSelected = pageUserIds.length > 0 && pageUserIds.every((id) => selectedEmployeeIds.includes(id));
+    if (isAllSelected) {
+      setSelectedEmployeeIds((prev) => prev.filter((id) => !pageUserIds.includes(id)));
+    } else {
+      setSelectedEmployeeIds((prev) => Array.from(new Set([...prev, ...pageUserIds])));
+    }
+  };
+
+  const handleClearSelectedEmployees = () => {
+    setSelectedEmployeeIds([]);
+  };
+
   // Point 7: Edit Absensi Karyawan
   const [editAttendanceModalOpen, setEditAttendanceModalOpen] = useState<boolean>(false);
   const [editingAttendance, setEditingAttendance] = useState<AttendanceRecord | null>(null);
@@ -609,6 +642,7 @@ export const AdminAttendancePage: React.FC = () => {
         date: filterType === 'daily' ? selectedDate : undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         search: searchQuery.trim() || undefined,
+        user_ids: selectedEmployeeIds.length > 0 ? selectedEmployeeIds : undefined,
       });
     } catch (err: any) {
       console.error('Error exporting attendance report:', err);
@@ -1080,12 +1114,20 @@ export const AdminAttendancePage: React.FC = () => {
                     type="button"
                     onClick={() => handleExportAttendance('xlsx')}
                     disabled={exportingAttendanceType !== null}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 rounded-lg transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer shadow-2xs disabled:opacity-50 ${
+                      selectedEmployeeIds.length > 0
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-500/30'
+                        : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200'
+                    }`}
                     title={`Export ${recapViewMode === 'employee_recap' ? 'Rekap Karyawan' : 'Log Detail'} ke format Excel (.xlsx)`}
                   >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <FileSpreadsheet className={`w-3.5 h-3.5 ${selectedEmployeeIds.length > 0 ? 'text-white' : 'text-emerald-600'}`} />
                     <span>
-                      {exportingAttendanceType === 'xlsx' ? 'Mengekspor...' : 'Export Excel (.xlsx)'}
+                      {exportingAttendanceType === 'xlsx'
+                        ? 'Mengekspor...'
+                        : selectedEmployeeIds.length > 0
+                        ? `Export Excel (${selectedEmployeeIds.length} Terpilih)`
+                        : 'Export Excel (.xlsx)'}
                     </span>
                   </button>
 
@@ -1098,7 +1140,11 @@ export const AdminAttendancePage: React.FC = () => {
                   >
                     <Download className="w-3.5 h-3.5 text-text-muted" />
                     <span>
-                      {exportingAttendanceType === 'csv' ? '...' : 'CSV'}
+                      {exportingAttendanceType === 'csv'
+                        ? '...'
+                        : selectedEmployeeIds.length > 0
+                        ? `CSV (${selectedEmployeeIds.length})`
+                        : 'CSV'}
                     </span>
                   </button>
                 </div>
@@ -1113,6 +1159,18 @@ export const AdminAttendancePage: React.FC = () => {
                 <table className="w-full min-w-[1100px] text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-border-subtle bg-surface-container/40 text-text-muted font-semibold whitespace-nowrap">
+                      <th className="py-3 px-3 text-center w-10">
+                        <input
+                          type="checkbox"
+                          checked={
+                            attendances.length > 0 &&
+                            attendances.every((a) => a.user_id && selectedEmployeeIds.includes(a.user_id))
+                          }
+                          onChange={handleToggleSelectAllDetail}
+                          className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                          title="Pilih Semua Karyawan pada Halaman Ini"
+                        />
+                      </th>
                       <th className="py-3 px-4">Karyawan</th>
                       <th className="py-3 px-3">Tanggal</th>
                       <th className="py-3 px-3">Foto Bukti</th>
@@ -1132,13 +1190,13 @@ export const AdminAttendancePage: React.FC = () => {
                   <tbody className="divide-y divide-border-subtle">
                     {loading ? (
                       <tr>
-                        <td colSpan={14} className="py-10 text-center text-text-muted">
+                        <td colSpan={15} className="py-10 text-center text-text-muted">
                           Memuat data absensi karyawan...
                         </td>
                       </tr>
                     ) : attendances.length === 0 ? (
                       <tr>
-                        <td colSpan={14} className="py-10 text-center text-text-muted">
+                        <td colSpan={15} className="py-10 text-center text-text-muted">
                           Tidak ada data absensi untuk filter {filterType === 'sp' ? selectedSp : selectedDate}.
                         </td>
                       </tr>
@@ -1147,8 +1205,18 @@ export const AdminAttendancePage: React.FC = () => {
                         const isLibur = row.attendance_type === 'libur' || row.status === 'holiday';
                         const isDinas = row.attendance_type === 'dinas_luar';
                         const photoSrc = row.photo_full_url || row.photo_url;
+                        const isRowSelected = row.user_id ? selectedEmployeeIds.includes(row.user_id) : false;
                         return (
-                          <tr key={row.id} className="hover:bg-surface-container/20 transition-colors">
+                          <tr key={row.id} className={`hover:bg-surface-container/20 transition-colors ${isRowSelected ? 'bg-primary/5' : ''}`}>
+                            <td className="py-3 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isRowSelected}
+                                onChange={() => row.user_id && handleToggleSelectEmployee(row.user_id)}
+                                className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                                title={`Pilih ${row.user?.name || 'Karyawan'} untuk laporan SP`}
+                              />
+                            </td>
                             <td className="py-3 px-4">
                               <div className="font-semibold text-text-primary">{row.user?.name || '-'}</div>
                               <div className="text-[11px] text-text-muted font-mono">
@@ -1325,6 +1393,18 @@ export const AdminAttendancePage: React.FC = () => {
                 <table className="w-full min-w-[1000px] text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-border-subtle bg-surface-container/50 text-text-muted font-semibold whitespace-nowrap">
+                      <th className="py-3 px-3 text-center w-10">
+                        <input
+                          type="checkbox"
+                          checked={
+                            employeeRecapData.length > 0 &&
+                            employeeRecapData.every((e) => selectedEmployeeIds.includes(e.user_id))
+                          }
+                          onChange={handleToggleSelectAllRecap}
+                          className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                          title="Pilih Semua Karyawan"
+                        />
+                      </th>
                       <th className="py-3 px-3 text-center w-12">No</th>
                       <th className="py-3 px-4">Nama & NIK</th>
                       <th className="py-3 px-3">Unit Sekolah / Lokasi</th>
@@ -1342,20 +1422,31 @@ export const AdminAttendancePage: React.FC = () => {
                   <tbody className="divide-y divide-border-subtle">
                     {employeeRecapLoading ? (
                       <tr>
-                        <td colSpan={12} className="py-10 text-center text-text-muted">
+                        <td colSpan={13} className="py-10 text-center text-text-muted">
                           Menghitung rekapitulasi data kehadiran per karyawan untuk {selectedSp}...
                         </td>
                       </tr>
                     ) : employeeRecapData.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="py-10 text-center text-text-muted">
+                        <td colSpan={13} className="py-10 text-center text-text-muted">
                           Tidak ada data karyawan ditemukan.
                         </td>
                       </tr>
                     ) : (
-                      employeeRecapData.map((emp, idx) => (
-                        <tr key={emp.user_id} className="hover:bg-surface-container/20 transition-colors">
-                          <td className="py-3 px-3 text-center text-text-muted font-mono">{idx + 1}</td>
+                      employeeRecapData.map((emp, idx) => {
+                        const isRowSelected = selectedEmployeeIds.includes(emp.user_id);
+                        return (
+                          <tr key={emp.user_id} className={`hover:bg-surface-container/20 transition-colors ${isRowSelected ? 'bg-primary/5' : ''}`}>
+                            <td className="py-3 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isRowSelected}
+                                onChange={() => handleToggleSelectEmployee(emp.user_id)}
+                                className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                                title={`Pilih ${emp.name} untuk laporan SP`}
+                              />
+                            </td>
+                            <td className="py-3 px-3 text-center text-text-muted font-mono">{idx + 1}</td>
                           <td className="py-3 px-4">
                             <div className="font-semibold text-text-primary">{emp.name}</div>
                             <div className="text-[11px] text-text-muted font-mono">
@@ -1413,7 +1504,8 @@ export const AdminAttendancePage: React.FC = () => {
                             </button>
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -3207,6 +3299,56 @@ export const AdminAttendancePage: React.FC = () => {
                 {deleteLoading ? 'Menghapus...' : 'Ya, Hapus Data'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* POINT 13: FLOATING ACTION BAR SAAT KARYAWAN DIPILIH UNTUK LAPORAN SP */}
+      {selectedEmployeeIds.length > 0 && activeTab === 'recap' && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-surface-panel/95 backdrop-blur-md border border-primary/40 shadow-xl rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-text-primary">
+              {selectedEmployeeIds.length} Karyawan Dipilih
+            </span>
+            <span className="text-[11px] text-text-muted hidden sm:inline">
+              (Laporan {filterType === 'sp' ? selectedSp : selectedDate})
+            </span>
+          </div>
+          <div className="h-4 w-px bg-border-subtle hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleExportAttendance('xlsx')}
+              disabled={exportingAttendanceType !== null}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Export Laporan Excel untuk karyawan yang dipilih"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>
+                {exportingAttendanceType === 'xlsx' ? 'Mengekspor...' : `Export Excel (${selectedEmployeeIds.length})`}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportAttendance('csv')}
+              disabled={exportingAttendanceType !== null}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-text-primary bg-surface-container hover:bg-surface-container/80 border border-border-subtle rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Export Laporan CSV untuk karyawan yang dipilih"
+            >
+              <Download className="w-3.5 h-3.5 text-text-muted" />
+              <span>
+                {exportingAttendanceType === 'csv' ? '...' : `CSV (${selectedEmployeeIds.length})`}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClearSelectedEmployees}
+              className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-container rounded-lg transition-all cursor-pointer ml-1"
+              title="Batalkan Pilihan"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

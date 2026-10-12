@@ -50,6 +50,8 @@ class Payroll extends Model
         'basic_salary',
         'allowance',
         'deduction',
+        'attended_days',
+        'holiday_days',
         'absence_count',
         'absence_rate',
         'absence_deduction',
@@ -77,6 +79,8 @@ class Payroll extends Model
             'basic_salary' => 'decimal:2',
             'allowance' => 'decimal:2',
             'deduction' => 'decimal:2',
+            'attended_days' => 'integer',
+            'holiday_days' => 'integer',
             'custom_deductions' => 'array',
             'absence_count' => 'integer',
             'absence_rate' => 'decimal:2',
@@ -124,12 +128,9 @@ class Payroll extends Model
             // Formula Resmi THP Sesuai Format Baru 2026:
             // (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (Potongan Absensi + Potongan Lainnya + PPh21)
             // PERHATIAN ATURAN KLIEN: BPJS TK BUKAN pengurang, melainkan ditampilkan di bawah sebagai "BPJS yang bisa dicairkan"
-            if (! $payroll->isDirty('take_home_pay') || (float) $payroll->take_home_pay <= 0) {
-                $totalEarnings = (float) $payroll->basic_salary + (float) $payroll->bpjs_kes + (float) $payroll->allowance;
-                $totalDeductions = (float) $payroll->absence_deduction + (float) $payroll->deduction + (float) $payroll->pph21;
-                $thp = $totalEarnings - $totalDeductions;
-                $payroll->take_home_pay = max(0, $thp);
-            }
+            $totalEarnings = (float) $payroll->basic_salary + (float) $payroll->bpjs_kes + (float) $payroll->allowance;
+            $totalDeductions = (float) $payroll->absence_deduction + (float) $payroll->deduction + (float) $payroll->pph21;
+            $payroll->take_home_pay = max(0, $totalEarnings - $totalDeductions);
         });
     }
 

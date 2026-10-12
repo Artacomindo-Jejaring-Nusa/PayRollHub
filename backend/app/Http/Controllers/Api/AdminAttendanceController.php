@@ -203,10 +203,19 @@ class AdminAttendanceController extends Controller
         ];
 
         $search = $request->query('search');
+        $rawUserIds = $request->query('user_ids') ?: $request->input('user_ids');
+        $selectedUserIds = [];
+        if ($rawUserIds) {
+            $selectedUserIds = is_array($rawUserIds) ? $rawUserIds : explode(',', (string) $rawUserIds);
+            $selectedUserIds = array_filter(array_map('intval', $selectedUserIds));
+        }
 
         $usersQuery = User::whereNotIn('role', ['admin', 'super_admin']);
         if ($targetCompany) {
             $usersQuery->where('company', $targetCompany);
+        }
+        if (!empty($selectedUserIds)) {
+            $usersQuery->whereIn('id', $selectedUserIds);
         }
         if ($search) {
             $usersQuery->where(function ($q) use ($search) {
@@ -526,6 +535,12 @@ class AdminAttendanceController extends Controller
         $month = $request->query('month');
         $status = $request->query('status');
         $search = $request->query('search');
+        $rawUserIds = $request->query('user_ids') ?: $request->input('user_ids');
+        $selectedUserIds = [];
+        if ($rawUserIds) {
+            $selectedUserIds = is_array($rawUserIds) ? $rawUserIds : explode(',', (string) $rawUserIds);
+            $selectedUserIds = array_filter(array_map('intval', $selectedUserIds));
+        }
 
         $currentUser = $request->user();
         $targetCompany = $currentUser->isSuperAdmin()
@@ -549,6 +564,9 @@ class AdminAttendanceController extends Controller
             $usersQuery = User::whereNotIn('role', ['admin', 'super_admin']);
             if ($targetCompany) {
                 $usersQuery->where('company', $targetCompany);
+            }
+            if (!empty($selectedUserIds)) {
+                $usersQuery->whereIn('id', $selectedUserIds);
             }
             if ($search) {
                 $usersQuery->where(function ($q) use ($search) {
@@ -620,8 +638,9 @@ class AdminAttendanceController extends Controller
                 ];
             }
 
+            $suffixSelected = !empty($selectedUserIds) ? '_terpilih' : '';
             $filterLabel = $spPeriod ? str_replace(' ', '_', $spPeriod) : "{$range[0]}_{$range[1]}";
-            $filename = "rekap_karyawan_absensi_{$filterLabel}";
+            $filename = "rekap_karyawan_absensi_{$filterLabel}{$suffixSelected}";
 
             if ($format === 'csv') {
                 $headers = [
@@ -802,6 +821,10 @@ class AdminAttendanceController extends Controller
             $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
         }
 
+        if (!empty($selectedUserIds)) {
+            $query->whereIn('user_id', $selectedUserIds);
+        }
+
         if ($spRange) {
             $query->whereBetween('date', $spRange);
             $cleanSp = str_replace(' ', '_', $spPeriod);
@@ -843,7 +866,8 @@ class AdminAttendanceController extends Controller
         }
 
         $attendances = $query->orderBy('date', 'desc')->orderBy('check_in_time', 'desc')->get();
-        $filename = "rekap_absensi_detail_{$filterLabel}";
+        $suffixSelected = !empty($selectedUserIds) ? '_terpilih' : '';
+        $filename = "rekap_absensi_detail_{$filterLabel}{$suffixSelected}";
 
         if ($format === 'csv') {
             $headers = [

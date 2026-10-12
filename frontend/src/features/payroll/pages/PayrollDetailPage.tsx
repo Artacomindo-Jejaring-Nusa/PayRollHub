@@ -276,6 +276,14 @@ export const PayrollDetailPage: React.FC = () => {
                 </span>
               </div>
             )}
+            {(payroll.attended_days !== null && payroll.attended_days !== undefined || payroll.holiday_days !== null && payroll.holiday_days !== undefined) && (
+              <div className="flex items-center text-[13px]">
+                <span className="w-40 text-text-muted">Rekap Kehadiran</span>
+                <span className="text-text-primary font-medium">
+                  : Hadir Masuk: <span className="text-emerald-700 font-semibold">{payroll.attended_days ?? 0} hari</span> • Libur: <span className="text-amber-700 font-semibold">{payroll.holiday_days ?? 0} hari</span>
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -386,6 +394,11 @@ export const PayrollDetailPage: React.FC = () => {
                     <tr>
                       <td className="py-2.5 px-4 text-rose-700 pl-6">
                         Absensi {payroll.absence_count && Number(payroll.absence_count) > 0 ? `(${payroll.absence_count}x)` : ''}
+                        {(payroll.attended_days !== null && payroll.attended_days !== undefined || payroll.holiday_days !== null && payroll.holiday_days !== undefined) && (
+                          <span className="text-[11px] text-text-muted block mt-0.5">
+                            (Presensi Masuk: {payroll.attended_days ?? 0} hari, Libur: {payroll.holiday_days ?? 0} hari)
+                          </span>
+                        )}
                         {payroll.absence_note && (
                           <span className="text-[11px] text-rose-500 font-normal block">
                             Ket: {payroll.absence_note}
@@ -461,7 +474,12 @@ export const PayrollDetailPage: React.FC = () => {
               </div>
 
               <div className="font-display-kpi text-[24px] sm:text-[28px] font-bold text-primary font-mono">
-                {payroll.formatted_take_home_pay}
+                {(() => {
+                  const totalEarnings = Number(payroll.basic_salary || 0) + Number(payroll.bpjs_kes || 0) + Number(payroll.allowance || 0);
+                  const totalDeductions = Number(payroll.absence_deduction || 0) + Number(payroll.deduction || 0) + Number(payroll.pph21 || 0);
+                  const calculatedThp = totalEarnings - totalDeductions;
+                  return formatCurrency(calculatedThp > 0 ? calculatedThp : Number(payroll.take_home_pay || 0));
+                })()}
               </div>
             </div>
 

@@ -32,6 +32,8 @@ export interface PayrollItem {
   pph21?: number;         // PPh 21
 
   // Absence deduction fields
+  attended_days?: number;   // Jumlah absen masuk
+  holiday_days?: number;    // Jumlah Libur
   absence_count: number;    // Multiplier (1x, 2x, 3x...)
   absence_rate: number;     // Tarif per absensi
   absence_deduction: number;// Total Potongan Absensi
@@ -131,6 +133,8 @@ export interface PayrollFormData {
   deduction?: number | string;
   custom_deductions?: Array<{ name: string; amount: number | string }>;
 
+  attended_days?: number | string;
+  holiday_days?: number | string;
   absence_count?: number | string;
   absence_rate?: number | string;
   absence_deduction?: number | string;

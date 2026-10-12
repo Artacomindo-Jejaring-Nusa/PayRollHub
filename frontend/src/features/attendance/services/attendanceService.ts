@@ -292,9 +292,15 @@ export const attendanceService = {
     status?: string;
     search?: string;
     company?: string;
+    user_ids?: number[] | string;
   }): Promise<void> => {
+    const queryParams: any = { ...params };
+    if (Array.isArray(params.user_ids)) {
+      queryParams.user_ids = params.user_ids.join(',');
+    }
+
     const response = await api.get('/admin/attendances/export', {
-      params,
+      params: queryParams,
       responseType: 'blob',
     });
 
@@ -313,8 +319,9 @@ export const attendanceService = {
     const datePart = params.date || cleanSp || new Date().toISOString().slice(0, 10);
     const modePart = params.mode === 'employee_recap' ? 'rekap_karyawan' : 'log_detail';
     const statusPart = params.status && params.status !== 'all' ? `_${params.status}` : '';
+    const selectedPart = params.user_ids && (Array.isArray(params.user_ids) ? params.user_ids.length > 0 : String(params.user_ids).length > 0) ? '_terpilih' : '';
 
-    link.download = `rekap_absensi_${modePart}_${datePart}${statusPart}.${ext}`;
+    link.download = `rekap_absensi_${modePart}_${datePart}${statusPart}${selectedPart}.${ext}`;
     document.body.appendChild(link);
     link.click();
     link.remove();

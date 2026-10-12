@@ -1,0 +1,1559 @@
+[
+    {
+        "id": 29,
+        "identifier": "1110120707970001",
+        "email": "1110120707970001@karyawan.local",
+        "nik": "1110120707970001",
+        "password": "1110120707970001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 31,
+        "identifier": "1407022211050001",
+        "email": "1407022211050001@riamamandiripratama.com",
+        "nik": "1407022211050001",
+        "password": "1407022211050001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 32,
+        "identifier": "1407020206010006",
+        "email": "1407020206010006@riamamandiripratama.com",
+        "nik": "1407020206010006",
+        "password": "1407020206010006",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 33,
+        "identifier": "1407021104880001",
+        "email": "1407021104880001@riamamandiripratama.com",
+        "nik": "1407021104880001",
+        "password": "1407021104880001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 34,
+        "identifier": "1407024305950004",
+        "email": "1407024305950004@riamamandiripratama.com",
+        "nik": "1407024305950004",
+        "password": "1407024305950004",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 35,
+        "identifier": "8206062307990001",
+        "email": "8206062307990001@riamamandiripratama.com",
+        "nik": "8206062307990001",
+        "password": "8206062307990001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 36,
+        "identifier": "9201070204870004",
+        "email": "9201070204870004@riamamandiripratama.com",
+        "nik": "9201070204870004",
+        "password": "9201070204870004",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 37,
+        "identifier": "8271022605980001",
+        "email": "8271022605980001@riamamandiripratama.com",
+        "nik": "8271022605980001",
+        "password": "8271022605980001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 38,
+        "identifier": "6473032503740007",
+        "email": "6473032503740007@riamamandiripratama.com",
+        "nik": "6473032503740007",
+        "password": "6473032503740007",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 39,
+        "identifier": "6473042109770002",
+        "email": "6473042109770002@riamamandiripratama.com",
+        "nik": "6473042109770002",
+        "password": "6473042109770002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 40,
+        "identifier": "6473031701790005",
+        "email": "6473031701790005@riamamandiripratama.com",
+        "nik": "6473031701790005",
+        "password": "6473031701790005",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 41,
+        "identifier": "6473042506820002",
+        "email": "6473042506820002@riamamandiripratama.com",
+        "nik": "6473042506820002",
+        "password": "6473042506820002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 42,
+        "identifier": "6408120810780002",
+        "email": "6408120810780002@riamamandiripratama.com",
+        "nik": "6408120810780002",
+        "password": "6408120810780002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 43,
+        "identifier": "5201151709960001",
+        "email": "5201151709960001@riamamandiripratama.com",
+        "nik": "5201151709960001",
+        "password": "5201151709960001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 44,
+        "identifier": "5204090612990001",
+        "email": "5204090612990001@riamamandiripratama.com",
+        "nik": "5204090612990001",
+        "password": "5204090612990001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 45,
+        "identifier": "2171121205900002",
+        "email": "2171121205900002@riamamandiripratama.com",
+        "nik": "2171121205900002",
+        "password": "2171121205900002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 46,
+        "identifier": "6472042806030004",
+        "email": "6472042806030004@riamamandiripratama.com",
+        "nik": "6472042806030004",
+        "password": "6472042806030004",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 47,
+        "identifier": "6472031807870002",
+        "email": "6472031807870002@riamamandiripratama.com",
+        "nik": "6472031807870002",
+        "password": "6472031807870002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 48,
+        "identifier": "6203012811880003",
+        "email": "6203012811880003@riamamandiripratama.com",
+        "nik": "6203012811880003",
+        "password": "6203012811880003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 49,
+        "identifier": "6202094712050002",
+        "email": "6202094712050002@riamamandiripratama.com",
+        "nik": "6202094712050002",
+        "password": "6202094712050002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 50,
+        "identifier": "6202061103960002",
+        "email": "6202061103960002@riamamandiripratama.com",
+        "nik": "6202061103960002",
+        "password": "6202061103960002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 51,
+        "identifier": "6202060212000003",
+        "email": "6202060212000003@riamamandiripratama.com",
+        "nik": "6202060212000003",
+        "password": "6202060212000003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 52,
+        "identifier": "3309086004930001",
+        "email": "3309086004930001@riamamandiripratama.com",
+        "nik": "3309086004930001",
+        "password": "3309086004930001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 53,
+        "identifier": "6211060202990002",
+        "email": "6211060202990002@riamamandiripratama.com",
+        "nik": "6211060202990002",
+        "password": "6211060202990002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 54,
+        "identifier": "6210052209970001",
+        "email": "6210052209970001@riamamandiripratama.com",
+        "nik": "6210052209970001",
+        "password": "6210052209970001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 55,
+        "identifier": "6210102708010002",
+        "email": "6210102708010002@riamamandiripratama.com",
+        "nik": "6210102708010002",
+        "password": "6210102708010002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 56,
+        "identifier": "6203011207050002",
+        "email": "6203011207050002@riamamandiripratama.com",
+        "nik": "6203011207050002",
+        "password": "6203011207050002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 57,
+        "identifier": "6210020508800001",
+        "email": "6210020508800001@riamamandiripratama.com",
+        "nik": "6210020508800001",
+        "password": "6210020508800001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 58,
+        "identifier": "6210022501930003",
+        "email": "6210022501930003@riamamandiripratama.com",
+        "nik": "6210022501930003",
+        "password": "6210022501930003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 59,
+        "identifier": "6104170703050001",
+        "email": "6104170703050001@riamamandiripratama.com",
+        "nik": "6104170703050001",
+        "password": "6104170703050001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 60,
+        "identifier": "6104171503000005",
+        "email": "6104171503000005@riamamandiripratama.com",
+        "nik": "6104171503000005",
+        "password": "6104171503000005",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 61,
+        "identifier": "6104171209910003",
+        "email": "6104171209910003@riamamandiripratama.com",
+        "nik": "6104171209910003",
+        "password": "6104171209910003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 62,
+        "identifier": "6104171712050003",
+        "email": "6104171712050003@riamamandiripratama.com",
+        "nik": "6104171712050003",
+        "password": "6104171712050003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 63,
+        "identifier": "7404251705930001",
+        "email": "7404251705930001@riamamandiripratama.com",
+        "nik": "7404251705930001",
+        "password": "7404251705930001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 64,
+        "identifier": "7404050107970033",
+        "email": "7404050107970033@riamamandiripratama.com",
+        "nik": "7404050107970033",
+        "password": "7404050107970033",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 65,
+        "identifier": "7472010301040001",
+        "email": "7472010301040001@riamamandiripratama.com",
+        "nik": "7472010301040001",
+        "password": "7472010301040001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 66,
+        "identifier": "7404052404030001",
+        "email": "7404052404030001@riamamandiripratama.com",
+        "nik": "7404052404030001",
+        "password": "7404052404030001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 67,
+        "identifier": "7404050602950001",
+        "email": "7404050602950001@riamamandiripratama.com",
+        "nik": "7404050602950001",
+        "password": "7404050602950001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 68,
+        "identifier": "7404050205970003",
+        "email": "7404050205970003@riamamandiripratama.com",
+        "nik": "7404050205970003",
+        "password": "7404050205970003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 69,
+        "identifier": "9171010703800003",
+        "email": "9171010703800003@riamamandiripratama.com",
+        "nik": "9171010703800003",
+        "password": "9171010703800003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 70,
+        "identifier": "9171021608680004",
+        "email": "9171021608680004@riamamandiripratama.com",
+        "nik": "9171021608680004",
+        "password": "9171021608680004",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 71,
+        "identifier": "9171021406890003",
+        "email": "9171021406890003@riamamandiripratama.com",
+        "nik": "9171021406890003",
+        "password": "9171021406890003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 72,
+        "identifier": "9171011005890007",
+        "email": "9171011005890007@riamamandiripratama.com",
+        "nik": "9171011005890007",
+        "password": "9171011005890007",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 73,
+        "identifier": "9171022404870001",
+        "email": "9171022404870001@riamamandiripratama.com",
+        "nik": "9171022404870001",
+        "password": "9171022404870001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 74,
+        "identifier": "9171010902990006",
+        "email": "9171010902990006@riamamandiripratama.com",
+        "nik": "9171010902990006",
+        "password": "9171010902990006",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 75,
+        "identifier": "7315021210970001",
+        "email": "7315021210970001@riamamandiripratama.com",
+        "nik": "7315021210970001",
+        "password": "7315021210970001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 76,
+        "identifier": "7602130706040002",
+        "email": "7602130706040002@riamamandiripratama.com",
+        "nik": "7602130706040002",
+        "password": "7602130706040002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 77,
+        "identifier": "2103151501940001",
+        "email": "2103151501940001@riamamandiripratama.com",
+        "nik": "2103151501940001",
+        "password": "2103151501940001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 78,
+        "identifier": "2103161106020001",
+        "email": "2103161106020001@riamamandiripratama.com",
+        "nik": "2103161106020001",
+        "password": "2103161106020001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 79,
+        "identifier": "2103070712001002",
+        "email": "2103070712001002@riamamandiripratama.com",
+        "nik": "2103070712001002",
+        "password": "2103070712001002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 80,
+        "identifier": "7322032004830001",
+        "email": "7322032004830001@riamamandiripratama.com",
+        "nik": "7322032004830001",
+        "password": "7322032004830001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 81,
+        "identifier": "7322032712030001",
+        "email": "7322032712030001@riamamandiripratama.com",
+        "nik": "7322032712030001",
+        "password": "7322032712030001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 82,
+        "identifier": "7322034206720001",
+        "email": "7322034206720001@riamamandiripratama.com",
+        "nik": "7322034206720001",
+        "password": "7322034206720001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 83,
+        "identifier": "7310080206030004",
+        "email": "7310080206030004@riamamandiripratama.com",
+        "nik": "7310080206030004",
+        "password": "7310080206030004",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 84,
+        "identifier": "7310076002070002",
+        "email": "7310076002070002@riamamandiripratama.com",
+        "nik": "7310076002070002",
+        "password": "7310076002070002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 85,
+        "identifier": "7308130408890001",
+        "email": "7308130408890001@riamamandiripratama.com",
+        "nik": "7308130408890001",
+        "password": "7308130408890001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 86,
+        "identifier": "7312012503020002",
+        "email": "7312012503020002@riamamandiripratama.com",
+        "nik": "7312012503020002",
+        "password": "7312012503020002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 87,
+        "identifier": "7312062606850001",
+        "email": "7312062606850001@riamamandiripratama.com",
+        "nik": "7312062606850001",
+        "password": "7312062606850001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 88,
+        "identifier": "7312061606000004",
+        "email": "7312061606000004@riamamandiripratama.com",
+        "nik": "7312061606000004",
+        "password": "7312061606000004",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 89,
+        "identifier": "7312010107981002",
+        "email": "7312010107981002@riamamandiripratama.com",
+        "nik": "7312010107981002",
+        "password": "7312010107981002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 90,
+        "identifier": "7308130506040003",
+        "email": "7308130506040003@riamamandiripratama.com",
+        "nik": "7308130506040003",
+        "password": "7308130506040003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 91,
+        "identifier": "1611041011850003",
+        "email": "1611041011850003@riamamandiripratama.com",
+        "nik": "1611041011850003",
+        "password": "1611041011850003",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 92,
+        "identifier": "1611041802770002",
+        "email": "1611041802770002@riamamandiripratama.com",
+        "nik": "1611041802770002",
+        "password": "1611041802770002",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 93,
+        "identifier": "1671122807040001",
+        "email": "1671122807040001@riamamandiripratama.com",
+        "nik": "1671122807040001",
+        "password": "1671122807040001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 94,
+        "identifier": "3210050702030001",
+        "email": "3210050702030001@riamamandiripratama.com",
+        "nik": "3210050702030001",
+        "password": "3210050702030001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 95,
+        "identifier": "3210060310830001",
+        "email": "3210060310830001@riamamandiripratama.com",
+        "nik": "3210060310830001",
+        "password": "3210060310830001",
+        "company": "rimamandiri",
+        "attendance_location_id": null
+    },
+    {
+        "id": 96,
+        "identifier": "3271021406930012",
+        "email": "3271021406930012@rimbunbuanasejahtera.com",
+        "nik": "3271021406930012",
+        "password": "3271021406930012",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 97,
+        "identifier": "3172010802900011",
+        "email": "3172010802900011@rimbunbuanasejahtera.com",
+        "nik": "3172010802900011",
+        "password": "3172010802900011",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 98,
+        "identifier": "7371100511870010",
+        "email": "7371100511870010@rimbunbuanasejahtera.com",
+        "nik": "7371100511870010",
+        "password": "7371100511870010",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 99,
+        "identifier": "6471091408930009",
+        "email": "6471091408930009@rimbunbuanasejahtera.com",
+        "nik": "6471091408930009",
+        "password": "6471091408930009",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 100,
+        "identifier": "1271082905910008",
+        "email": "1271082905910008@rimbunbuanasejahtera.com",
+        "nik": "1271082905910008",
+        "password": "1271082905910008",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 101,
+        "identifier": "5171071803880007",
+        "email": "5171071803880007@rimbunbuanasejahtera.com",
+        "nik": "5171071803880007",
+        "password": "5171071803880007",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 102,
+        "identifier": "3471060407940006",
+        "email": "3471060407940006@rimbunbuanasejahtera.com",
+        "nik": "3471060407940006",
+        "password": "3471060407940006",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 103,
+        "identifier": "3671052309900005",
+        "email": "3671052309900005@rimbunbuanasejahtera.com",
+        "nik": "3671052309900005",
+        "password": "3671052309900005",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 104,
+        "identifier": "3578041112950004",
+        "email": "3578041112950004@rimbunbuanasejahtera.com",
+        "nik": "3578041112950004",
+        "password": "3578041112950004",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 105,
+        "identifier": "3374031901850002",
+        "email": "3374031901850002@rimbunbuanasejahtera.com",
+        "nik": "3374031901850002",
+        "password": "3374031901850002",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 106,
+        "identifier": "3273022204920003",
+        "email": "3273022204920003@rimbunbuanasejahtera.com",
+        "nik": "3273022204920003",
+        "password": "3273022204920003",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 107,
+        "identifier": "3171011508890001",
+        "email": "3171011508890001@rimbunbuanasejahtera.com",
+        "nik": "3171011508890001",
+        "password": "3171011508890001",
+        "company": "rbs",
+        "attendance_location_id": null
+    },
+    {
+        "id": 108,
+        "identifier": "3212122005910002",
+        "email": "3212122005910002@rimbunbuanasejahtera.com",
+        "nik": "3212122005910002",
+        "password": "3212122005910002",
+        "company": "rbs",
+        "attendance_location_id": 39
+    },
+    {
+        "id": 109,
+        "identifier": "3209295103970002",
+        "email": "3209295103970002@rimbunbuanasejahtera.com",
+        "nik": "3209295103970002",
+        "password": "3209295103970002",
+        "company": "rbs",
+        "attendance_location_id": 39
+    },
+    {
+        "id": 110,
+        "identifier": "3212264209990001",
+        "email": "3212264209990001@rimbunbuanasejahtera.com",
+        "nik": "3212264209990001",
+        "password": "3212264209990001",
+        "company": "rbs",
+        "attendance_location_id": 39
+    },
+    {
+        "id": 111,
+        "identifier": "3212214805030003",
+        "email": "3212214805030003@rimbunbuanasejahtera.com",
+        "nik": "3212214805030003",
+        "password": "3212214805030003",
+        "company": "rbs",
+        "attendance_location_id": 39
+    },
+    {
+        "id": 112,
+        "identifier": "3374150708610002",
+        "email": "3374150708610002@rimbunbuanasejahtera.com",
+        "nik": "3374150708610002",
+        "password": "3374150708610002",
+        "company": "rbs",
+        "attendance_location_id": 38
+    },
+    {
+        "id": 113,
+        "identifier": "3315150405990001",
+        "email": "3315150405990001@rimbunbuanasejahtera.com",
+        "nik": "3315150405990001",
+        "password": "3315150405990001",
+        "company": "rbs",
+        "attendance_location_id": 38
+    },
+    {
+        "id": 114,
+        "identifier": "3374144907030002",
+        "email": "3374144907030002@rimbunbuanasejahtera.com",
+        "nik": "3374144907030002",
+        "password": "3374144907030002",
+        "company": "rbs",
+        "attendance_location_id": 38
+    },
+    {
+        "id": 115,
+        "identifier": "3320022103000002",
+        "email": "3320022103000002@rimbunbuanasejahtera.com",
+        "nik": "3320022103000002",
+        "password": "3320022103000002",
+        "company": "rbs",
+        "attendance_location_id": 38
+    },
+    {
+        "id": 116,
+        "identifier": "8272025101950001",
+        "email": "8272025101950001@rimbunbuanasejahtera.com",
+        "nik": "8272025101950001",
+        "password": "8272025101950001",
+        "company": "rbs",
+        "attendance_location_id": 37
+    },
+    {
+        "id": 117,
+        "identifier": "8201051909980003",
+        "email": "8201051909980003@rimbunbuanasejahtera.com",
+        "nik": "8201051909980003",
+        "password": "8201051909980003",
+        "company": "rbs",
+        "attendance_location_id": 37
+    },
+    {
+        "id": 118,
+        "identifier": "8201050504970000",
+        "email": "8201050504970000@rimbunbuanasejahtera.com",
+        "nik": "8201050504970000",
+        "password": "8201050504970000",
+        "company": "rbs",
+        "attendance_location_id": 37
+    },
+    {
+        "id": 119,
+        "identifier": "8271060107890000",
+        "email": "8271060107890000@rimbunbuanasejahtera.com",
+        "nik": "8271060107890000",
+        "password": "8271060107890000",
+        "company": "rbs",
+        "attendance_location_id": 37
+    },
+    {
+        "id": 120,
+        "identifier": "8201054906990003",
+        "email": "8201054906990003@rimbunbuanasejahtera.com",
+        "nik": "8201054906990003",
+        "password": "8201054906990003",
+        "company": "rbs",
+        "attendance_location_id": 37
+    },
+    {
+        "id": 121,
+        "identifier": "5107083112890122",
+        "email": "5107083112890122@rimbunbuanasejahtera.com",
+        "nik": "5107083112890122",
+        "password": "5107083112890122",
+        "company": "rbs",
+        "attendance_location_id": 36
+    },
+    {
+        "id": 122,
+        "identifier": "6172055105970002",
+        "email": "6172055105970002@rimbunbuanasejahtera.com",
+        "nik": "6172055105970002",
+        "password": "6172055105970002",
+        "company": "rbs",
+        "attendance_location_id": 35
+    },
+    {
+        "id": 123,
+        "identifier": "6172017110980003",
+        "email": "6172017110980003@rimbunbuanasejahtera.com",
+        "nik": "6172017110980003",
+        "password": "6172017110980003",
+        "company": "rbs",
+        "attendance_location_id": 35
+    },
+    {
+        "id": 124,
+        "identifier": "6172035711010002",
+        "email": "6172035711010002@rimbunbuanasejahtera.com",
+        "nik": "6172035711010002",
+        "password": "6172035711010002",
+        "company": "rbs",
+        "attendance_location_id": 35
+    },
+    {
+        "id": 125,
+        "identifier": "6103124808980001",
+        "email": "6103124808980001@rimbunbuanasejahtera.com",
+        "nik": "6103124808980001",
+        "password": "6103124808980001",
+        "company": "rbs",
+        "attendance_location_id": 35
+    },
+    {
+        "id": 126,
+        "identifier": "6172020803000001",
+        "email": "6172020803000001@rimbunbuanasejahtera.com",
+        "nik": "6172020803000001",
+        "password": "6172020803000001",
+        "company": "rbs",
+        "attendance_location_id": 35
+    },
+    {
+        "id": 127,
+        "identifier": "6172025310030002",
+        "email": "6172025310030002@rimbunbuanasejahtera.com",
+        "nik": "6172025310030002",
+        "password": "6172025310030002",
+        "company": "rbs",
+        "attendance_location_id": 35
+    },
+    {
+        "id": 128,
+        "identifier": "6171046103890006",
+        "email": "6171046103890006@rimbunbuanasejahtera.com",
+        "nik": "6171046103890006",
+        "password": "6171046103890006",
+        "company": "rbs",
+        "attendance_location_id": 34
+    },
+    {
+        "id": 129,
+        "identifier": "6310091005950002",
+        "email": "6310091005950002@rimbunbuanasejahtera.com",
+        "nik": "6310091005950002",
+        "password": "6310091005950002",
+        "company": "rbs",
+        "attendance_location_id": 33
+    },
+    {
+        "id": 130,
+        "identifier": "7305036308920001",
+        "email": "7305036308920001@rimbunbuanasejahtera.com",
+        "nik": "7305036308920001",
+        "password": "7305036308920001",
+        "company": "rbs",
+        "attendance_location_id": 32
+    },
+    {
+        "id": 131,
+        "identifier": "7305036804960002",
+        "email": "7305036804960002@rimbunbuanasejahtera.com",
+        "nik": "7305036804960002",
+        "password": "7305036804960002",
+        "company": "rbs",
+        "attendance_location_id": 32
+    },
+    {
+        "id": 132,
+        "identifier": "3311040402870003",
+        "email": "3311040402870003@rimbunbuanasejahtera.com",
+        "nik": "3311040402870003",
+        "password": "3311040402870003",
+        "company": "rbs",
+        "attendance_location_id": 31
+    },
+    {
+        "id": 133,
+        "identifier": "3311061109950004",
+        "email": "3311061109950004@rimbunbuanasejahtera.com",
+        "nik": "3311061109950004",
+        "password": "3311061109950004",
+        "company": "rbs",
+        "attendance_location_id": 31
+    },
+    {
+        "id": 134,
+        "identifier": "3311092809890001",
+        "email": "3311092809890001@rimbunbuanasejahtera.com",
+        "nik": "3311092809890001",
+        "password": "3311092809890001",
+        "company": "rbs",
+        "attendance_location_id": 31
+    },
+    {
+        "id": 135,
+        "identifier": "6474015707950008",
+        "email": "6474015707950008@rimbunbuanasejahtera.com",
+        "nik": "6474015707950008",
+        "password": "6474015707950008",
+        "company": "rbs",
+        "attendance_location_id": 30
+    },
+    {
+        "id": 136,
+        "identifier": "8106021907970001",
+        "email": "8106021907970001@rimbunbuanasejahtera.com",
+        "nik": "8106021907970001",
+        "password": "8106021907970001",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 137,
+        "identifier": "8101014704010003",
+        "email": "8101014704010003@rimbunbuanasejahtera.com",
+        "nik": "8101014704010003",
+        "password": "8101014704010003",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 138,
+        "identifier": "8101171212970001",
+        "email": "8101171212970001@rimbunbuanasejahtera.com",
+        "nik": "8101171212970001",
+        "password": "8101171212970001",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 139,
+        "identifier": "8101172605900002",
+        "email": "8101172605900002@rimbunbuanasejahtera.com",
+        "nik": "8101172605900002",
+        "password": "8101172605900002",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 140,
+        "identifier": "8101174205020004",
+        "email": "8101174205020004@rimbunbuanasejahtera.com",
+        "nik": "8101174205020004",
+        "password": "8101174205020004",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 141,
+        "identifier": "8101115211010003",
+        "email": "8101115211010003@rimbunbuanasejahtera.com",
+        "nik": "8101115211010003",
+        "password": "8101115211010003",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 142,
+        "identifier": "8171024306880003",
+        "email": "8171024306880003@rimbunbuanasejahtera.com",
+        "nik": "8171024306880003",
+        "password": "8171024306880003",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 143,
+        "identifier": "8101174605980003",
+        "email": "8101174605980003@rimbunbuanasejahtera.com",
+        "nik": "8101174605980003",
+        "password": "8101174605980003",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 144,
+        "identifier": "8101171101020002",
+        "email": "8101171101020002@rimbunbuanasejahtera.com",
+        "nik": "8101171101020002",
+        "password": "8101171101020002",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 145,
+        "identifier": "8101012804000001",
+        "email": "8101012804000001@rimbunbuanasejahtera.com",
+        "nik": "8101012804000001",
+        "password": "8101012804000001",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 146,
+        "identifier": "8101112602900001",
+        "email": "8101112602900001@rimbunbuanasejahtera.com",
+        "nik": "8101112602900001",
+        "password": "8101112602900001",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 147,
+        "identifier": "8101120306030002",
+        "email": "8101120306030002@rimbunbuanasejahtera.com",
+        "nik": "8101120306030002",
+        "password": "8101120306030002",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 148,
+        "identifier": "8101110806900002",
+        "email": "8101110806900002@rimbunbuanasejahtera.com",
+        "nik": "8101110806900002",
+        "password": "8101110806900002",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 149,
+        "identifier": "8101014904770001",
+        "email": "8101014904770001@rimbunbuanasejahtera.com",
+        "nik": "8101014904770001",
+        "password": "8101014904770001",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 150,
+        "identifier": "8101022806980002",
+        "email": "8101022806980002@rimbunbuanasejahtera.com",
+        "nik": "8101022806980002",
+        "password": "8101022806980002",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 151,
+        "identifier": "8101176110870003",
+        "email": "8101176110870003@rimbunbuanasejahtera.com",
+        "nik": "8101176110870003",
+        "password": "8101176110870003",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 152,
+        "identifier": "8101011305810003",
+        "email": "8101011305810003@rimbunbuanasejahtera.com",
+        "nik": "8101011305810003",
+        "password": "8101011305810003",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 153,
+        "identifier": "8101061402850001",
+        "email": "8101061402850001@rimbunbuanasejahtera.com",
+        "nik": "8101061402850001",
+        "password": "8101061402850001",
+        "company": "rbs",
+        "attendance_location_id": 29
+    },
+    {
+        "id": 154,
+        "identifier": "3519070701030002",
+        "email": "3519070701030002@rimbunbuanasejahtera.com",
+        "nik": "3519070701030002",
+        "password": "3519070701030002",
+        "company": "rbs",
+        "attendance_location_id": 28
+    },
+    {
+        "id": 155,
+        "identifier": "5208037112740179",
+        "email": "5208037112740179@rimbunbuanasejahtera.com",
+        "nik": "5208037112740179",
+        "password": "5208037112740179",
+        "company": "rbs",
+        "attendance_location_id": 27
+    },
+    {
+        "id": 156,
+        "identifier": "5208012504080002",
+        "email": "5208012504080002@rimbunbuanasejahtera.com",
+        "nik": "5208012504080002",
+        "password": "5208012504080002",
+        "company": "rbs",
+        "attendance_location_id": 27
+    },
+    {
+        "id": 157,
+        "identifier": "5208020711900001",
+        "email": "5208020711900001@rimbunbuanasejahtera.com",
+        "nik": "5208020711900001",
+        "password": "5208020711900001",
+        "company": "rbs",
+        "attendance_location_id": 27
+    },
+    {
+        "id": 158,
+        "identifier": "5201090107970079",
+        "email": "5201090107970079@rimbunbuanasejahtera.com",
+        "nik": "5201090107970079",
+        "password": "5201090107970079",
+        "company": "rbs",
+        "attendance_location_id": 27
+    },
+    {
+        "id": 159,
+        "identifier": "5208021508020001",
+        "email": "5208021508020001@rimbunbuanasejahtera.com",
+        "nik": "5208021508020001",
+        "password": "5208021508020001",
+        "company": "rbs",
+        "attendance_location_id": 27
+    },
+    {
+        "id": 160,
+        "identifier": "5371042311960002",
+        "email": "5371042311960002@rimbunbuanasejahtera.com",
+        "nik": "5371042311960002",
+        "password": "5371042311960002",
+        "company": "rbs",
+        "attendance_location_id": 26
+    },
+    {
+        "id": 161,
+        "identifier": "5305063011840001",
+        "email": "5305063011840001@rimbunbuanasejahtera.com",
+        "nik": "5305063011840001",
+        "password": "5305063011840001",
+        "company": "rbs",
+        "attendance_location_id": 26
+    },
+    {
+        "id": 162,
+        "identifier": "6202050706010002",
+        "email": "6202050706010002@rimbunbuanasejahtera.com",
+        "nik": "6202050706010002",
+        "password": "6202050706010002",
+        "company": "rbs",
+        "attendance_location_id": 25
+    },
+    {
+        "id": 163,
+        "identifier": "6202066905020002",
+        "email": "6202066905020002@rimbunbuanasejahtera.com",
+        "nik": "6202066905020002",
+        "password": "6202066905020002",
+        "company": "rbs",
+        "attendance_location_id": 25
+    },
+    {
+        "id": 164,
+        "identifier": "6206100508980002",
+        "email": "6206100508980002@rimbunbuanasejahtera.com",
+        "nik": "6206100508980002",
+        "password": "6206100508980002",
+        "company": "rbs",
+        "attendance_location_id": 25
+    },
+    {
+        "id": 165,
+        "identifier": "udh chat",
+        "email": "udh chat@rimbunbuanasejahtera.com",
+        "nik": "udh chat",
+        "password": "udh chat",
+        "company": "rbs",
+        "attendance_location_id": 24
+    },
+    {
+        "id": 166,
+        "identifier": "3320094109010002",
+        "email": "3320094109010002@rimbunbuanasejahtera.com",
+        "nik": "3320094109010002",
+        "password": "3320094109010002",
+        "company": "rbs",
+        "attendance_location_id": 23
+    },
+    {
+        "id": 167,
+        "identifier": "3212116010050002",
+        "email": "3212116010050002@rimbunbuanasejahtera.com",
+        "nik": "3212116010050002",
+        "password": "3212116010050002",
+        "company": "rbs",
+        "attendance_location_id": 22
+    },
+    {
+        "id": 168,
+        "identifier": "3212154910810004",
+        "email": "3212154910810004@rimbunbuanasejahtera.com",
+        "nik": "3212154910810004",
+        "password": "3212154910810004",
+        "company": "rbs",
+        "attendance_location_id": 22
+    },
+    {
+        "id": 169,
+        "identifier": "8203204710030000",
+        "email": "8203204710030000@rimbunbuanasejahtera.com",
+        "nik": "8203204710030000",
+        "password": "8203204710030000",
+        "company": "rbs",
+        "attendance_location_id": 21
+    },
+    {
+        "id": 170,
+        "identifier": "8203150102960000",
+        "email": "8203150102960000@rimbunbuanasejahtera.com",
+        "nik": "8203150102960000",
+        "password": "8203150102960000",
+        "company": "rbs",
+        "attendance_location_id": 21
+    },
+    {
+        "id": 171,
+        "identifier": "8203055411970000",
+        "email": "8203055411970000@rimbunbuanasejahtera.com",
+        "nik": "8203055411970000",
+        "password": "8203055411970000",
+        "company": "rbs",
+        "attendance_location_id": 21
+    },
+    {
+        "id": 172,
+        "identifier": "8203140208910000",
+        "email": "8203140208910000@rimbunbuanasejahtera.com",
+        "nik": "8203140208910000",
+        "password": "8203140208910000",
+        "company": "rbs",
+        "attendance_location_id": 21
+    },
+    {
+        "id": 173,
+        "identifier": "8201096412870000",
+        "email": "8201096412870000@rimbunbuanasejahtera.com",
+        "nik": "8201096412870000",
+        "password": "8201096412870000",
+        "company": "rbs",
+        "attendance_location_id": 21
+    },
+    {
+        "id": 174,
+        "identifier": "8203200405950000",
+        "email": "8203200405950000@rimbunbuanasejahtera.com",
+        "nik": "8203200405950000",
+        "password": "8203200405950000",
+        "company": "rbs",
+        "attendance_location_id": 21
+    },
+    {
+        "id": 175,
+        "identifier": "8203071601821000",
+        "email": "8203071601821000@rimbunbuanasejahtera.com",
+        "nik": "8203071601821000",
+        "password": "8203071601821000",
+        "company": "rbs",
+        "attendance_location_id": 21
+    },
+    {
+        "id": 176,
+        "identifier": "6210024202990002",
+        "email": "6210024202990002@rimbunbuanasejahtera.com",
+        "nik": "6210024202990002",
+        "password": "6210024202990002",
+        "company": "rbs",
+        "attendance_location_id": 20
+    },
+    {
+        "id": 177,
+        "identifier": "6210034604940002",
+        "email": "6210034604940002@rimbunbuanasejahtera.com",
+        "nik": "6210034604940002",
+        "password": "6210034604940002",
+        "company": "rbs",
+        "attendance_location_id": 20
+    },
+    {
+        "id": 178,
+        "identifier": "6210045002860002",
+        "email": "6210045002860002@rimbunbuanasejahtera.com",
+        "nik": "6210045002860002",
+        "password": "6210045002860002",
+        "company": "rbs",
+        "attendance_location_id": 20
+    },
+    {
+        "id": 179,
+        "identifier": "3525095412900002",
+        "email": "3525095412900002@rimbunbuanasejahtera.com",
+        "nik": "3525095412900002",
+        "password": "3525095412900002",
+        "company": "rbs",
+        "attendance_location_id": 19
+    },
+    {
+        "id": 180,
+        "identifier": "3578134804760002",
+        "email": "3578134804760002@rimbunbuanasejahtera.com",
+        "nik": "3578134804760002",
+        "password": "3578134804760002",
+        "company": "rbs",
+        "attendance_location_id": 19
+    },
+    {
+        "id": 181,
+        "identifier": "3525126011860003",
+        "email": "3525126011860003@rimbunbuanasejahtera.com",
+        "nik": "3525126011860003",
+        "password": "3525126011860003",
+        "company": "rbs",
+        "attendance_location_id": 19
+    },
+    {
+        "id": 182,
+        "identifier": "3525090401980001",
+        "email": "3525090401980001@rimbunbuanasejahtera.com",
+        "nik": "3525090401980001",
+        "password": "3525090401980001",
+        "company": "rbs",
+        "attendance_location_id": 19
+    },
+    {
+        "id": 183,
+        "identifier": "1611045512960002",
+        "email": "1611045512960002@rimbunbuanasejahtera.com",
+        "nik": "1611045512960002",
+        "password": "1611045512960002",
+        "company": "rbs",
+        "attendance_location_id": 18
+    },
+    {
+        "id": 184,
+        "identifier": "1611062805060003",
+        "email": "1611062805060003@rimbunbuanasejahtera.com",
+        "nik": "1611062805060003",
+        "password": "1611062805060003",
+        "company": "rbs",
+        "attendance_location_id": 18
+    },
+    {
+        "id": 185,
+        "identifier": "1611040806930004",
+        "email": "1611040806930004@rimbunbuanasejahtera.com",
+        "nik": "1611040806930004",
+        "password": "1611040806930004",
+        "company": "rbs",
+        "attendance_location_id": 18
+    },
+    {
+        "id": 186,
+        "identifier": "3274030206000014",
+        "email": "3274030206000014@rimbunbuanasejahtera.com",
+        "nik": "3274030206000014",
+        "password": "3274030206000014",
+        "company": "rbs",
+        "attendance_location_id": 17
+    },
+    {
+        "id": 187,
+        "identifier": "3301144511930003",
+        "email": "3301144511930003@rimbunbuanasejahtera.com",
+        "nik": "3301144511930003",
+        "password": "3301144511930003",
+        "company": "rbs",
+        "attendance_location_id": 16
+    },
+    {
+        "id": 188,
+        "identifier": "3329155512070008",
+        "email": "3329155512070008@rimbunbuanasejahtera.com",
+        "nik": "3329155512070008",
+        "password": "3329155512070008",
+        "company": "rbs",
+        "attendance_location_id": 15
+    },
+    {
+        "id": 189,
+        "identifier": "1111094402780001",
+        "email": "1111094402780001@rimbunbuanasejahtera.com",
+        "nik": "1111094402780001",
+        "password": "1111094402780001",
+        "company": "rbs",
+        "attendance_location_id": 13
+    },
+    {
+        "id": 190,
+        "identifier": "6304020412940001",
+        "email": "6304020412940001@rimbunbuanasejahtera.com",
+        "nik": "6304020412940001",
+        "password": "6304020412940001",
+        "company": "rbs",
+        "attendance_location_id": 12
+    },
+    {
+        "id": 191,
+        "identifier": "3302104203990002",
+        "email": "3302104203990002@rimbunbuanasejahtera.com",
+        "nik": "3302104203990002",
+        "password": "3302104203990002",
+        "company": "rbs",
+        "attendance_location_id": 11
+    },
+    {
+        "id": 192,
+        "identifier": "3302112809990001",
+        "email": "3302112809990001@rimbunbuanasejahtera.com",
+        "nik": "3302112809990001",
+        "password": "3302112809990001",
+        "company": "rbs",
+        "attendance_location_id": 11
+    },
+    {
+        "id": 193,
+        "identifier": "3302255008990001",
+        "email": "3302255008990001@rimbunbuanasejahtera.com",
+        "nik": "3302255008990001",
+        "password": "3302255008990001",
+        "company": "rbs",
+        "attendance_location_id": 11
+    },
+    {
+        "id": 194,
+        "identifier": "3303063110020001",
+        "email": "3303063110020001@rimbunbuanasejahtera.com",
+        "nik": "3303063110020001",
+        "password": "3303063110020001",
+        "company": "rbs",
+        "attendance_location_id": 11
+    },
+    {
+        "id": 195,
+        "identifier": "3302200306870001",
+        "email": "3302200306870001@rimbunbuanasejahtera.com",
+        "nik": "3302200306870001",
+        "password": "3302200306870001",
+        "company": "rbs",
+        "attendance_location_id": 11
+    },
+    {
+        "id": 196,
+        "identifier": "3210076302840061",
+        "email": "3210076302840061@rimbunbuanasejahtera.com",
+        "nik": "3210076302840061",
+        "password": "3210076302840061",
+        "company": "rbs",
+        "attendance_location_id": 10
+    },
+    {
+        "id": 197,
+        "identifier": "3201196912020001",
+        "email": "3201196912020001@rimbunbuanasejahtera.com",
+        "nik": "3201196912020001",
+        "password": "3201196912020001",
+        "company": "rbs",
+        "attendance_location_id": 8
+    },
+    {
+        "id": 198,
+        "identifier": "1207245102930001",
+        "email": "1207245102930001@rimbunbuanasejahtera.com",
+        "nik": "1207245102930001",
+        "password": "1207245102930001",
+        "company": "rbs",
+        "attendance_location_id": 7
+    },
+    {
+        "id": 199,
+        "identifier": "1771021208770010",
+        "email": "1771021208770010@rimbunbuanasejahtera.com",
+        "nik": "1771021208770010",
+        "password": "1771021208770010",
+        "company": "rbs",
+        "attendance_location_id": 5
+    },
+    {
+        "id": 200,
+        "identifier": "1213131111910001",
+        "email": "1213131111910001@rimbunbuanasejahtera.com",
+        "nik": "1213131111910001",
+        "password": "1213131111910001",
+        "company": "rbs",
+        "attendance_location_id": 3
+    },
+    {
+        "id": 202,
+        "identifier": "febri-hidayat@karyawan.local",
+        "email": "febri-hidayat@karyawan.local",
+        "nik": null,
+        "password": "password123",
+        "company": "rbs",
+        "attendance_location_id": 1
+    },
+    {
+        "id": 1,
+        "identifier": "admin@payrollhub.com",
+        "email": "admin@payrollhub.com",
+        "nik": null,
+        "password": "password123",
+        "company": "rbs",
+        "role": "admin"
+    }
+]

@@ -598,6 +598,10 @@ class PayrollController extends Controller
      */
     public function previewImport(Request $request): JsonResponse
     {
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
+        @ini_set('memory_limit', '512M');
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'], // max 10MB
         ], [
@@ -636,6 +640,10 @@ class PayrollController extends Controller
      */
     public function import(Request $request): JsonResponse
     {
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
+        @ini_set('memory_limit', '512M');
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'], // max 10MB
         ], [
@@ -652,13 +660,15 @@ class PayrollController extends Controller
         $import = new PayrollImport($period, isPreview: false, targetSheet: $targetSheet, defaultCompany: $company);
         Excel::import($import, $request->file('file'));
 
+        $totalSaved = $import->getImportedCount() + $import->getUpdatedCount();
         \App\Models\ActivityLog::record(
             action: 'IMPORT_EXCEL',
             module: 'payroll',
-            description: "Mengimpor data penggajian Excel periode {$period} (Entitas: " . strtoupper($company) . ") - Baru: {$import->getImportedCount()} baris, Diperbarui: {$import->getUpdatedCount()} baris.",
+            description: "Mengimpor data penggajian Excel periode {$period} (Entitas: " . strtoupper($company) . ") - Total: {$totalSaved} baris berhasil diproses (Baru: {$import->getImportedCount()}, Diperbarui: {$import->getUpdatedCount()}).",
             details: [
                 'period' => $period,
                 'company' => $company,
+                'total_saved' => $totalSaved,
                 'imported_count' => $import->getImportedCount(),
                 'updated_count' => $import->getUpdatedCount(),
                 'file_name' => $request->file('file')?->getClientOriginalName(),

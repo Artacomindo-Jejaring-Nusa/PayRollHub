@@ -59,6 +59,36 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
 
     public function collection(Collection $rows): void
     {
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
+
+        $targetCompany = in_array(strtolower($this->defaultCompany ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
+
+        // Preload existing payrolls for the target company & default period into fast in-memory hash maps
+        // This eliminates 300-900 sequential database queries and prevents execution timeout (max 30s)
+        $existingRecords = Payroll::where('company', $targetCompany)
+            ->where('period', $this->defaultPeriod)
+            ->get();
+
+        $cacheByNik = [];
+        $cacheByNameSchool = [];
+        $cacheByNameProvince = [];
+
+        foreach ($existingRecords as $rec) {
+            $pPeriod = (string) $rec->period;
+            if (!empty($rec->nik)) {
+                $cacheByNik[$pPeriod . '|' . trim((string) $rec->nik)] = $rec;
+            }
+            if (!empty($rec->employee_name) && !empty($rec->school_unit)) {
+                $k = $pPeriod . '|' . mb_strtolower(trim($rec->employee_name)) . '|' . mb_strtolower(trim($rec->school_unit));
+                $cacheByNameSchool[$k] = $rec;
+            }
+            if (!empty($rec->employee_name) && !empty($rec->province)) {
+                $k = $pPeriod . '|' . mb_strtolower(trim($rec->employee_name)) . '|' . mb_strtolower(trim($rec->province));
+                $cacheByNameProvince[$k] = $rec;
+            }
+        }
+
         $rowIndex = 1; // 1-based index after header
         foreach ($rows as $row) {
             $rowIndex++;
@@ -225,26 +255,39 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 continue;
             }
 
-            // Match existing record strictly within target company
-            $targetCompany = in_array(strtolower($this->defaultCompany ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
-
+            // Match existing record strictly within target company using fast in-memory cache
             $existing = null;
             if (!empty($nik)) {
-                $existing = Payroll::where('company', $targetCompany)->where('nik', $nik)->where('period', $period)->first();
+                $existing = $cacheByNik[$period . '|' . $nik] ?? null;
             }
             if (!$existing && !empty($schoolUnit)) {
-                $existing = Payroll::where('company', $targetCompany)
-                    ->where('employee_name', $name)
-                    ->where('school_unit', $schoolUnit)
-                    ->where('period', $period)
-                    ->first();
+                $k = $period . '|' . mb_strtolower($name) . '|' . mb_strtolower($schoolUnit);
+                $existing = $cacheByNameSchool[$k] ?? null;
             }
             if (!$existing) {
-                $existing = Payroll::where('company', $targetCompany)
-                    ->where('employee_name', $name)
-                    ->where('province', $province)
-                    ->where('period', $period)
-                    ->first();
+                $k = $period . '|' . mb_strtolower($name) . '|' . mb_strtolower($province);
+                $existing = $cacheByNameProvince[$k] ?? null;
+            }
+
+            // Fallback to direct DB query only if row belongs to a different period than default
+            if (!$existing && $period !== $this->defaultPeriod) {
+                if (!empty($nik)) {
+                    $existing = Payroll::where('company', $targetCompany)->where('nik', $nik)->where('period', $period)->first();
+                }
+                if (!$existing && !empty($schoolUnit)) {
+                    $existing = Payroll::where('company', $targetCompany)
+                        ->where('employee_name', $name)
+                        ->where('school_unit', $schoolUnit)
+                        ->where('period', $period)
+                        ->first();
+                }
+                if (!$existing) {
+                    $existing = Payroll::where('company', $targetCompany)
+                        ->where('employee_name', $name)
+                        ->where('province', $province)
+                        ->where('period', $period)
+                        ->first();
+                }
             }
 
             // If Excel provided calculated Take Home Pay, use it; otherwise compute:
@@ -311,6 +354,9 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 } else {
                     $newRecord = Payroll::create($payrollData);
                     PayrollService::syncEmployeeAccount($newRecord);
+                    if (!empty($newRecord->nik)) {
+                        $cacheByNik[$period . '|' . $newRecord->nik] = $newRecord;
+                    }
                     $this->importedCount++;
                 }
             }

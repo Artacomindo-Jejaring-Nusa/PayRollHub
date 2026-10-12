@@ -805,22 +805,37 @@ export const PayrollImportPage: React.FC = () => {
             </div>
             <div>
               <h3 className="font-title-card text-[20px] font-bold text-text-primary">
-                Import Data Gaji Selesai
+                Import Data Gaji Berhasil
               </h3>
               <p className="text-[13px] text-text-muted">
-                Semua baris data telah diproses dan berhasil tersimpan ke dalam database.
+                Total <span className="font-semibold text-emerald-700">{(importResult.imported_count || 0) + (importResult.updated_count || 0)} data karyawan</span> telah diproses dan berhasil tersimpan ke dalam database.
               </p>
             </div>
           </div>
 
           {/* Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-              <span className="text-[12px] font-medium text-emerald-800 uppercase block">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-300 shadow-xs">
+              <span className="text-[12px] font-bold text-emerald-900 uppercase block tracking-wider">
+                Total Disimpan
+              </span>
+              <span className="font-display-kpi text-[26px] font-bold text-emerald-800 font-mono">
+                {(importResult.imported_count || 0) + (importResult.updated_count || 0)} Data
+              </span>
+              <span className="text-[11px] text-emerald-700 block mt-0.5">
+                100% masuk ke database
+              </span>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <span className="text-[12px] font-medium text-slate-700 uppercase block">
                 Data Baru Ditambahkan
               </span>
-              <span className="font-display-kpi text-[26px] font-bold text-emerald-700 font-mono">
+              <span className="font-display-kpi text-[26px] font-bold text-slate-800 font-mono">
                 {importResult.imported_count} Data
+              </span>
+              <span className="text-[11px] text-text-muted block mt-0.5">
+                Karyawan baru di SP ini
               </span>
             </div>
 
@@ -831,6 +846,9 @@ export const PayrollImportPage: React.FC = () => {
               <span className="font-display-kpi text-[26px] font-bold text-blue-700 font-mono">
                 {importResult.updated_count} Data
               </span>
+              <span className="text-[11px] text-blue-600 block mt-0.5">
+                Data lama disinkronkan
+              </span>
             </div>
 
             <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200">
@@ -839,6 +857,9 @@ export const PayrollImportPage: React.FC = () => {
               </span>
               <span className="font-display-kpi text-[20px] font-bold text-indigo-700 font-mono">
                 {formatRupiah(importResult.total_estimated_thp || 0)}
+              </span>
+              <span className="text-[11px] text-indigo-600 block mt-0.5">
+                Total take home pay
               </span>
             </div>
           </div>

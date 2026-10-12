@@ -765,6 +765,10 @@ class AttendanceLocationController extends Controller
      */
     public function previewImport(Request $request): JsonResponse
     {
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
+        @ini_set('memory_limit', '512M');
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
         ], [
@@ -934,6 +938,10 @@ class AttendanceLocationController extends Controller
      */
     public function import(Request $request): JsonResponse
     {
+        @set_time_limit(300);
+        @ini_set('max_execution_time', '300');
+        @ini_set('memory_limit', '512M');
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:10240'],
         ], [

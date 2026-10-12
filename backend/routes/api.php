@@ -51,7 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Announcements (Read-only for all logged in users, Write for Admin & HR)
     Route::get('/announcements', [\App\Http\Controllers\Api\AnnouncementController::class, 'index']);
     Route::post('/announcements', [\App\Http\Controllers\Api\AnnouncementController::class, 'store']);
-    Route::put('/announcements/{announcement}', [\App\Http\Controllers\Api\AnnouncementController::class, 'update']);
+    Route::match(['put', 'post'], '/announcements/{announcement}', [\App\Http\Controllers\Api\AnnouncementController::class, 'update']);
     Route::delete('/announcements/{announcement}', [\App\Http\Controllers\Api\AnnouncementController::class, 'destroy']);
 
     // Attendance Active Locations (Accessible to Employees & Admin)
@@ -75,6 +75,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/work-reports', [\App\Http\Controllers\Api\EmployeePortalController::class, 'storeWorkReport']);
         Route::get('/announcements', [\App\Http\Controllers\Api\EmployeePortalController::class, 'announcements']);
 
+        // Employee Complaints (Keluhan Karyawan Tulisan & Foto - Point 11)
+        Route::get('/complaints', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'index']);
+        Route::post('/complaints', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'store']);
+        Route::get('/complaints/{complaint}', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'show']);
+
         // Employee Geofence Attendance (Absensi Radius)
         Route::get('/attendance/today', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'today']);
         Route::post('/attendance/check-in', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'checkIn']);
@@ -84,9 +89,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Admin Only Operations
     Route::middleware('admin')->group(function () {
+        // Complaints Management (Admin & HR)
+        Route::get('/admin/complaints', [\App\Http\Controllers\Api\AdminComplaintController::class, 'index']);
+        Route::get('/admin/complaints/summary', [\App\Http\Controllers\Api\AdminComplaintController::class, 'summary']);
+        Route::get('/admin/complaints/{complaint}', [\App\Http\Controllers\Api\AdminComplaintController::class, 'show']);
+        Route::match(['put', 'post'], '/admin/complaints/{complaint}', [\App\Http\Controllers\Api\AdminComplaintController::class, 'update']);
+        Route::delete('/admin/complaints/{complaint}', [\App\Http\Controllers\Api\AdminComplaintController::class, 'destroy']);
         // Attendance Management & Settings (Admin)
         Route::get('/admin/attendances', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'index']);
         Route::get('/admin/attendances/summary', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'summary']);
+        Route::get('/admin/attendances/recap-by-employee', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'recapByEmployee']);
+        Route::post('/admin/attendances', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'store']);
+        Route::put('/admin/attendances/{attendance}', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'update']);
+        Route::delete('/admin/attendances/{attendance}', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'destroy']);
         Route::get('/admin/attendances/export', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'export']);
         Route::get('/admin/attendance-settings', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'getSettings']);
         Route::put('/admin/attendance-settings', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'updateSettings']);
@@ -115,6 +130,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/payrolls/{payroll}', [PayrollController::class, 'destroy']);
         Route::post('/payrolls/import/preview', [PayrollController::class, 'previewImport']);
         Route::post('/payrolls/import', [PayrollController::class, 'import']);
+
+        // Province Payroll Settings (Pengaturan Nilai & Formula Perhitungan per Provinsi)
+        Route::get('/province-settings', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'index']);
+        Route::get('/admin/province-settings', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'index']);
+        Route::match(['put', 'post'], '/province-settings/{province}', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'update']);
+        Route::match(['put', 'post'], '/admin/province-settings/{province}', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'update']);
+        Route::post('/province-settings/{province}/apply', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'applyToEmployees']);
+        Route::post('/admin/province-settings/{province}/apply', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'applyToEmployees']);
+
+        // Employee Replacements Tracking (Rekam Jejak Pergantian Karyawan Off)
+        Route::get('/employee-replacements', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'index']);
+        Route::get('/admin/employee-replacements', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'index']);
+        Route::get('/employee-replacements/off-employees', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'offEmployees']);
+        Route::get('/admin/employee-replacements/off-employees', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'offEmployees']);
+        Route::post('/employee-replacements', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'store']);
+        Route::post('/admin/employee-replacements', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'store']);
+        Route::delete('/employee-replacements/{replacement}', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'destroy']);
+        Route::delete('/admin/employee-replacements/{replacement}', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'destroy']);
 
         // User Account Management
         Route::apiResource('users', UserController::class);

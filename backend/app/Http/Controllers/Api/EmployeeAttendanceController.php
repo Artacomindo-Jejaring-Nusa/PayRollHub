@@ -21,6 +21,7 @@ class EmployeeAttendanceController extends Controller
         $today = Carbon::today('Asia/Jakarta')->toDateString();
         $targetCompany = $user->company ?: 'rbs';
         $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
+        $hqLocation = \App\Models\AttendanceSetting::syncHeadquartersLocation($setting);
 
         // Ambil daftar 100+ lokasi aktif untuk perusahaan ini
         $locations = \App\Models\AttendanceLocation::forTenant($targetCompany)
@@ -28,31 +29,45 @@ class EmployeeAttendanceController extends Controller
             ->orderBy('name', 'asc')
             ->get();
 
+        // Pastikan lokasi Kantor Pusat ada di daftar lokasi
+        if (!$locations->contains('id', $hqLocation->id)) {
+            $locations->prepend($hqLocation);
+        }
+
         $attendance = Attendance::with('location')->where('user_id', $user->id)
             ->where('date', $today)
             ->first();
 
-        // Cari lokasi penugasan jika user memiliki attendance_location_id atau unit sekolah
+        // POINT 10: Khusus Admin, lokasi penugasan otomatis dikunci ke Kantor Pusat yang dibuat Super Admin
+        $isAdmin = $user->role === 'admin';
         $assignedLocation = null;
-        if (!empty($user->attendance_location_id)) {
-            $assignedLocation = $locations->firstWhere('id', $user->attendance_location_id);
-        }
 
-        if (!$assignedLocation && !empty($user->school_unit)) {
-            $cleanUserSchool = strtolower(trim($user->school_unit));
-            $assignedLocation = $locations->first(function ($loc) use ($cleanUserSchool) {
-                $locName = strtolower(trim($loc->name));
-                $locCode = strtolower(trim($loc->code ?? ''));
-                return $locCode === $cleanUserSchool
-                    || $locName === $cleanUserSchool
-                    || ($locCode !== '' && str_contains($cleanUserSchool, $locCode))
-                    || ($locName !== '' && (str_contains($cleanUserSchool, $locName) || str_contains($locName, $cleanUserSchool)));
-            });
-
-            // Tautkan otomatis ke attendance_location_id jika cocok
-            if ($assignedLocation && empty($user->attendance_location_id)) {
-                $user->update(['attendance_location_id' => $assignedLocation->id]);
+        if ($isAdmin) {
+            $assignedLocation = $hqLocation;
+            $isLocationLocked = true;
+        } else {
+            // Cari lokasi penugasan jika karyawan memiliki attendance_location_id atau unit sekolah
+            if (!empty($user->attendance_location_id)) {
+                $assignedLocation = $locations->firstWhere('id', $user->attendance_location_id);
             }
+
+            if (!$assignedLocation && !empty($user->school_unit)) {
+                $cleanUserSchool = strtolower(trim($user->school_unit));
+                $assignedLocation = $locations->first(function ($loc) use ($cleanUserSchool) {
+                    $locName = strtolower(trim($loc->name));
+                    $locCode = strtolower(trim($loc->code ?? ''));
+                    return $locCode === $cleanUserSchool
+                        || $locName === $cleanUserSchool
+                        || ($locCode !== '' && str_contains($cleanUserSchool, $locCode))
+                        || ($locName !== '' && (str_contains($cleanUserSchool, $locName) || str_contains($locName, $cleanUserSchool)));
+                });
+
+                // Tautkan otomatis ke attendance_location_id jika cocok
+                if ($assignedLocation && empty($user->attendance_location_id)) {
+                    $user->update(['attendance_location_id' => $assignedLocation->id]);
+                }
+            }
+            $isLocationLocked = $assignedLocation !== null;
         }
 
         return response()->json([
@@ -62,9 +77,12 @@ class EmployeeAttendanceController extends Controller
                 'server_time' => Carbon::now('Asia/Jakarta')->format('H:i:s'),
                 'attendance' => $attendance,
                 'assigned_location' => $assignedLocation,
-                'is_location_locked' => $assignedLocation !== null,
+                'is_location_locked' => $isLocationLocked,
+                'is_admin_user' => $isAdmin,
+                'is_admin_headquarters_enforced' => $isAdmin,
+                'headquarters_location' => $hqLocation,
                 'total_locations' => $locations->count(),
-                'locations' => $locations,
+                'locations' => $isAdmin ? collect([$hqLocation]) : $locations,
                 'office_setting' => [
                     'office_name' => $setting->office_name,
                     'latitude' => $setting->latitude,
@@ -194,74 +212,106 @@ class EmployeeAttendanceController extends Controller
         $lat = (float) $validated['latitude'];
         $lng = (float) $validated['longitude'];
 
-        // Prioritaskan lokasi penugasan karyawan jika ada (baik via attendance_location_id atau unit sekolah)
-        $assignedLocation = null;
-        if (!empty($user->attendance_location_id)) {
-            $assignedLocation = \App\Models\AttendanceLocation::where('id', $user->attendance_location_id)
-                ->where('is_active', true)
-                ->first();
-        }
-
-        if (!$assignedLocation && !empty($user->school_unit)) {
-            $cleanUserSchool = strtolower(trim($user->school_unit));
-            $assignedLocation = \App\Models\AttendanceLocation::forTenant($targetCompany)
-                ->where('is_active', true)
-                ->get()
-                ->first(function ($loc) use ($cleanUserSchool) {
-                    $locName = strtolower(trim($loc->name));
-                    $locCode = strtolower(trim($loc->code ?? ''));
-                    return $locCode === $cleanUserSchool
-                        || $locName === $cleanUserSchool
-                        || ($locCode !== '' && str_contains($cleanUserSchool, $locCode))
-                        || ($locName !== '' && (str_contains($cleanUserSchool, $locName) || str_contains($locName, $cleanUserSchool)));
-                });
-            if ($assignedLocation && empty($user->attendance_location_id)) {
-                $user->update(['attendance_location_id' => $assignedLocation->id]);
-            }
-        }
-
-        // Cari lokasi tujuan:
+        // =========================================================================
+        // POINT 10: KHUSUS ADMIN — WAJIB ABSEN DI KANTOR PUSAT YANG DIBUAT SUPER ADMIN
+        // =========================================================================
         $matchedLocation = null;
         $distance = null;
         $isWithinRadius = false;
+        $locationName = '';
+        $radiusLimit = 100;
+        $locationId = null;
 
-        if ($assignedLocation) {
-            $matchedLocation = $assignedLocation;
-            $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters($lat, $lng, $matchedLocation->latitude, $matchedLocation->longitude);
-            $isWithinRadius = $distance <= $matchedLocation->radius_meters;
-        } elseif (!empty($validated['location_id'])) {
-            $matchedLocation = \App\Models\AttendanceLocation::where('id', $validated['location_id'])
-                ->where('is_active', true)
-                ->first();
-            if ($matchedLocation) {
-                $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters($lat, $lng, $matchedLocation->latitude, $matchedLocation->longitude);
-                $isWithinRadius = $distance <= $matchedLocation->radius_meters;
-            }
-        }
-
-        if (!$matchedLocation) {
-            // Cari lokasi terdekat dari 100+ lokasi aktif (prioritaskan unit sekolah user jika ada)
-            $nearestResult = \App\Models\AttendanceLocation::findNearest($lat, $lng, $targetCompany, $user->school_unit);
-            $matchedLocation = $nearestResult['location'];
-            $distance = $nearestResult['distance_meters'];
-            $isWithinRadius = $nearestResult['is_within_radius'];
-        }
-
-        // Fallback jika belum ada data di attendance_locations
-        if (!$matchedLocation) {
+        if ($user->role === 'admin') {
             $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
+            $hqLocation = \App\Models\AttendanceSetting::syncHeadquartersLocation($setting);
+
             $distance = \App\Models\AttendanceSetting::calculateDistanceInMeters(
                 $lat, $lng,
-                $setting->latitude, $setting->longitude
+                $hqLocation->latitude, $hqLocation->longitude
             );
-            $isWithinRadius = $distance <= $setting->radius_meters;
-            $locationName = $setting->office_name;
-            $radiusLimit = $setting->radius_meters;
-            $locationId = null;
+            $isWithinRadius = $distance <= $hqLocation->radius_meters;
+            $locationName = $hqLocation->name;
+            $radiusLimit = $hqLocation->radius_meters;
+            $locationId = $hqLocation->id;
+            $matchedLocation = $hqLocation;
+
+            if (!$isWithinRadius) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Gagal Absen: Sebagai Admin, Anda wajib melakukan absensi di Kantor Pusat ({$locationName}) yang telah ditetapkan oleh Super Admin! Jarak Anda saat ini: {$distance} meter dari Kantor Pusat (Batas radius kantor: {$radiusLimit} meter). Presensi di unit sekolah atau lokasi lain tidak diizinkan untuk akun Admin.",
+                    'distance_meters' => $distance,
+                    'max_radius_meters' => $radiusLimit,
+                    'nearest_location' => $locationName,
+                    'is_admin_violation' => true,
+                ], 422);
+            }
         } else {
-            $locationName = $matchedLocation->name;
-            $radiusLimit = $matchedLocation->radius_meters;
-            $locationId = $matchedLocation->id;
+            // Prioritaskan lokasi penugasan karyawan jika ada (baik via attendance_location_id atau unit sekolah)
+            $assignedLocation = null;
+            if (!empty($user->attendance_location_id)) {
+                $assignedLocation = \App\Models\AttendanceLocation::where('id', $user->attendance_location_id)
+                    ->where('is_active', true)
+                    ->first();
+            }
+
+            if (!$assignedLocation && !empty($user->school_unit)) {
+                $cleanUserSchool = strtolower(trim($user->school_unit));
+                $assignedLocation = \App\Models\AttendanceLocation::forTenant($targetCompany)
+                    ->where('is_active', true)
+                    ->get()
+                    ->first(function ($loc) use ($cleanUserSchool) {
+                        $locName = strtolower(trim($loc->name));
+                        $locCode = strtolower(trim($loc->code ?? ''));
+                        return $locCode === $cleanUserSchool
+                            || $locName === $cleanUserSchool
+                            || ($locCode !== '' && str_contains($cleanUserSchool, $locCode))
+                            || ($locName !== '' && (str_contains($cleanUserSchool, $locName) || str_contains($locName, $cleanUserSchool)));
+                    });
+                if ($assignedLocation && empty($user->attendance_location_id)) {
+                    $user->update(['attendance_location_id' => $assignedLocation->id]);
+                }
+            }
+
+            // Cari lokasi tujuan karyawan biasa:
+            if ($assignedLocation) {
+                $matchedLocation = $assignedLocation;
+                $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters($lat, $lng, $matchedLocation->latitude, $matchedLocation->longitude);
+                $isWithinRadius = $distance <= $matchedLocation->radius_meters;
+            } elseif (!empty($validated['location_id'])) {
+                $matchedLocation = \App\Models\AttendanceLocation::where('id', $validated['location_id'])
+                    ->where('is_active', true)
+                    ->first();
+                if ($matchedLocation) {
+                    $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters($lat, $lng, $matchedLocation->latitude, $matchedLocation->longitude);
+                    $isWithinRadius = $distance <= $matchedLocation->radius_meters;
+                }
+            }
+
+            if (!$matchedLocation) {
+                // Cari lokasi terdekat dari 100+ lokasi aktif (prioritaskan unit sekolah user jika ada)
+                $nearestResult = \App\Models\AttendanceLocation::findNearest($lat, $lng, $targetCompany, $user->school_unit);
+                $matchedLocation = $nearestResult['location'];
+                $distance = $nearestResult['distance_meters'];
+                $isWithinRadius = $nearestResult['is_within_radius'];
+            }
+
+            // Fallback jika belum ada data di attendance_locations
+            if (!$matchedLocation) {
+                $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
+                $distance = \App\Models\AttendanceSetting::calculateDistanceInMeters(
+                    $lat, $lng,
+                    $setting->latitude, $setting->longitude
+                );
+                $isWithinRadius = $distance <= $setting->radius_meters;
+                $locationName = $setting->office_name;
+                $radiusLimit = $setting->radius_meters;
+                $locationId = null;
+            } else {
+                $locationName = $matchedLocation->name;
+                $radiusLimit = $matchedLocation->radius_meters;
+                $locationId = $matchedLocation->id;
+            }
         }
 
         // Validasi Radius Geofencing
@@ -317,8 +367,8 @@ class EmployeeAttendanceController extends Controller
     public function checkOut(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -354,17 +404,18 @@ class EmployeeAttendanceController extends Controller
             ], 422);
         }
 
-        // Hitung jarak saat pulang jika bukan perjalanan dinas
-        $isDinasLuar = $attendance->attendance_type === 'dinas_luar';
+        // POINT 8: Absensi pulang di-los (Bebas radius geofence, yang terpenting durasi 8 jam kerja)
         $distance = null;
+        $lat = $validated['latitude'] ?? null;
+        $lng = $validated['longitude'] ?? null;
 
-        if (!$isDinasLuar) {
+        if ($lat !== null && $lng !== null && $attendance->attendance_type !== 'dinas_luar') {
             if ($attendance->location_id) {
                 $loc = \App\Models\AttendanceLocation::find($attendance->location_id);
                 if ($loc) {
                     $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters(
-                        (float) $validated['latitude'],
-                        (float) $validated['longitude'],
+                        (float) $lat,
+                        (float) $lng,
                         $loc->latitude,
                         $loc->longitude
                     );
@@ -374,28 +425,56 @@ class EmployeeAttendanceController extends Controller
             if ($distance === null) {
                 $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
                 $distance = \App\Models\AttendanceSetting::calculateDistanceInMeters(
-                    (float) $validated['latitude'],
-                    (float) $validated['longitude'],
+                    (float) $lat,
+                    (float) $lng,
                     $setting->latitude,
                     $setting->longitude
                 );
             }
         }
 
+        // Hitung durasi jam kerja dari jam masuk ke jam pulang
+        $durationFormatted = null;
+        $isEightHours = false;
+        $durationMinutes = 0;
+
+        if ($attendance->check_in_time) {
+            try {
+                $checkIn = Carbon::createFromTimeString($attendance->check_in_time);
+                $checkOut = Carbon::createFromTimeString($currentTime);
+                if ($checkOut->lessThan($checkIn)) {
+                    $checkOut->addDay();
+                }
+                $durationMinutes = (int) $checkIn->diffInMinutes($checkOut);
+                $hours = intdiv($durationMinutes, 60);
+                $mins = $durationMinutes % 60;
+                $durationFormatted = "{$hours} jam {$mins} menit";
+                $isEightHours = $durationMinutes >= 480;
+            } catch (\Throwable) {
+            }
+        }
+
         $attendance->update([
             'check_out_time' => $currentTime,
-            'check_out_lat' => $validated['latitude'],
-            'check_out_lng' => $validated['longitude'],
+            'check_out_lat' => $lat,
+            'check_out_lng' => $lng,
             'check_out_distance_meters' => $distance,
             'notes' => $validated['notes'] ? ($attendance->notes ? $attendance->notes . ' | ' . $validated['notes'] : $validated['notes']) : $attendance->notes,
         ]);
 
-        $distanceText = $distance !== null ? " Jarak: {$distance} meter." : "";
+        $fresh = $attendance->fresh();
+        $durationText = $durationFormatted ? " Durasi kerja: {$durationFormatted}." : "";
+        $eightHoursText = $isEightHours ? " (✓ 8 Jam Kerja Terpenuhi)" : " (Kurang dari 8 Jam Kerja)";
 
         return response()->json([
             'status' => 'success',
-            'message' => "Absen pulang berhasil tercatat pada {$currentTime}.{$distanceText} Selamat beristirahat!",
-            'data' => $attendance,
+            'message' => "Absen pulang berhasil tercatat pada {$currentTime}.{$durationText}{$eightHoursText} Selamat beristirahat!",
+            'data' => $fresh,
+            'work_duration' => [
+                'minutes' => $durationMinutes,
+                'formatted' => $durationFormatted,
+                'is_eight_hours_met' => $isEightHours,
+            ],
         ]);
     }
 

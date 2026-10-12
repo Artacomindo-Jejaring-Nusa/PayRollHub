@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Slip Gaji - {{ $payroll->employee_name }} ({{ $payroll->period }})</title>
+    <title>Slip Gaji - {{ $payroll->employee_name }}</title>
     @php
         $isRima = ($payroll->company ?? 'rbs') === 'rimamandiri';
         $companyName = $isRima ? 'PT Riama Mandiri Pratama' : 'PT Rimbun Buana Sejahtera';
@@ -14,40 +14,62 @@
         $allowance = (float) ($payroll->allowance ?? 0);
         $totalEarnings = $basicSalary + $bpjsKes + $allowance;
 
+        // BPJS TK breakdown (Bukan pengurang gaji)
         $bpjsTk = (float) ($payroll->bpjs_tk ?? 0);
-        // Break down BPJS TK to JHT (2%) and JP (1%)
-        if ($bpjsTk > 0) {
-            if ($basicSalary > 0) {
-                $jht = round($basicSalary * 0.02, 2);
-                $jp = round($bpjsTk - $jht, 2);
-                if ($jp < 0) {
-                    $jht = round($bpjsTk * (2 / 3), 2);
-                    $jp = $bpjsTk - $jht;
-                }
-            } else {
-                $jht = round($bpjsTk * (2 / 3), 2);
-                $jp = $bpjsTk - $jht;
-            }
-        } else {
-            $jht = 0;
-            $jp = 0;
+        $jht = (float) ($payroll->bpjs_tk_jht ?? 0);
+        $jp = (float) ($payroll->bpjs_tk_jp ?? 0);
+
+        if ($jht <= 0 && $jp <= 0 && $bpjsTk > 0) {
+            $jht = round($bpjsTk * (2 / 3));
+            $jp = round($bpjsTk - $jht);
         }
 
         $pph21 = (float) ($payroll->pph21 ?? 0);
         $absenceDeduction = (float) ($payroll->absence_deduction ?? 0);
         $otherDeduction = (float) ($payroll->deduction ?? 0);
         $customDeductions = is_array($payroll->custom_deductions) ? $payroll->custom_deductions : (is_string($payroll->custom_deductions) ? json_decode($payroll->custom_deductions, true) : []);
-        $totalDeductions = $bpjsTk + $pph21 + $absenceDeduction + $otherDeduction;
 
+        // Total Potongan murni potongan absensi, pph21, dan potongan kustom lainnya (BPJS TK BUKAN pengurang)
+        $totalDeductions = $pph21 + $absenceDeduction + $otherDeduction;
+
+        // Total Gaji Diterima
         $takeHomePay = $totalEarnings - $totalDeductions;
         if ($takeHomePay <= 0 && (float) ($payroll->take_home_pay ?? 0) > 0) {
             $takeHomePay = (float) $payroll->take_home_pay;
         }
+
+        // Format Periode
+        $periodStr = trim((string) ($payroll->period ?? ''));
+        if (preg_match('/(\d{4})-(\d{2})/', $periodStr, $m)) {
+            $months = [
+                '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
+                '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
+                '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
+            ];
+            $periodDisplay = ($months[$m[2]] ?? '') . ' ' . $m[1];
+        } elseif (preg_match('/(?:SP|Surat\s+Pesanan)?\s*(\d+)/i', $periodStr, $m)) {
+            $spNum = (int)$m[1];
+            $months = [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+            ];
+            $periodDisplay = ($months[$spNum] ?? "SP {$spNum}") . ' 2026';
+        } else {
+            $periodDisplay = $periodStr ?: 'Juni 2026';
+        }
+
+        // Base64 Images for Bulletproof PDF Rendering
+        $logoPath = public_path('images/logo_rbs.png');
+        $logoBase64 = file_exists($logoPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath)) : null;
+
+        $ttdPath = public_path('images/ttd_stempel_esron.png');
+        $ttdBase64 = file_exists($ttdPath) ? 'data:image/png;base64,' . base64_encode(file_get_contents($ttdPath)) : null;
     @endphp
     <style>
         @page {
             size: A4 portrait;
-            margin: 25mm 20mm 20mm 20mm;
+            margin: 20mm 20mm 20mm 20mm;
         }
         body {
             font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
@@ -59,64 +81,61 @@
         }
         .header-company {
             text-align: center;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .header-company h2 {
-            font-size: 14px;
+            font-size: 13.5px;
             font-weight: bold;
-            margin: 0 0 4px 0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            margin: 0 0 3px 0;
         }
         .header-company p {
-            font-size: 10.5px;
+            font-size: 10px;
             margin: 0;
-            color: #222222;
+            color: #111111;
         }
         .header-divider {
             border: none;
-            border-top: 2px solid #000000;
-            margin: 8px 0 16px 0;
+            border-top: 1.5px solid #000000;
+            margin: 6px 0 16px 0;
         }
         .slip-title {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 22px;
         }
         .slip-title h3 {
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: bold;
-            margin: 0 0 4px 0;
-            letter-spacing: 0.3px;
+            margin: 0 0 3px 0;
         }
         .slip-title p {
-            font-size: 11px;
+            font-size: 10px;
             margin: 0;
-            color: #333333;
+            color: #222222;
         }
 
-        /* Employee Info & Logo Table */
+        /* Employee Info & Logo */
         .info-logo-table {
             width: 100%;
-            margin-bottom: 14px;
+            margin-bottom: 8px;
             border-collapse: collapse;
         }
         .info-logo-table td {
-            vertical-align: top;
+            vertical-align: middle;
             padding: 0;
         }
         .emp-info-table {
             border-collapse: collapse;
         }
         .emp-info-table td {
-            padding: 2.5px 0;
-            font-size: 11px;
+            padding: 2px 0;
+            font-size: 10.5px;
         }
         .emp-info-table .lbl {
-            width: 70px;
-            font-weight: 500;
+            width: 65px;
+            color: #111111;
         }
         .emp-info-table .sep {
-            width: 15px;
+            width: 12px;
             text-align: center;
         }
         .emp-info-table .val {
@@ -125,84 +144,93 @@
 
         .logo-box {
             text-align: right;
+            vertical-align: middle;
         }
-        .company-logo-text {
-            display: inline-block;
-            text-align: center;
-            font-weight: bold;
-            font-size: 11px;
-            letter-spacing: 0.5px;
-            color: #1e3a8a;
-            border: 2px solid #1e3a8a;
-            padding: 6px 12px;
-            border-radius: 4px;
+        .company-logo-img {
+            max-height: 58px;
+            max-width: 190px;
         }
 
-        /* Salary Breakdown Table */
+        /* Rincian Komponen Gaji Table */
         .salary-table {
             width: 100%;
             border-collapse: collapse;
-            border: 1.5px solid #000000;
-            margin-bottom: 30px;
+            border: 2px solid #000000;
+            margin-top: 4px;
+            margin-bottom: 25px;
         }
-        .salary-table th {
-            border-bottom: 1.5px solid #000000;
-            padding: 6px 10px;
+        .salary-table th.table-main-title {
+            text-align: center;
             font-size: 11px;
             font-weight: bold;
-            text-align: left;
+            padding: 6px 8px 3px 8px;
+            border-bottom: 1.5px solid #000000;
         }
-        .salary-table th.amount-col {
+        .salary-table th.amount-header {
             text-align: right;
-            width: 150px;
+            font-size: 10.5px;
+            font-weight: bold;
+            padding: 6px 12px 6px 0;
+            width: 170px;
         }
         .salary-table td {
-            padding: 4px 10px;
-            font-size: 11px;
+            padding: 2.5px 12px;
+            font-size: 10.5px;
         }
-        .salary-table td.amount-col {
-            text-align: right;
+        .salary-table td.col-item {
+            text-align: left;
+        }
+        .salary-table td.col-rp {
+            width: 30px;
+            text-align: left;
             white-space: nowrap;
         }
-        .salary-table .subtotal-row td {
-            font-weight: bold;
-            padding-top: 6px;
-            padding-bottom: 6px;
+        .salary-table td.col-amount {
+            text-align: right;
+            white-space: nowrap;
+            width: 110px;
+            padding-right: 12px;
         }
-        .salary-table .total-row td {
-            border-top: 1.5px solid #000000;
-            border-bottom: 1.5px solid #000000;
-            font-size: 11.5px;
+        .bold-text {
             font-weight: bold;
-            padding-top: 8px;
-            padding-bottom: 8px;
         }
-        .section-header td {
-            font-weight: bold;
-            padding-top: 8px;
-            padding-bottom: 2px;
+        .section-gap {
+            height: 10px;
         }
 
         /* Signature Section */
         .signature-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         .signature-table td {
             vertical-align: top;
             padding: 0;
         }
         .sign-box {
-            width: 240px;
+            width: 220px;
             text-align: center;
             float: right;
-            font-size: 11px;
-        }
-        .sign-space {
-            height: 65px;
+            font-size: 10.5px;
         }
         .sign-title {
+            margin-bottom: 2px;
+        }
+        .sign-company {
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .sign-img-container {
+            height: 75px;
+            text-align: center;
+            margin: 2px 0;
+        }
+        .sign-img {
+            max-height: 72px;
+            max-width: 190px;
+        }
+        .sign-role {
             margin-bottom: 2px;
         }
         .sign-name {
@@ -211,24 +239,24 @@
     </style>
 </head>
 <body>
-    <!-- 1. Header / Kop Surat Resmi -->
+    <!-- 1. Header / Kop Perusahaan -->
     <div class="header-company">
         <h2>{{ $companyName }}</h2>
         <p>{{ $companyAddress }}</p>
     </div>
     <hr class="header-divider">
 
-    <!-- 2. Judul Dokumen -->
+    <!-- 2. Judul Dokumen & Periode -->
     <div class="slip-title">
         <h3>Slip Gaji Karyawan</h3>
-        <p>Periode Pembayaran: {{ $payroll->period }}</p>
+        <p>Periode Pembayaran: {{ $periodDisplay }}</p>
     </div>
 
-    <!-- 3. Informasi Karyawan & Logo Perusahaan -->
+    <!-- 3. Informasi Karyawan & Logo -->
     <table class="info-logo-table">
         <tr>
-            <td style="width: 60%;">
-                <div style="font-weight: bold; margin-bottom: 4px;">Data Karyawan</div>
+            <td style="width: 58%;">
+                <div style="font-weight: bold; margin-bottom: 4px; font-size: 11px;">Data Karyawan</div>
                 <table class="emp-info-table">
                     <tr>
                         <td class="lbl">Nama</td>
@@ -247,160 +275,154 @@
                             @if(!empty($payroll->school_unit))
                                 {{ $payroll->school_unit }}
                             @else
-                                {{ $payroll->status === 'off' ? 'Non-Aktif' : 'Pegawai Kontrak - TK/0' }}
+                                {{ $payroll->status === 'off' ? 'Pegawai Non-Aktif' : 'Pegawai Kontrak - TK/0' }}
                             @endif
                         </td>
                     </tr>
-                    @if(!empty($payroll->nik))
-                    <tr>
-                        <td class="lbl">NIK</td>
-                        <td class="sep">:</td>
-                        <td class="val">{{ $payroll->nik }}</td>
-                    </tr>
-                    @endif
                 </table>
             </td>
-            <td style="width: 40%; vertical-align: middle;" class="logo-box">
-                <div class="company-logo-text">
-                    <span style="font-size: 16px; display: block; font-weight: 900; letter-spacing: 1px;">
-                        {{ $isRima ? 'RIMA' : 'RS' }}
-                    </span>
-                    {{ $companyName }}
-                </div>
+            <td style="width: 42%;" class="logo-box">
+                @if($logoBase64)
+                    <img src="{{ $logoBase64 }}" class="company-logo-img" alt="Logo Perusahaan">
+                @else
+                    <div style="font-weight: bold; font-size: 13px; color: #004AC6;">
+                        {{ $companyName }}
+                    </div>
+                @endif
             </td>
         </tr>
     </table>
 
-    <!-- 4. Rincian Komponen Gaji Sesuai Format Resmi Perusahaan -->
+    <!-- 4. Rincian Komponen Gaji (Format Baru 2026) -->
     <table class="salary-table">
         <thead>
             <tr>
-                <th>Rincian Komponen Gaji</th>
-                <th class="amount-col">Jumlah (Rp)</th>
+                <th colspan="3" class="table-main-title">Rincian Komponen Gaji</th>
+            </tr>
+            <tr>
+                <th class="col-item"></th>
+                <th colspan="2" class="amount-header">Jumlah (Rp)</th>
             </tr>
         </thead>
         <tbody>
-            <!-- A. Komponen Penghasilan -->
+            <!-- PENGHASILAN -->
             <tr>
-                <td style="font-weight: bold;">Gaji Pokok</td>
-                <td class="amount-col">Rp {{ number_format($basicSalary, 2, ',', '.') }}</td>
+                <td class="col-item bold-text">Gaji Pokok</td>
+                <td class="col-rp">Rp</td>
+                <td class="col-amount">{{ number_format($basicSalary, 0, ',', '.') }}</td>
             </tr>
             <tr>
-                <td>Tunjangan BPJS Kesehatan</td>
-                <td class="amount-col">
-                    @if($bpjsKes > 0)
-                        Rp {{ number_format($bpjsKes, 2, ',', '.') }}
-                    @else
-                        Rp -
-                    @endif
-                </td>
+                <td class="col-item">Tunjangan BPJS Kesehatan</td>
+                <td class="col-rp">Rp</td>
+                <td class="col-amount">{{ $bpjsKes > 0 ? number_format($bpjsKes, 0, ',', '.') : '-' }}</td>
             </tr>
             <tr>
-                <td>Tunjangan Jabatan</td>
-                <td class="amount-col">
-                    @if($allowance > 0)
-                        Rp {{ number_format($allowance, 2, ',', '.') }}
-                    @else
-                        Rp -
-                    @endif
-                </td>
+                <td class="col-item">Tunjangan Jabatan</td>
+                <td class="col-rp">Rp</td>
+                <td class="col-amount">{{ $allowance > 0 ? number_format($allowance, 0, ',', '.') : '-' }}</td>
             </tr>
             <tr>
-                <td>Tunjangan Hari Raya</td>
-                <td class="amount-col">Rp -</td>
+                <td class="col-item">Tunjangan Hari Raya</td>
+                <td class="col-rp">Rp</td>
+                <td class="col-amount">-</td>
             </tr>
-            <tr class="subtotal-row">
-                <td>Total Gaji sebelum potongan</td>
-                <td class="amount-col">Rp {{ number_format($totalEarnings, 2, ',', '.') }}</td>
+            <tr>
+                <td class="col-item bold-text">Total Gaji sebelum potongan</td>
+                <td class="col-rp bold-text">Rp</td>
+                <td class="col-amount bold-text">{{ number_format($totalEarnings, 0, ',', '.') }}</td>
             </tr>
 
-            <!-- B. Komponen Potongan -->
-            <tr class="section-header">
-                <td colspan="2">Potongan</td>
+            <!-- GAP -->
+            <tr><td colspan="3" class="section-gap"></td></tr>
+
+            <!-- POTONGAN -->
+            <tr>
+                <td colspan="3" class="col-item bold-text" style="padding-top: 4px;">Potongan</td>
             </tr>
             <tr>
-                <td style="padding-left: 15px;">BPJS TK JHT (2%)</td>
-                <td class="amount-col">
-                    @if($jht > 0)
-                        Rp {{ number_format($jht, 2, ',', '.') }}
-                    @else
-                        Rp -
-                    @endif
-                </td>
+                <td class="col-item">Pph 21</td>
+                <td class="col-rp">Rp</td>
+                <td class="col-amount">{{ $pph21 > 0 ? number_format($pph21, 0, ',', '.') : '-' }}</td>
             </tr>
             <tr>
-                <td style="padding-left: 15px;">BPJS TK JP (1%)</td>
-                <td class="amount-col">
-                    @if($jp > 0)
-                        Rp {{ number_format($jp, 2, ',', '.') }}
-                    @else
-                        Rp -
-                    @endif
-                </td>
-            </tr>
-            <tr>
-                <td style="padding-left: 15px;">Pph 21</td>
-                <td class="amount-col">
-                    @if($pph21 > 0)
-                        Rp {{ number_format($pph21, 2, ',', '.') }}
-                    @else
-                        Rp -
-                    @endif
-                </td>
-            </tr>
-            <tr>
-                <td style="padding-left: 15px;">
+                <td class="col-item">
                     Absensi
                     @if((int)($payroll->absence_count ?? 0) > 0)
                         ({{ $payroll->absence_count }}x)
                     @endif
                 </td>
-                <td class="amount-col">
-                    @if($absenceDeduction > 0)
-                        Rp {{ number_format($absenceDeduction, 2, ',', '.') }}
-                    @else
-                        Rp -
-                    @endif
-                </td>
+                <td class="col-rp">Rp</td>
+                <td class="col-amount">{{ $absenceDeduction > 0 ? number_format($absenceDeduction, 0, ',', '.') : '-' }}</td>
             </tr>
             @if(!empty($customDeductions) && count($customDeductions) > 0)
                 @foreach($customDeductions as $cd)
                     @if((float)($cd['amount'] ?? 0) > 0)
                     <tr>
-                        <td style="padding-left: 15px;">{{ $cd['name'] ?? 'Potongan Kustom' }}</td>
-                        <td class="amount-col">Rp {{ number_format((float)$cd['amount'], 2, ',', '.') }}</td>
+                        <td class="col-item">{{ $cd['name'] ?? 'Potongan Kustom' }}</td>
+                        <td class="col-rp">Rp</td>
+                        <td class="col-amount">{{ number_format((float)$cd['amount'], 0, ',', '.') }}</td>
                     </tr>
                     @endif
                 @endforeach
             @elseif($otherDeduction > 0)
-            <tr>
-                <td style="padding-left: 15px;">Potongan Lainnya</td>
-                <td class="amount-col">Rp {{ number_format($otherDeduction, 2, ',', '.') }}</td>
-            </tr>
+                <tr>
+                    <td class="col-item">Potongan Lainnya</td>
+                    <td class="col-rp">Rp</td>
+                    <td class="col-amount">{{ number_format($otherDeduction, 0, ',', '.') }}</td>
+                </tr>
             @endif
-            <tr class="subtotal-row">
-                <td>Total Potongan</td>
-                <td class="amount-col">Rp {{ number_format($totalDeductions, 2, ',', '.') }}</td>
+            <tr>
+                <td class="col-item bold-text">Total Potongan</td>
+                <td class="col-rp bold-text">Rp</td>
+                <td class="col-amount bold-text">{{ $totalDeductions > 0 ? number_format($totalDeductions, 0, ',', '.') : '-' }}</td>
             </tr>
 
-            <!-- C. Total Gaji Bersih / Take Home Pay -->
-            <tr class="total-row">
-                <td>Total Gaji Bersih</td>
-                <td class="amount-col">Rp {{ number_format($takeHomePay, 2, ',', '.') }}</td>
+            <!-- GAP -->
+            <tr><td colspan="3" class="section-gap"></td></tr>
+
+            <!-- TOTAL GAJI DITERIMA (TAKE HOME PAY) -->
+            <tr>
+                <td class="col-item bold-text" style="font-size: 11px;">Total Gaji Diterima</td>
+                <td class="col-rp bold-text" style="font-size: 11px;">Rp</td>
+                <td class="col-amount bold-text" style="font-size: 11px;">{{ number_format($takeHomePay, 0, ',', '.') }}</td>
+            </tr>
+
+            <!-- GAP -->
+            <tr><td colspan="3" class="section-gap"></td></tr>
+
+            <!-- BPJS YANG BISA DICAIRKAN (BUKAN PENGURANG) -->
+            <tr>
+                <td colspan="3" class="col-item bold-text" style="padding-top: 4px;">BPJS yang bisa dicairkan</td>
+            </tr>
+            <tr>
+                <td class="col-item" style="padding-left: 12px;">BPJS TK JHT</td>
+                <td class="col-rp">Rp</td>
+                <td class="col-amount">{{ $jht > 0 ? number_format($jht, 0, ',', '.') : '-' }}</td>
+            </tr>
+            <tr>
+                <td class="col-item" style="padding-left: 12px; padding-bottom: 8px;">BPJS TK JP</td>
+                <td class="col-rp" style="padding-bottom: 8px;">Rp</td>
+                <td class="col-amount" style="padding-bottom: 8px;">{{ $jp > 0 ? number_format($jp, 0, ',', '.') : '-' }}</td>
             </tr>
         </tbody>
     </table>
 
-    <!-- 5. Tanda Tangan / Pengesahan Resmi -->
+    <!-- 5. Tanda Tangan Resmi & Stempel Direktur Utama -->
     <table class="signature-table">
         <tr>
-            <td style="width: 50%;"></td>
-            <td style="width: 50%;">
+            <td style="width: 55%;"></td>
+            <td style="width: 45%;">
                 <div class="sign-box">
                     <div class="sign-title">Mengetahui,</div>
-                    <div style="font-weight: bold; margin-bottom: 2px;">{{ $companyName }}</div>
-                    <div class="sign-space"></div>
-                    <div class="sign-title">Direktur Utama</div>
+                    <div class="sign-company">{{ $companyName }}</div>
+                    <div class="sign-img-container">
+                        @if($ttdBase64)
+                            <img src="{{ $ttdBase64 }}" class="sign-img" alt="Tanda Tangan & Stempel">
+                        @else
+                            <div style="height: 60px;"></div>
+                        @endif
+                    </div>
+                    <div class="sign-role">Direktur Utama</div>
                     <div class="sign-name">({{ $directorName }})</div>
                 </div>
             </td>

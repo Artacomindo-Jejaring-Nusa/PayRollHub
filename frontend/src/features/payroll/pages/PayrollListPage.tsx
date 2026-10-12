@@ -14,6 +14,8 @@ import { Modal } from '../../../components/ui/Modal';
 import { Pagination } from '../../../components/shared/Pagination';
 import { ConfirmDialog } from '../../../components/shared/ConfirmDialog';
 import { SP_PERIOD_LIST, MONTH_PERIOD_OPTIONS, formatPeriodDisplay } from '../../../lib/period';
+import { ProvinceSettingsModal } from '../components/ProvinceSettingsModal';
+import { EmployeeReplacementsModal } from '../components/EmployeeReplacementsModal';
 import {
   Search,
   Filter,
@@ -32,6 +34,9 @@ import {
   Lock,
   UserX,
   UserCheck,
+  AlertTriangle,
+  SlidersHorizontal,
+  History,
 } from 'lucide-react';
 
 export const PayrollListPage: React.FC = () => {
@@ -67,6 +72,12 @@ export const PayrollListPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<string | null>(null);
 
+  // New features: Province Settings, Replacements, Duplicate Account Detection
+  const [isProvinceModalOpen, setIsProvinceModalOpen] = useState(false);
+  const [isReplacementModalOpen, setIsReplacementModalOpen] = useState(false);
+  const [filterDuplicateAccount, setFilterDuplicateAccount] = useState(false);
+  const [totalDuplicateAccounts, setTotalDuplicateAccounts] = useState(0);
+
   // Restricted export modal state for user
   const [isExportRestrictedModalOpen, setIsExportRestrictedModalOpen] = useState(false);
 
@@ -100,10 +111,12 @@ export const PayrollListPage: React.FC = () => {
         per_page: perPage,
         sort_by: 'id',
         sort_order: 'asc',
+        duplicate_account: filterDuplicateAccount ? true : undefined,
       });
 
       setPayrolls(response.data);
       setMeta(response.meta);
+      setTotalDuplicateAccounts(response.metrics?.total_duplicate_accounts || 0);
       if (response.filters?.provinces?.length) {
         setProvinceOptions(response.filters.provinces);
       }
@@ -118,7 +131,7 @@ export const PayrollListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [search, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id]);
+  }, [search, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id, filterDuplicateAccount]);
 
   useEffect(() => {
     fetchData();
@@ -268,6 +281,22 @@ export const PayrollListPage: React.FC = () => {
           {/* Admin-only buttons */}
           {isAdmin && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<SlidersHorizontal className="w-4 h-4 text-primary" />}
+                onClick={() => setIsProvinceModalOpen(true)}
+              >
+                Aturan Gaji Wilayah
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<History className="w-4 h-4 text-emerald-600" />}
+                onClick={() => setIsReplacementModalOpen(true)}
+              >
+                Rekam Pergantian
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -468,11 +497,39 @@ export const PayrollListPage: React.FC = () => {
                 )}
               </div>
 
-              {(startPeriod || endPeriod) && (
-                <div className="text-[11px] text-primary bg-primary/10 px-2.5 py-0.5 rounded-md font-semibold">
-                  Rentang Aktif: {startPeriod || 'Awal'} s/d {endPeriod || 'Akhir'}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterDuplicateAccount(!filterDuplicateAccount);
+                      setPage(1);
+                    }}
+                    className={`h-7 px-2.5 rounded-md border text-[11.5px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      filterDuplicateAccount
+                        ? 'bg-rose-100 border-rose-400 text-rose-800 shadow-xs'
+                        : totalDuplicateAccounts > 0
+                        ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                        : 'bg-surface-panel border-border-subtle text-text-muted hover:text-text-primary'
+                    }`}
+                    title={filterDuplicateAccount ? 'Klik untuk tampilkan seluruh data' : 'Filter hanya nomor rekening duplikat'}
+                  >
+                    <AlertTriangle className={`w-3.5 h-3.5 ${filterDuplicateAccount ? 'text-rose-600' : totalDuplicateAccounts > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
+                    <span>Rekening Duplikat</span>
+                    {totalDuplicateAccounts > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${filterDuplicateAccount ? 'bg-rose-600 text-white' : 'bg-amber-200 text-amber-900'}`}>
+                        {totalDuplicateAccounts}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {(startPeriod || endPeriod) && (
+                  <div className="text-[11px] text-primary bg-primary/10 px-2.5 py-0.5 rounded-md font-semibold">
+                    Rentang: {startPeriod || 'Awal'} s/d {endPeriod || 'Akhir'}
+                  </div>
+                )}
+              </div>
             </div>
       </div>
 
@@ -631,6 +688,15 @@ export const PayrollListPage: React.FC = () => {
                         <div className="font-semibold text-text-primary group-hover:text-primary transition-colors text-[13px]">
                           {item.employee_name}
                         </div>
+                        {item.replaced_employee_name && (
+                          <div
+                            className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                            title={item.replacement_note || `Menggantikan ${item.replaced_employee_name}`}
+                          >
+                            <RefreshCw className="w-2.5 h-2.5 text-amber-600" />
+                            <span>Gantikan: {item.replaced_employee_name}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Fungsi Tenaga Kependidikan */}
@@ -669,14 +735,19 @@ export const PayrollListPage: React.FC = () => {
                             {item.formatted_basic_salary}
                           </td>
 
-                          {/* BPJS Kes (+) & TK (-) */}
+                          {/* BPJS Kes (+) & TK (Non-potongan) */}
                           <td className="py-3 px-3 text-right whitespace-nowrap">
-                            <div className="font-mono text-[11.5px] text-emerald-700">
+                            <div className="font-mono text-[11.5px] text-emerald-700 font-medium">
                               +Kes: {item.formatted_bpjs_kes || '0'}
                             </div>
-                            <div className="font-mono text-[11px] text-rose-600">
-                              -TK: {item.formatted_bpjs_tk || '0'}
+                            <div className="font-mono text-[11px] text-blue-700 font-medium" title="BPJS TK tidak memotong THP (Muncul di bawah slip)">
+                              TK: {item.formatted_bpjs_tk || '0'}
                             </div>
+                            {(item.bpjs_tk_jht || item.bpjs_tk_jp) ? (
+                              <div className="text-[9.5px] text-text-muted font-mono">
+                                JHT:{Number(item.bpjs_tk_jht || 0).toLocaleString('id-ID')} JP:{Number(item.bpjs_tk_jp || 0).toLocaleString('id-ID')}
+                              </div>
+                            ) : null}
                           </td>
 
                           {/* Potongan Absensi (multiplier x rate) */}
@@ -706,10 +777,18 @@ export const PayrollListPage: React.FC = () => {
 
                           {/* No Rekening & Bank */}
                           <td className="py-3 px-3 text-[12px] whitespace-nowrap">
-                            <div className="font-semibold text-text-primary">
-                              {item.bank_name || '-'}
+                            <div className="font-semibold text-text-primary flex items-center gap-1.5">
+                              <span>{item.bank_name || '-'}</span>
+                              {item.is_duplicate_bank_account && (
+                                <span
+                                  className="px-1.5 py-0.2 rounded text-[9.5px] font-bold uppercase bg-rose-100 text-rose-700 border border-rose-300"
+                                  title={`Peringatan: Rekening ini digunakan ${item.duplicate_account_count || 2}x pada data karyawan!`}
+                                >
+                                  Duplikat ({item.duplicate_account_count}x)
+                                </span>
+                              )}
                             </div>
-                            <div className="font-mono text-[11px] text-text-muted">
+                            <div className={`font-mono text-[11px] ${item.is_duplicate_bank_account ? 'text-rose-600 font-bold bg-rose-50 px-1 py-0.5 rounded border border-rose-200 w-fit' : 'text-text-muted'}`}>
                               {item.bank_account || '-'}
                             </div>
                           </td>
@@ -921,6 +1000,23 @@ export const PayrollListPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Pengaturan Gaji Wilayah Modal (UMP & BPJS) */}
+      <ProvinceSettingsModal
+        isOpen={isProvinceModalOpen}
+        onClose={() => setIsProvinceModalOpen(false)}
+        onSettingsUpdated={fetchData}
+        company={tenant.id}
+      />
+
+      {/* Rekam Jejak Pergantian Karyawan Modal */}
+      <EmployeeReplacementsModal
+        isOpen={isReplacementModalOpen}
+        onClose={() => setIsReplacementModalOpen(false)}
+        onReplacementRecorded={fetchData}
+        company={tenant.id}
+        payrolls={payrolls}
+      />
 
     </div>
   );

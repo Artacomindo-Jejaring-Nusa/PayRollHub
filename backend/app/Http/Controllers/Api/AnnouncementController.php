@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class AnnouncementController extends Controller
 {
@@ -45,7 +46,7 @@ class AnnouncementController extends Controller
     }
 
     /**
-     * Store a newly created announcement.
+     * Store a newly created announcement with optional attachment (photo/document).
      */
     public function store(Request $request): JsonResponse
     {
@@ -56,17 +57,39 @@ class AnnouncementController extends Controller
             'content' => ['required', 'string'],
             'category' => ['required', 'string', 'max:50'],
             'company' => ['required', 'string', 'in:all,rbs,rimamandiri'],
-            'is_pinned' => ['boolean'],
+            'is_pinned' => ['nullable'],
+            'attachment' => ['nullable', 'file', 'max:25600'], // max 25MB (photo or document)
         ]);
 
         if (!$currentUser->isSuperAdmin()) {
             $validated['company'] = $currentUser->company ?: 'rbs';
         }
 
+        $attachmentData = [];
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $mime = $file->getMimeType() ?: $file->getClientMimeType() ?: '';
+            $isImage = str_starts_with($mime, 'image/');
+            $path = $file->store('announcements', 'public');
+
+            $attachmentData = [
+                'attachment_path' => $path,
+                'attachment_name' => $file->getClientOriginalName(),
+                'attachment_type' => $isImage ? 'image' : 'file',
+                'attachment_mime' => $mime,
+                'attachment_size' => $file->getSize(),
+            ];
+        }
+
         $announcement = Announcement::create([
-            ...$validated,
+            'title' => $validated['title'],
+            'content' => $validated['content'],
+            'category' => $validated['category'],
+            'company' => $validated['company'],
+            'is_pinned' => filter_var($request->input('is_pinned', false), FILTER_VALIDATE_BOOLEAN),
             'author_id' => $currentUser->id,
             'published_at' => now(),
+            ...$attachmentData,
         ]);
 
         return response()->json([
@@ -95,14 +118,53 @@ class AnnouncementController extends Controller
             'content' => ['required', 'string'],
             'category' => ['required', 'string', 'max:50'],
             'company' => ['required', 'string', 'in:all,rbs,rimamandiri'],
-            'is_pinned' => ['boolean'],
+            'is_pinned' => ['nullable'],
+            'attachment' => ['nullable', 'file', 'max:25600'],
+            'remove_attachment' => ['nullable'],
         ]);
 
         if (!$currentUser->isSuperAdmin()) {
             $validated['company'] = $currentUser->company ?: 'rbs';
         }
 
-        $announcement->update($validated);
+        $updateData = [
+            'title' => $validated['title'],
+            'content' => $validated['content'],
+            'category' => $validated['category'],
+            'company' => $validated['company'],
+            'is_pinned' => filter_var($request->input('is_pinned', false), FILTER_VALIDATE_BOOLEAN),
+        ];
+
+        // Hapus attachment lama jika diminta
+        if (filter_var($request->input('remove_attachment', false), FILTER_VALIDATE_BOOLEAN)) {
+            if ($announcement->attachment_path && Storage::disk('public')->exists($announcement->attachment_path)) {
+                Storage::disk('public')->delete($announcement->attachment_path);
+            }
+            $updateData['attachment_path'] = null;
+            $updateData['attachment_name'] = null;
+            $updateData['attachment_type'] = null;
+            $updateData['attachment_mime'] = null;
+            $updateData['attachment_size'] = null;
+        }
+
+        // Upload attachment baru jika ada
+        if ($request->hasFile('attachment')) {
+            if ($announcement->attachment_path && Storage::disk('public')->exists($announcement->attachment_path)) {
+                Storage::disk('public')->delete($announcement->attachment_path);
+            }
+            $file = $request->file('attachment');
+            $mime = $file->getMimeType() ?: $file->getClientMimeType() ?: '';
+            $isImage = str_starts_with($mime, 'image/');
+            $path = $file->store('announcements', 'public');
+
+            $updateData['attachment_path'] = $path;
+            $updateData['attachment_name'] = $file->getClientOriginalName();
+            $updateData['attachment_type'] = $isImage ? 'image' : 'file';
+            $updateData['attachment_mime'] = $mime;
+            $updateData['attachment_size'] = $file->getSize();
+        }
+
+        $announcement->update($updateData);
 
         return response()->json([
             'status' => 'success',
@@ -112,7 +174,7 @@ class AnnouncementController extends Controller
     }
 
     /**
-     * Delete an announcement.
+     * Delete an announcement and its attachment file.
      */
     public function destroy(Request $request, Announcement $announcement): JsonResponse
     {
@@ -123,6 +185,10 @@ class AnnouncementController extends Controller
             if ($announcement->company !== $userCompany && $announcement->company !== 'all') {
                 abort(403, 'Akses ditolak. Anda tidak memiliki izin menghapus pengumuman perusahaan lain.');
             }
+        }
+
+        if ($announcement->attachment_path && Storage::disk('public')->exists($announcement->attachment_path)) {
+            Storage::disk('public')->delete($announcement->attachment_path);
         }
 
         $announcement->delete();

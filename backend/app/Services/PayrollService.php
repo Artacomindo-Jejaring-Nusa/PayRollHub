@@ -82,6 +82,21 @@ class PayrollService
             ->byStatus($request->input('status'))
             ->byCompany($company);
 
+        // Filter duplikat rekening bank jika diminta
+        if ($request->boolean('duplicate_account') || $request->input('duplicate_account') === '1' || $request->input('duplicate_account') === 'true') {
+            $duplicateAccList = DB::table('payrolls')
+                ->whereNotNull('bank_account')
+                ->where('bank_account', '!=', '')
+                ->where('bank_account', '!=', '-')
+                ->when($company, fn ($q) => $q->where('company', $company))
+                ->groupBy('bank_account')
+                ->havingRaw('COUNT(id) > 1')
+                ->pluck('bank_account')
+                ->toArray();
+
+            $query->whereIn('bank_account', $duplicateAccList);
+        }
+
         $sortBy = $request->input('sort_by', 'id');
         $sortOrder = strtolower($request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
 
@@ -119,7 +134,32 @@ class PayrollService
             $query->orderBy('id', 'asc');
         }
 
-        return $query->paginate($perPage)->withQueryString();
+        $paginator = $query->paginate($perPage)->withQueryString();
+
+        // Detect duplicate accounts for records in current page
+        $accountsOnPage = $paginator->getCollection()->pluck('bank_account')
+            ->filter(fn ($a) => !empty($a) && $a !== '-')
+            ->unique()
+            ->toArray();
+
+        if (!empty($accountsOnPage)) {
+            $duplicateCounts = DB::table('payrolls')
+                ->whereIn('bank_account', $accountsOnPage)
+                ->when($company, fn ($q) => $q->where('company', $company))
+                ->groupBy('bank_account')
+                ->select('bank_account', DB::raw('COUNT(id) as count'))
+                ->pluck('count', 'bank_account')
+                ->toArray();
+
+            foreach ($paginator->getCollection() as $item) {
+                $acc = $item->bank_account;
+                $count = $duplicateCounts[$acc] ?? 0;
+                $item->is_duplicate_bank_account = $count > 1;
+                $item->duplicate_account_count = $count;
+            }
+        }
+
+        return $paginator;
     }
 
     /**
@@ -154,12 +194,25 @@ class PayrollService
             COALESCE(SUM(take_home_pay), 0) as total_take_home_pay
         ')->first();
 
+        // Hitung rekening yang terduplikasi
+        $duplicateAccountsCount = DB::table('payrolls')
+            ->select('bank_account')
+            ->whereNotNull('bank_account')
+            ->where('bank_account', '!=', '')
+            ->where('bank_account', '!=', '-')
+            ->when($company, fn ($q) => $q->where('company', $company))
+            ->groupBy('bank_account')
+            ->havingRaw('COUNT(id) > 1')
+            ->pluck('bank_account')
+            ->count();
+
         return [
             'total_employees' => (int) ($metrics->total_employees ?? 0),
             'total_active_employees' => (int) ($metrics->total_active_employees ?? 0),
             'total_off_employees' => (int) ($metrics->total_off_employees ?? 0),
             'total_provinces' => (int) ($metrics->total_provinces ?? 0),
             'total_locations' => (int) ($metrics->total_locations ?? 0),
+            'total_duplicate_accounts' => $duplicateAccountsCount,
             'total_net_base_price' => (float) ($metrics->total_net_base_price ?? 0),
             'total_bpjs_kes' => (float) ($metrics->total_bpjs_kes ?? 0),
             'total_bpjs_tk' => (float) ($metrics->total_bpjs_tk ?? 0),

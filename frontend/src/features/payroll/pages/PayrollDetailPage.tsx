@@ -22,6 +22,7 @@ import {
   CreditCard,
   UserCheck,
   UserX,
+  RefreshCw,
 } from 'lucide-react';
 
 export const PayrollDetailPage: React.FC = () => {
@@ -368,36 +369,6 @@ export const PayrollDetailPage: React.FC = () => {
                       </td>
                     </tr>
 
-                    {/* BPJS TK JHT (2%) */}
-                    <tr>
-                      <td className="py-2.5 px-4 text-rose-700 pl-6">
-                        BPJS TK JHT (2%)
-                      </td>
-                      <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
-                        Pengurang (2%)
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
-                        {payroll.bpjs_tk && Number(payroll.bpjs_tk) > 0 
-                          ? `-${formatCurrency(Math.round(Number(payroll.basic_salary > 0 ? Number(payroll.basic_salary) * 0.02 : Number(payroll.bpjs_tk) * (2/3))))}`
-                          : 'Rp -'}
-                      </td>
-                    </tr>
-
-                    {/* BPJS TK JP (1%) */}
-                    <tr>
-                      <td className="py-2.5 px-4 text-rose-700 pl-6">
-                        BPJS TK JP (1%)
-                      </td>
-                      <td className="py-2.5 px-4 text-center text-[12px] text-rose-600 font-mono">
-                        Pengurang (1%)
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-mono text-rose-600 font-medium">
-                        {payroll.bpjs_tk && Number(payroll.bpjs_tk) > 0 
-                          ? `-${formatCurrency(Math.round(Number(payroll.bpjs_tk) - Math.round(Number(payroll.basic_salary > 0 ? Number(payroll.basic_salary) * 0.02 : Number(payroll.bpjs_tk) * (2/3)))))}`
-                          : 'Rp -'}
-                      </td>
-                    </tr>
-
                     {/* PPh 21 */}
                     <tr>
                       <td className="py-2.5 px-4 text-rose-700 pl-6">
@@ -467,7 +438,10 @@ export const PayrollDetailPage: React.FC = () => {
                         Subtotal
                       </td>
                       <td className="py-2.5 px-4 text-right font-mono text-rose-700 text-[14px]">
-                        -{formatCurrency(Number(payroll.bpjs_tk || 0) + Number(payroll.absence_deduction || 0) + Number(payroll.deduction || 0) + Number(payroll.pph21 || 0))}
+                        {(() => {
+                          const potTotal = Number(payroll.absence_deduction || 0) + Number(payroll.deduction || 0) + Number(payroll.pph21 || 0);
+                          return potTotal > 0 ? `-${formatCurrency(potTotal)}` : 'Rp -';
+                        })()}
                       </td>
                     </tr>
                   </tbody>
@@ -476,13 +450,13 @@ export const PayrollDetailPage: React.FC = () => {
             </div>
 
             {/* Net Take Home Pay Total Box */}
-            <div className="p-5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-primary/40 flex items-center justify-between">
+            <div className="p-5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-primary/40 flex items-center justify-between mb-5">
               <div>
                 <div className="font-title-card text-[14px] font-bold text-primary uppercase tracking-wider">
-                  TOTAL GAJI DITERIMA (TAKE HOME PAY)
+                  TOTAL GAJI DITERIMA
                 </div>
                 <span className="text-[12px] text-text-muted">
-                  Ditransfer langsung ke rekening {payroll.bank_name || 'karyawan'}
+                  Ditransfer ke rekening {payroll.bank_name ? `${payroll.bank_name} (${payroll.bank_account || '-'})` : 'karyawan'}
                 </span>
               </div>
 
@@ -490,6 +464,55 @@ export const PayrollDetailPage: React.FC = () => {
                 {payroll.formatted_take_home_pay}
               </div>
             </div>
+
+            {/* BPJS Yang Bisa Dicairkan (Format Slip Baru 2026 - Non-Potongan) */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-300 mb-6">
+              <div className="font-title-card text-[13.5px] font-bold text-text-primary uppercase tracking-wide mb-2.5 flex items-center justify-between">
+                <span>BPJS yang bisa dicairkan (Non-potongan)</span>
+                <span className="text-[11px] font-normal text-text-muted">Muncul di slip 2026</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
+                <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-border-subtle">
+                  <span className="text-text-secondary">BPJS TK JHT</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {payroll.bpjs_tk_jht && Number(payroll.bpjs_tk_jht) > 0
+                      ? formatCurrency(payroll.bpjs_tk_jht)
+                      : payroll.bpjs_tk && Number(payroll.bpjs_tk) > 0
+                      ? formatCurrency(Math.round(Number(payroll.bpjs_tk) * 0.43))
+                      : 'Rp -'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-border-subtle">
+                  <span className="text-text-secondary">BPJS TK JP</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {payroll.bpjs_tk_jp && Number(payroll.bpjs_tk_jp) > 0
+                      ? formatCurrency(payroll.bpjs_tk_jp)
+                      : payroll.bpjs_tk && Number(payroll.bpjs_tk) > 0
+                      ? formatCurrency(Math.round(Number(payroll.bpjs_tk) * 0.57))
+                      : 'Rp -'}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[11px] text-text-muted mt-2">
+                * Catatan: Sesuai format slip gaji 2026, BPJS Ketenagakerjaan tidak memotong Gaji Diterima (THP) dan diakumulasi sebagai saldo klaim karyawan.
+              </p>
+            </div>
+
+            {/* Replacement Note if exists */}
+            {payroll.replaced_employee_name && (
+              <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 text-[12.5px] mb-6 flex items-start gap-2.5">
+                <RefreshCw className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Rekam Jejak Pergantian Karyawan:</strong> Karyawan ini menggantikan posisi <strong>{payroll.replaced_employee_name}</strong>
+                  {payroll.replacement_date ? ` per tanggal ${payroll.replacement_date}` : ''}.
+                  {payroll.replacement_note && (
+                    <span className="block text-amber-800 text-[11.5px] mt-0.5 italic">
+                      Catatan: {payroll.replacement_note}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           /* Operational Placement Summary for User */

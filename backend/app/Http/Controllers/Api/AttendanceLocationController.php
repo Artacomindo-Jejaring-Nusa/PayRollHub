@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\AttendanceLocation;
+use App\Models\AttendanceSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -131,7 +132,26 @@ class AttendanceLocationController extends Controller
             $validated['tenant_id'] = $validated['tenant_id'] ?? 'rbs';
         }
 
+        // POINT 10: Hanya Super Admin yang berwenang membuat titik lokasi Kantor Pusat
+        if (($validated['type'] ?? '') === 'headquarters' && !$user->isSuperAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akses ditolak: Hanya Super Admin yang berwenang membuat titik lokasi bertipe Kantor Pusat.',
+            ], 403);
+        }
+
         $location = AttendanceLocation::create($validated);
+
+        // Jika lokasi ini dibuat sebagai Kantor Pusat oleh Super Admin, sinkronkan ke attendance_settings
+        if ($location->type === 'headquarters') {
+            $setting = AttendanceSetting::getActiveSetting($location->tenant_id);
+            $setting->update([
+                'office_name' => $location->name,
+                'latitude' => $location->latitude,
+                'longitude' => $location->longitude,
+                'radius_meters' => $location->radius_meters,
+            ]);
+        }
 
         // Otomatis tautkan karyawan yang unit sekolahnya cocok
         $linkedCount = \App\Models\User::query()
@@ -146,7 +166,7 @@ class AttendanceLocationController extends Controller
         ActivityLog::record(
             action: 'CREATE_ATTENDANCE_LOCATION',
             module: 'attendance',
-            description: "Menambahkan lokasi absensi baru: {$location->name} (Radius: {$location->radius_meters}m, {$linkedCount} karyawan otomatis terhubung)",
+            description: "Menambahkan lokasi absensi baru: {$location->name} (" . ($location->type === 'headquarters' ? 'Kantor Pusat' : 'Radius ' . $location->radius_meters . 'm') . ", {$linkedCount} karyawan otomatis terhubung)",
             details: $validated,
             company: $location->tenant_id
         );
@@ -192,7 +212,26 @@ class AttendanceLocationController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        // POINT 10: Hanya Super Admin yang berwenang mengubah titik lokasi Kantor Pusat
+        if (($attendanceLocation->type === 'headquarters' || ($validated['type'] ?? '') === 'headquarters') && !$user->isSuperAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akses ditolak: Hanya Super Admin yang berwenang mengubah titik lokasi Kantor Pusat.',
+            ], 403);
+        }
+
         $attendanceLocation->update($validated);
+
+        // Jika lokasi ini bertipe Kantor Pusat, sinkronkan ke attendance_settings
+        if ($attendanceLocation->type === 'headquarters') {
+            $setting = AttendanceSetting::getActiveSetting($attendanceLocation->tenant_id);
+            $setting->update([
+                'office_name' => $attendanceLocation->name,
+                'latitude' => $attendanceLocation->latitude,
+                'longitude' => $attendanceLocation->longitude,
+                'radius_meters' => $attendanceLocation->radius_meters,
+            ]);
+        }
 
         ActivityLog::record(
             action: 'UPDATE_ATTENDANCE_LOCATION',
@@ -229,6 +268,14 @@ class AttendanceLocationController extends Controller
             abort(403, 'Akses ditolak. Anda tidak memiliki izin menghapus lokasi perusahaan lain.');
         }
 
+        // POINT 10: Titik Kantor Pusat tidak dapat dihapus oleh Admin biasa
+        if ($attendanceLocation->type === 'headquarters' && !$user->isSuperAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Titik lokasi Kantor Pusat tidak dapat dihapus. Hanya Super Admin yang berwenang mengelola Kantor Pusat.',
+            ], 403);
+        }
+
         $name = $attendanceLocation->name;
         $tenantId = $attendanceLocation->tenant_id;
         $attendanceLocation->delete();
@@ -257,20 +304,22 @@ class AttendanceLocationController extends Controller
             ? ($request->input('company') ?: 'rbs')
             : ($user->company ?: 'rbs');
 
-        $count = AttendanceLocation::forTenant($targetCompany)->count();
-        AttendanceLocation::forTenant($targetCompany)->delete();
+        // POINT 10: Selalu amankan titik lokasi Kantor Pusat agar patokan absensi Admin tidak terhapus
+        $query = AttendanceLocation::forTenant($targetCompany)->where('type', '!=', 'headquarters');
+        $count = $query->count();
+        $query->delete();
 
         ActivityLog::record(
             action: 'CLEAR_ATTENDANCE_LOCATIONS',
             module: 'attendance',
-            description: "Mengosongkan seluruh master lokasi absensi ({$targetCompany}) - Jumlah dihapus: {$count} lokasi",
+            description: "Mengosongkan daftar lokasi absensi ({$targetCompany}) kecuali Kantor Pusat - Jumlah dihapus: {$count} lokasi",
             details: ['deleted_count' => $count],
             company: $targetCompany
         );
 
         return response()->json([
             'status' => 'success',
-            'message' => "Seluruh master lokasi ({$count} data) untuk {$targetCompany} berhasil dibersihkan.",
+            'message' => "Master lokasi ({$count} data unit/sekolah) untuk {$targetCompany} berhasil dibersihkan (Kantor Pusat tetap dipertahankan).",
             'deleted_count' => $count,
         ]);
     }

@@ -9,6 +9,7 @@ import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { Card } from '../../../components/ui/Card';
+import { ProvincePayrollSetting, OffEmployeeItem } from '../../../types/payroll';
 import {
   ArrowLeft,
   Save,
@@ -27,6 +28,10 @@ import {
   CheckCircle2,
   Plus,
   Trash2,
+  RefreshCw,
+  SlidersHorizontal,
+  History,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const PayrollFormPage: React.FC = () => {
@@ -54,9 +59,22 @@ export const PayrollFormPage: React.FC = () => {
   const [bankAccount, setBankAccount] = useState('');
   const [bankName, setBankName] = useState('BNI');
 
-  // Formula Gaji Pokok & BPJS (Sesuai Rumus Resmi PM)
+  // Pergantian Karyawan (Pengganti Karyawan Off)
+  const [isReplacing, setIsReplacing] = useState(false);
+  const [replacedPayrollId, setReplacedPayrollId] = useState<number | string>('');
+  const [replacedEmployeeName, setReplacedEmployeeName] = useState('');
+  const [replacementDate, setReplacementDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+  const [replacementNote, setReplacementNote] = useState('');
+  const [offEmployees, setOffEmployees] = useState<OffEmployeeItem[]>([]);
+  const [provinceSettings, setProvinceSettings] = useState<ProvincePayrollSetting[]>([]);
+
+  // Formula Gaji Pokok & BPJS (Sesuai Format Resmi 2026)
   const [basicSalary, setBasicSalary] = useState<number | string>('');
   const [bpjsKes, setBpjsKes] = useState<number | string>('');
+  const [bpjsTkJht, setBpjsTkJht] = useState<number | string>(0);
+  const [bpjsTkJp, setBpjsTkJp] = useState<number | string>(0);
   const [bpjsTk, setBpjsTk] = useState<number | string>(0);
   const [netBasePrice, setNetBasePrice] = useState<number | string>('');
 
@@ -77,15 +95,31 @@ export const PayrollFormPage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
 
-  // Auto-hitung BPJS Kesehatan saat Gaji Pokok berubah (BPJS TK default 0)
+  // Load auxiliary data: Province settings & Off employees
+  useEffect(() => {
+    payrollService.getProvinceSettings(tenant.id).then(setProvinceSettings).catch(console.error);
+    payrollService.getOffEmployees(undefined, tenant.id).then(setOffEmployees).catch(console.error);
+  }, [tenant.id]);
+
+  // Handler auto-apply dari pengaturan provinsi
+  const handleApplyProvinceRules = (provName: string) => {
+    const found = provinceSettings.find(
+      (p) => p.province.trim().toUpperCase() === provName.trim().toUpperCase()
+    );
+    if (found) {
+      setBpjsKes(found.bpjs_kes);
+      setBpjsTkJht(found.bpjs_tk_jht);
+      setBpjsTkJp(found.bpjs_tk_jp);
+      setBpjsTk(found.bpjs_tk);
+    }
+  };
+
+  // Auto-hitung BPJS Kesehatan saat Gaji Pokok berubah jika belum terisi
   const handleBasicSalaryChange = (valStr: string) => {
     setBasicSalary(valStr);
     const val = parseFloat(valStr) || 0;
-    if (val > 0) {
-      if (!bpjsKes || Number(bpjsKes) === 0) {
-        setBpjsKes(100000);
-      }
-      // Note: BPJS TK default 0 karena setiap karyawan nilai nya berbeda-beda
+    if (val > 0 && (!bpjsKes || Number(bpjsKes) === 0)) {
+      handleApplyProvinceRules(province);
     }
   };
 
@@ -127,20 +161,18 @@ export const PayrollFormPage: React.FC = () => {
     setAbsenceDeduction(total);
   };
 
-  // Live Take Home Pay (Rumus Resmi: Pokok + BPJS KES + Tunjangan - BPJS TK - Absensi - Potongan Kustom)
+  // Format 2026: BPJS TK BUKAN pengurang! THP = (Pokok + BPJS KES + Tunjangan) - (Absensi + Potongan Kustom)
   const numBasic = parseFloat(String(basicSalary)) || 0;
   const numBpjsKes = parseFloat(String(bpjsKes)) || 0;
-  const numBpjsTk = parseFloat(String(bpjsTk)) || 0;
   const numAllowance = parseFloat(String(allowance)) || 0;
   const numAbsence = parseFloat(String(absenceDeduction)) || 0;
-
   const numCustomDeductions = customDeductions.reduce((sum, item) => {
     const val = parseFloat(String(item.amount)) || 0;
     return sum + (val > 0 ? val : 0);
   }, 0);
 
   const totalEarnings = numBasic + numBpjsKes + numAllowance;
-  const totalDeductions = numBpjsTk + numAbsence + numCustomDeductions;
+  const totalDeductions = numAbsence + numCustomDeductions;
   const takeHomePay = Math.max(0, totalEarnings - totalDeductions);
 
   useEffect(() => {
@@ -163,8 +195,18 @@ export const PayrollFormPage: React.FC = () => {
 
           setNetBasePrice(data.net_base_price ?? '');
           setBpjsKes(data.bpjs_kes ?? '');
+          setBpjsTkJht(data.bpjs_tk_jht ?? 0);
+          setBpjsTkJp(data.bpjs_tk_jp ?? 0);
           setBpjsTk(data.bpjs_tk ?? 0);
           setBasicSalary(data.basic_salary);
+
+          if (data.replaced_employee_name || data.replaced_payroll_id) {
+            setIsReplacing(true);
+            setReplacedPayrollId(data.replaced_payroll_id ?? '');
+            setReplacedEmployeeName(data.replaced_employee_name ?? '');
+            setReplacementDate(data.replacement_date ? data.replacement_date.slice(0, 10) : new Date().toISOString().split('T')[0]);
+            setReplacementNote(data.replacement_note ?? '');
+          }
 
           setAbsenceCount(data.absence_count ?? 0);
           setAbsenceRate(data.absence_rate ?? 50000);
@@ -211,6 +253,8 @@ export const PayrollFormPage: React.FC = () => {
     setGeneralError(null);
     setIsSubmitting(true);
 
+    const calculatedTk = (parseFloat(String(bpjsTkJht)) || 0) + (parseFloat(String(bpjsTkJp)) || 0);
+
     const payload = {
       row_no: rowNo.trim() || undefined,
       employee_name: employeeName.trim(),
@@ -226,8 +270,15 @@ export const PayrollFormPage: React.FC = () => {
 
       net_base_price: netBasePrice !== '' ? parseFloat(String(netBasePrice)) : undefined,
       bpjs_kes: bpjsKes !== '' ? parseFloat(String(bpjsKes)) : undefined,
-      bpjs_tk: bpjsTk !== '' ? parseFloat(String(bpjsTk)) : 0,
+      bpjs_tk_jht: bpjsTkJht !== '' ? parseFloat(String(bpjsTkJht)) : 0,
+      bpjs_tk_jp: bpjsTkJp !== '' ? parseFloat(String(bpjsTkJp)) : 0,
+      bpjs_tk: calculatedTk > 0 ? calculatedTk : (bpjsTk !== '' ? parseFloat(String(bpjsTk)) : 0),
       basic_salary: numBasic,
+
+      replaced_payroll_id: isReplacing && replacedPayrollId ? Number(replacedPayrollId) : undefined,
+      replaced_employee_name: isReplacing ? replacedEmployeeName.trim() || undefined : undefined,
+      replacement_date: isReplacing ? replacementDate.trim() || undefined : undefined,
+      replacement_note: isReplacing ? replacementNote.trim() || undefined : undefined,
 
       absence_count: absenceCount || 0,
       absence_rate: absenceRate || 0,
@@ -392,20 +443,32 @@ export const PayrollFormPage: React.FC = () => {
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <Select
-                    label="Fungsi Tenaga Kependidikan (Jabatan)"
-                    value={position}
-                    onChange={(e) => setPosition(e.target.value)}
-                    error={errors.position}
-                    options={[
+                  {(() => {
+                    const basePositionOptions = [
+                      { label: 'Security', value: 'Security' },
+                      { label: 'Satpam', value: 'Satpam' },
                       { label: 'Wali Asuh', value: 'Wali Asuh' },
                       { label: 'Cleaning Service', value: 'Cleaning Service' },
                       { label: 'Juru Masak', value: 'Juru Masak' },
                       { label: 'Wali Asrama', value: 'Wali Asrama' },
                       { label: 'Tata Usaha', value: 'Tata Usaha' },
                       { label: 'Operator Data Sekolah', value: 'Operator Data Sekolah' },
-                    ]}
-                  />
+                    ];
+                    // Jika posisi yang sedang diedit belum ada di daftar, tambahkan dinamis agar tidak hilang
+                    const options = [...basePositionOptions];
+                    if (position && !options.some((opt) => opt.value.toLowerCase() === position.toLowerCase())) {
+                      options.unshift({ label: position, value: position });
+                    }
+                    return (
+                      <Select
+                        label="Fungsi Tenaga Kependidikan (Jabatan)"
+                        value={position}
+                        onChange={(e) => setPosition(e.target.value)}
+                        error={errors.position}
+                        options={options}
+                      />
+                    );
+                  })()}
 
                   <Input
                     label="Tanggal Masuk Bekerja"
@@ -577,6 +640,88 @@ export const PayrollFormPage: React.FC = () => {
                   Rekening digunakan untuk slip transfer gaji resmi periode <strong>{period}</strong>.
                 </span>
               </div>
+
+              {/* Pergantian Karyawan (Pengganti Karyawan Off) */}
+              <div className="pt-3 border-t border-border-row space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[12px] font-semibold text-text-secondary flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isReplacing}
+                      onChange={(e) => setIsReplacing(e.target.checked)}
+                      className="w-4 h-4 rounded text-primary focus:ring-primary border-slate-300 cursor-pointer"
+                    />
+                    <span>Karyawan ini menggantikan karyawan keluar / off</span>
+                  </label>
+                  {isReplacing && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      Pergantian Posisi
+                    </span>
+                  )}
+                </div>
+
+                {isReplacing && (
+                  <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-amber-900 mb-1">
+                        Pilih Karyawan Yang Digantikan (Off/Keluar)
+                      </label>
+                      <select
+                        value={replacedPayrollId}
+                        onChange={(e) => {
+                          setReplacedPayrollId(e.target.value);
+                          const sel = offEmployees.find((o) => o.id === Number(e.target.value));
+                          if (sel) {
+                            setReplacedEmployeeName(sel.employee_name);
+                          }
+                        }}
+                        className="w-full h-9 px-3 rounded-lg border border-amber-300 bg-white text-[12.5px] outline-none focus:ring-2 focus:ring-primary text-text-primary"
+                      >
+                        <option value="">-- Pilih dari Karyawan Off ({offEmployees.length}) --</option>
+                        {offEmployees.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.employee_name} ({o.position || '-'}) - {o.school_unit || '-'} {o.resign_date ? `[Out: ${o.resign_date}]` : ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="text"
+                        placeholder="Atau ketik nama karyawan yang digantikan..."
+                        value={replacedEmployeeName}
+                        onChange={(e) => setReplacedEmployeeName(e.target.value)}
+                        className="w-full h-8 px-3 mt-1.5 rounded-lg border border-amber-200 bg-white text-[12px] outline-none focus:ring-2 focus:ring-primary text-text-primary"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                          Tanggal Efektif Penggantian
+                        </label>
+                        <input
+                          type="date"
+                          value={replacementDate}
+                          onChange={(e) => setReplacementDate(e.target.value)}
+                          className="w-full h-8 px-2.5 rounded-lg border border-amber-300 bg-white text-[12px] outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                          Catatan / Keterangan
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Contoh: Menggantikan Wali Asuh Asrama 1"
+                          value={replacementNote}
+                          onChange={(e) => setReplacementNote(e.target.value)}
+                          className="w-full h-8 px-2.5 rounded-lg border border-amber-300 bg-white text-[12px] outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -595,10 +740,20 @@ export const PayrollFormPage: React.FC = () => {
                       3. Gaji Pokok & Komponen BPJS
                     </h2>
                     <p className="text-[11px] text-text-muted">
-                      Gaji Pokok, Tunjangan BPJS KES (+), & Potongan BPJS TK (-)
+                      Gaji Pokok, BPJS Kesehatan (+), & BPJS Ketenagakerjaan (Non-potongan)
                     </p>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyProvinceRules(province)}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-colors flex items-center gap-1 cursor-pointer"
+                  title={`Gunakan nilai standar UMP provinsi ${province}`}
+                >
+                  <SlidersHorizontal className="w-3 h-3" />
+                  <span>Isi Sesuai {province}</span>
+                </button>
               </div>
 
               <div className="space-y-3.5">
@@ -609,7 +764,7 @@ export const PayrollFormPage: React.FC = () => {
                     type="number"
                     min="0"
                     step="1"
-                    placeholder="Contoh: 3489300"
+                    placeholder="Contoh: 3291906"
                     value={basicSalary}
                     onChange={(e) => handleBasicSalaryChange(e.target.value)}
                     error={errors.basic_salary}
@@ -628,30 +783,53 @@ export const PayrollFormPage: React.FC = () => {
                       type="number"
                       min="0"
                       step="1"
-                      placeholder="Contoh: 100000"
+                      placeholder="Contoh: 192094"
                       value={bpjsKes}
                       onChange={(e) => setBpjsKes(e.target.value)}
                       error={errors.bpjs_kes}
                     />
                     <span className="text-[10px] text-emerald-600 font-medium">
-                      + Tunjangan Kesehatan (Penambah)
+                      + Tunjangan Kesehatan (Penambah ke Total Gaji)
                     </span>
                   </div>
 
-                  {/* BPJS TK */}
-                  <div>
-                    <Input
-                      label="Potongan BPJS TK (Rp)"
-                      type="number"
-                      min="0"
-                      step="1"
-                      placeholder="0 (Default 0 jika tidak ada)"
-                      value={bpjsTk}
-                      onChange={(e) => setBpjsTk(e.target.value)}
-                      error={errors.bpjs_tk}
-                    />
-                    <span className="text-[10px] text-text-muted font-medium block mt-0.5">
-                      - BPJS TK default Rp 0 (karena tiap karyawan berbeda). Masukkan nominal jika ada potongan.
+                  {/* BPJS TK JHT & JP */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[12px] font-semibold text-text-secondary">
+                      BPJS TK (JHT & JP) - Non-Potongan
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="JHT: 150000"
+                        value={bpjsTkJht}
+                        onChange={(e) => {
+                          setBpjsTkJht(e.target.value);
+                          const total = (parseFloat(e.target.value) || 0) + (parseFloat(String(bpjsTkJp)) || 0);
+                          setBpjsTk(total);
+                        }}
+                        className="w-full h-10 px-2.5 rounded-lg border border-border-subtle bg-surface text-[12px] font-mono outline-none focus:ring-2 focus:ring-primary"
+                        title="BPJS TK JHT"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="JP: 200000"
+                        value={bpjsTkJp}
+                        onChange={(e) => {
+                          setBpjsTkJp(e.target.value);
+                          const total = (parseFloat(String(bpjsTkJht)) || 0) + (parseFloat(e.target.value) || 0);
+                          setBpjsTk(total);
+                        }}
+                        className="w-full h-10 px-2.5 rounded-lg border border-border-subtle bg-surface text-[12px] font-mono outline-none focus:ring-2 focus:ring-primary"
+                        title="BPJS TK JP"
+                      />
+                    </div>
+                    <span className="text-[10.5px] text-text-muted block">
+                      Total BPJS TK: <strong className="font-mono text-primary">{formatCurrency((parseFloat(String(bpjsTkJht)) || 0) + (parseFloat(String(bpjsTkJp)) || 0))}</strong> (Muncul di bawah slip sebagai saldo dicairkan, tidak memotong gaji diterima).
                     </span>
                   </div>
                 </div>
@@ -865,7 +1043,10 @@ export const PayrollFormPage: React.FC = () => {
                         TOTAL TAKE HOME PAY (BERSIH)
                       </span>
                       <span className="text-[10.5px] text-emerald-700 font-mono">
-                        Pokok ({formatCurrency(numBasic)}) + BPJS KES ({formatCurrency(numBpjsKes)}) + Tunjangan ({formatCurrency(numAllowance)}) - BPJS TK ({formatCurrency(numBpjsTk)}) - Absensi ({formatCurrency(numAbsence)}) - Potongan ({formatCurrency(numCustomDeductions)})
+                        Pokok ({formatCurrency(numBasic)}) + BPJS KES ({formatCurrency(numBpjsKes)}) + Tunjangan ({formatCurrency(numAllowance)}) - Absensi ({formatCurrency(numAbsence)}) - Potongan ({formatCurrency(numCustomDeductions)})
+                      </span>
+                      <span className="text-[10px] text-emerald-600 block mt-0.5">
+                        * Sesuai format slip 2026: BPJS Ketenagakerjaan dicairkan terpisah dan tidak memotong gaji diterima.
                       </span>
                     </div>
 

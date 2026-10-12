@@ -32,6 +32,9 @@ class Attendance extends Model
 
     protected $appends = [
         'photo_full_url',
+        'work_duration_minutes',
+        'work_duration_formatted',
+        'is_eight_hours_met',
     ];
 
     protected $casts = [
@@ -43,6 +46,43 @@ class Attendance extends Model
         'check_out_lng' => 'float',
         'check_out_distance_meters' => 'float',
     ];
+
+    public function getWorkDurationMinutesAttribute(): ?int
+    {
+        if (!$this->check_in_time || !$this->check_out_time) {
+            return null;
+        }
+        try {
+            $in = \Carbon\Carbon::createFromTimeString($this->check_in_time);
+            $out = \Carbon\Carbon::createFromTimeString($this->check_out_time);
+            if ($out->lessThan($in)) {
+                $out->addDay();
+            }
+            return (int) $in->diffInMinutes($out);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public function getWorkDurationFormattedAttribute(): ?string
+    {
+        $minutes = $this->work_duration_minutes;
+        if ($minutes === null) {
+            return null;
+        }
+        $hours = intdiv($minutes, 60);
+        $remMinutes = $minutes % 60;
+        return "{$hours}j {$remMinutes}m";
+    }
+
+    public function getIsEightHoursMetAttribute(): ?bool
+    {
+        $minutes = $this->work_duration_minutes;
+        if ($minutes === null) {
+            return null;
+        }
+        return $minutes >= 480; // 8 jam kerja = 480 menit
+    }
 
     public function getPhotoFullUrlAttribute(): ?string
     {

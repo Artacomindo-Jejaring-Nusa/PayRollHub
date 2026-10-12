@@ -53,6 +53,12 @@ class UpdatePayrollRequest extends FormRequest
             'pph21' => ['nullable', 'numeric', 'min:0'],
             'bank_account' => ['nullable', 'string', 'max:50'],
             'bank_name' => ['nullable', 'string', 'max:50'],
+            'bpjs_tk_jht' => ['nullable', 'numeric', 'min:0'],
+            'bpjs_tk_jp' => ['nullable', 'numeric', 'min:0'],
+            'replaced_payroll_id' => ['nullable', 'integer'],
+            'replaced_employee_name' => ['nullable', 'string', 'max:150'],
+            'replacement_note' => ['nullable', 'string', 'max:500'],
+            'replacement_date' => ['nullable', 'date'],
         ];
     }
 
@@ -86,10 +92,18 @@ class UpdatePayrollRequest extends FormRequest
             }
         }
 
+        $bpjsTkJht = (float) ($this->bpjs_tk_jht ?? 0);
+        $bpjsTkJp = (float) ($this->bpjs_tk_jp ?? 0);
+        if (($bpjsTkJht > 0 || $bpjsTkJp > 0) && $bpjsTk <= 0) {
+            $bpjsTk = $bpjsTkJht + $bpjsTkJp;
+        }
+
         $this->merge([
             'net_base_price' => $netBase,
             'bpjs_kes' => $bpjsKes,
             'bpjs_tk' => $bpjsTk,
+            'bpjs_tk_jht' => $bpjsTkJht,
+            'bpjs_tk_jp' => $bpjsTkJp,
             'basic_salary' => $basicSalary,
             'allowance' => $this->allowance ?? 0,
             'deduction' => $deduction,

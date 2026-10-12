@@ -18,7 +18,11 @@ import {
   Briefcase,
   Building2,
   CreditCard,
+  MessageSquareWarning,
+  Image as ImageIcon,
+  Paperclip,
 } from 'lucide-react';
+import { CreateComplaintModal } from '../../complaints/components/CreateComplaintModal';
 
 export const EmployeeDashboardPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -28,6 +32,7 @@ export const EmployeeDashboardPage: React.FC = () => {
   const [data, setData] = useState<EmployeeDashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isComplaintModalOpen, setIsComplaintModalOpen] = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -465,45 +470,119 @@ export const EmployeeDashboardPage: React.FC = () => {
                     <p className="text-[12.5px] text-text-muted line-clamp-2 leading-relaxed">
                       {ann.content}
                     </p>
+                    {ann.attachment_url && (
+                      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-primary font-medium">
+                        {ann.attachment_type === 'image' ? (
+                          <>
+                            <ImageIcon className="w-3 h-3" />
+                            <span>Foto Terlampir</span>
+                          </>
+                        ) : (
+                          <>
+                            <Paperclip className="w-3 h-3" />
+                            <span>Dokumen Terlampir</span>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </Card>
 
-          {/* Work Report Quick Card */}
+          {/* Employee Complaints Card (Point 11: Tulisan & Foto) */}
           <Card className="p-6 sm:p-7 border-border-subtle bg-surface-panel shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-3.5 border-b border-border-subtle">
               <div className="flex items-center gap-2.5">
-                <ClipboardList className="w-4.5 h-4.5 text-text-muted" />
-                <h3 className="font-bold text-[15px] text-text-primary">
-                  Aktivitas Laporan Kerja
-                </h3>
+                <MessageSquareWarning className="w-5 h-5 text-primary" />
+                <div>
+                  <h3 className="font-bold text-[15px] text-text-primary">
+                    Pusat Keluhan Karyawan
+                  </h3>
+                  <span className="text-[11px] text-text-muted">Point 11: Tulisan & Foto</span>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => navigate('/employee/reports')}
+                onClick={() => navigate('/employee/complaints')}
                 className="text-[12.5px] font-semibold text-primary hover:underline"
               >
-                Kelola
+                Lihat Semua
               </button>
             </div>
 
-            <p className="text-[13px] text-text-muted leading-relaxed">
-              Kirimkan ringkasan aktivitas tugas harian dan dokumentasi foto kegiatan kerja Anda untuk dievaluasi oleh tim HR.
-            </p>
+            {/* Summary Counts */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                <div className="text-base font-bold text-amber-900">
+                  {data?.complaints_summary?.pending ?? 0}
+                </div>
+                <span className="text-[10px] font-semibold text-amber-800">Menunggu</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200">
+                <div className="text-base font-bold text-sky-900">
+                  {data?.complaints_summary?.in_progress ?? 0}
+                </div>
+                <span className="text-[10px] font-semibold text-sky-800">Ditinjau</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                <div className="text-base font-bold text-emerald-900">
+                  {data?.complaints_summary?.resolved ?? 0}
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-800">Selesai</span>
+              </div>
+            </div>
 
+            {/* Action button: Tulis Keluhan Baru */}
             <button
               type="button"
-              onClick={() => navigate('/employee/reports')}
-              className="w-full py-3 rounded-xl bg-surface hover:bg-surface-container border border-border-subtle text-[13px] font-semibold text-text-primary flex items-center justify-center gap-2 transition-colors mt-2"
+              onClick={() => setIsComplaintModalOpen(true)}
+              className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-primary" />
-              <span>Buat Laporan Hari Ini</span>
+              <Plus className="w-4 h-4" />
+              <span>Tulis Keluhan Baru (Tulisan & Foto)</span>
             </button>
+
+            {/* Recent Complaints */}
+            {data?.recent_complaints && data.recent_complaints.length > 0 && (
+              <div className="pt-2 space-y-2 border-t border-border-subtle">
+                <span className="text-[11px] font-semibold text-text-muted block">Keluhan Terbaru Anda:</span>
+                {data.recent_complaints.slice(0, 2).map((comp) => (
+                  <div
+                    key={comp.id}
+                    onClick={() => navigate('/employee/complaints')}
+                    className="p-2.5 rounded-xl bg-surface hover:bg-surface-container border border-border-subtle text-xs cursor-pointer transition-colors space-y-1"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-text-primary line-clamp-1">{comp.title}</span>
+                      <span
+                        className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
+                          comp.status === 'resolved'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : comp.status === 'in_progress'
+                            ? 'bg-sky-100 text-sky-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {comp.status === 'resolved' ? 'Selesai' : comp.status === 'in_progress' ? 'Ditinjau' : 'Menunggu'}
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] text-text-muted line-clamp-1">{comp.description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       </div>
+
+      {/* Modal Tulis Keluhan Karyawan */}
+      <CreateComplaintModal
+        isOpen={isComplaintModalOpen}
+        onClose={() => setIsComplaintModalOpen(false)}
+        onSuccess={fetchDashboard}
+      />
     </div>
   );
 };

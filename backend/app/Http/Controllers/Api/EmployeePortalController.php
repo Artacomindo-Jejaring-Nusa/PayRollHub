@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\PayrollResource;
 use App\Http\Resources\UserResource;
 use App\Models\Announcement;
+use App\Models\Complaint;
 use App\Models\Payroll;
 use App\Models\WorkReport;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -61,6 +62,16 @@ class EmployeePortalController extends Controller
                 ->count();
         }
 
+        // 5. Complaints stats for current employee
+        $totalComplaints = Complaint::where('user_id', $user->id)->count();
+        $pendingComplaints = Complaint::where('user_id', $user->id)->where('status', 'pending')->count();
+        $inProgressComplaints = Complaint::where('user_id', $user->id)->where('status', 'in_progress')->count();
+        $resolvedComplaints = Complaint::where('user_id', $user->id)->where('status', 'resolved')->count();
+        $recentComplaints = Complaint::where('user_id', $user->id)
+            ->latest()
+            ->take(5)
+            ->get();
+
         return response()->json([
             'status' => 'success',
             'data' => [
@@ -73,6 +84,13 @@ class EmployeePortalController extends Controller
                     'approved' => $approvedReports,
                 ],
                 'recent_announcements' => $announcements,
+                'complaints_summary' => [
+                    'total' => $totalComplaints,
+                    'pending' => $pendingComplaints,
+                    'in_progress' => $inProgressComplaints,
+                    'resolved' => $resolvedComplaints,
+                ],
+                'recent_complaints' => $recentComplaints,
             ],
         ]);
     }

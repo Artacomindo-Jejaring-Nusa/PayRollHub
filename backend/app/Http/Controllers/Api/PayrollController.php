@@ -676,6 +676,19 @@ class PayrollController extends Controller
             company: $company
         );
 
+        if ($totalSaved === 0 && !empty($import->getErrors())) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengimpor data: ' . ($import->getErrors()[0] ?? 'Periksa format file Anda.'),
+                'data' => [
+                    'imported_count' => 0,
+                    'updated_count' => 0,
+                    'errors' => $import->getErrors(),
+                    'warnings' => $import->getWarnings(),
+                ],
+            ], 422);
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Proses import data selesai dan berhasil disimpan.',

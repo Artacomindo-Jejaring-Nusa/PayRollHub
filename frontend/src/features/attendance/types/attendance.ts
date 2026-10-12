@@ -8,6 +8,8 @@ export interface OfficeSetting {
   work_end_time: string;
   late_tolerance_minutes: number;
   is_active?: boolean;
+  can_edit?: boolean;
+  headquarters_location_id?: number | null;
 }
 
 export interface AttendanceLocation {
@@ -58,6 +60,9 @@ export interface AttendanceRecord {
   photo_full_url?: string | null;
   status: 'present' | 'late' | 'absent' | 'holiday' | 'permit';
   notes: string | null;
+  work_duration_minutes?: number | null;
+  work_duration_formatted?: string | null;
+  is_eight_hours_met?: boolean | null;
   created_at: string;
   updated_at: string;
   user?: {
@@ -77,6 +82,9 @@ export interface TodayAttendanceData {
   attendance: AttendanceRecord | null;
   assigned_location: AttendanceLocation | null;
   is_location_locked?: boolean;
+  is_admin_user?: boolean;
+  is_admin_headquarters_enforced?: boolean;
+  headquarters_location?: AttendanceLocation | null;
   total_locations: number;
   locations: AttendanceLocation[];
   office_setting: OfficeSetting;
@@ -84,6 +92,7 @@ export interface TodayAttendanceData {
 
 export interface AttendanceSummary {
   date: string;
+  sp_period?: string | null;
   company?: string;
   total_employees: number;
   total_present: number;
@@ -92,6 +101,26 @@ export interface AttendanceSummary {
   total_on_time: number;
   total_late: number;
   total_not_checked_in: number;
+  total_eight_hours_met?: number;
   avg_distance_meters: number;
+}
+
+export interface EmployeeRecapItem {
+  user_id: number;
+  name: string;
+  nik?: string | null;
+  email: string;
+  company?: string | null;
+  position?: string | null;
+  school_unit?: string | null;
+  total_records: number;
+  total_present: number;
+  total_on_time: number;
+  total_late: number;
+  total_business_trip: number;
+  total_holiday: number;
+  eight_hours_met_count: number;
+  total_work_minutes: number;
+  total_work_formatted: string;
 }
 

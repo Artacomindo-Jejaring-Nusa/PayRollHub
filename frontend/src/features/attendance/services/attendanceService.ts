@@ -200,6 +200,7 @@ export const attendanceService = {
   // Admin Portal APIs
   getAdminAttendances: async (params?: {
     date?: string;
+    sp_period?: string;
     month?: string;
     search?: string;
     status?: string;
@@ -210,11 +211,56 @@ export const attendanceService = {
     return response.data.data;
   },
 
-  getAdminSummary: async (date?: string): Promise<AttendanceSummary> => {
+  getAdminSummary: async (date?: string, sp_period?: string): Promise<AttendanceSummary> => {
     const response = await api.get('/admin/attendances/summary', {
-      params: { date },
+      params: { date, sp_period },
     });
     return response.data.data;
+  },
+
+  getRecapByEmployee: async (params?: {
+    sp_period?: string;
+    search?: string;
+    company?: string;
+  }): Promise<{ sp_period: string; date_range: string[]; items: any[]; total_employees: number }> => {
+    const response = await api.get('/admin/attendances/recap-by-employee', { params });
+    return response.data.data;
+  },
+
+  createAdminAttendance: async (data: {
+    user_id: number;
+    date: string;
+    attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+    check_in_time?: string | null;
+    check_out_time?: string | null;
+    check_in_status?: 'on_time' | 'late';
+    status?: string;
+    location_name?: string;
+    notes?: string;
+  }): Promise<AttendanceRecord> => {
+    const response = await api.post('/admin/attendances', data);
+    return response.data.data;
+  },
+
+  updateAdminAttendance: async (
+    id: number,
+    data: {
+      date: string;
+      attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+      check_in_time?: string | null;
+      check_out_time?: string | null;
+      check_in_status?: 'on_time' | 'late';
+      status?: string;
+      location_name?: string;
+      notes?: string;
+    }
+  ): Promise<AttendanceRecord> => {
+    const response = await api.put(`/admin/attendances/${id}`, data);
+    return response.data.data;
+  },
+
+  deleteAdminAttendance: async (id: number): Promise<void> => {
+    await api.delete(`/admin/attendances/${id}`);
   },
 
   getSettings: async (): Promise<OfficeSetting> => {
@@ -227,12 +273,52 @@ export const attendanceService = {
     return response.data.data;
   },
 
-  exportCsvUrl: (date?: string, month?: string): string => {
+  exportCsvUrl: (date?: string, month?: string, sp_period?: string, mode?: 'detail' | 'employee_recap'): string => {
     const baseUrl = api.defaults.baseURL || '/api';
     const params = new URLSearchParams();
     if (date) params.append('date', date);
     if (month) params.append('month', month);
+    if (sp_period) params.append('sp_period', sp_period);
+    if (mode) params.append('mode', mode);
     return `${baseUrl}/admin/attendances/export?${params.toString()}`;
+  },
+
+  downloadAttendanceExport: async (params: {
+    format: 'xlsx' | 'csv';
+    mode: 'detail' | 'employee_recap';
+    sp_period?: string;
+    date?: string;
+    month?: string;
+    status?: string;
+    search?: string;
+    company?: string;
+  }): Promise<void> => {
+    const response = await api.get('/admin/attendances/export', {
+      params,
+      responseType: 'blob',
+    });
+
+    const isExcel = params.format === 'xlsx';
+    const mimeType = isExcel
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'text/csv;charset=utf-8;';
+
+    const blob = new Blob([response.data], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    const ext = isExcel ? 'xlsx' : 'csv';
+    const cleanSp = params.sp_period ? params.sp_period.replace(/\s+/g, '_') : '';
+    const datePart = params.date || cleanSp || new Date().toISOString().slice(0, 10);
+    const modePart = params.mode === 'employee_recap' ? 'rekap_karyawan' : 'log_detail';
+    const statusPart = params.status && params.status !== 'all' ? `_${params.status}` : '';
+
+    link.download = `rekap_absensi_${modePart}_${datePart}${statusPart}.${ext}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
 };
 

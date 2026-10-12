@@ -10,12 +10,13 @@ export const announcementService = {
     return { data: res.data.data, meta: res.data.meta };
   },
 
-  async createAnnouncement(data: {
+  async createAnnouncement(data: FormData | {
     title: string;
     content: string;
     category: string;
     company: 'all' | 'rbs' | 'rimamandiri';
     is_pinned?: boolean;
+    attachment?: File | null;
   }): Promise<Announcement> {
     const res = await api.post('/announcements', data);
     return res.data.data;
@@ -23,15 +24,17 @@ export const announcementService = {
 
   async updateAnnouncement(
     id: number,
-    data: {
+    data: FormData | {
       title: string;
       content: string;
       category: string;
       company: 'all' | 'rbs' | 'rimamandiri';
       is_pinned?: boolean;
+      attachment?: File | null;
+      remove_attachment?: boolean;
     }
   ): Promise<Announcement> {
-    const res = await api.put(`/announcements/${id}`, data);
+    const res = await api.post(`/announcements/${id}`, data);
     return res.data.data;
   },
 

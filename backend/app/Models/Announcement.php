@@ -12,6 +12,11 @@ class Announcement extends Model
     protected $fillable = [
         'title',
         'content',
+        'attachment_path',
+        'attachment_name',
+        'attachment_type',
+        'attachment_mime',
+        'attachment_size',
         'category',
         'company',
         'author_id',
@@ -19,10 +24,28 @@ class Announcement extends Model
         'published_at',
     ];
 
+    protected $appends = [
+        'attachment_url',
+    ];
+
     protected $casts = [
         'is_pinned' => 'boolean',
         'published_at' => 'datetime',
+        'attachment_size' => 'integer',
     ];
+
+    public function getAttachmentUrlAttribute(): ?string
+    {
+        if (!$this->attachment_path) {
+            return null;
+        }
+
+        if (str_starts_with($this->attachment_path, 'http://') || str_starts_with($this->attachment_path, 'https://')) {
+            return $this->attachment_path;
+        }
+
+        return url('storage/' . $this->attachment_path);
+    }
 
     public function author()
     {

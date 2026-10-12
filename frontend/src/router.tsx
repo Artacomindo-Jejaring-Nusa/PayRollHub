@@ -20,6 +20,8 @@ import { AdminWorkReportsPage } from './features/reports/pages/AdminWorkReportsP
 import { EmployeeAttendancePage } from './features/attendance/pages/EmployeeAttendancePage';
 import { AdminAttendancePage } from './features/attendance/pages/AdminAttendancePage';
 import { ActivityLogsPage } from './features/activityLogs/pages/ActivityLogsPage';
+import { EmployeeComplaintsPage } from './features/complaints/pages/EmployeeComplaintsPage';
+import { AdminComplaintsPage } from './features/complaints/pages/AdminComplaintsPage';
 
 // Guard: Must be authenticated
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -112,6 +114,7 @@ export const AppRouter: React.FC = () => {
         <Route path="payrolls" element={<EmployeePayrollsPage />} />
         <Route path="reports" element={<EmployeeReportsPage />} />
         <Route path="announcements" element={<EmployeeAnnouncementsPage />} />
+        <Route path="complaints" element={<EmployeeComplaintsPage />} />
         <Route path="profile" element={<EmployeeProfilePage />} />
       </Route>
 
@@ -133,6 +136,8 @@ export const AppRouter: React.FC = () => {
 
         {/* Manajemen Absensi Geofencing Radius */}
         <Route path="/attendances" element={<AdminAttendancePage />} />
+        {/* Presensi Mandiri Admin di Kantor Pusat (Point 10) */}
+        <Route path="/my-attendance" element={<EmployeeAttendancePage />} />
 
         {/* Data Penggajian */}
         <Route path="/payrolls" element={<PayrollListPage />} />
@@ -141,6 +146,8 @@ export const AppRouter: React.FC = () => {
         {/* Laporan Kerja Review & Papan Pengumuman */}
         <Route path="/work-reports" element={<AdminWorkReportsPage />} />
         <Route path="/announcements" element={<AnnouncementManagePage />} />
+        {/* Keluhan Karyawan (Point 11) */}
+        <Route path="/complaints" element={<AdminComplaintsPage />} />
 
         {/* Admin Restricted Routes */}
         <Route

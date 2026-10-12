@@ -19,7 +19,10 @@ import {
   Eye,
   X,
   FileText,
+  AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react';
+import { useAuthStore } from '../../../store/authStore';
 import {
   attendanceService,
   calculateDistanceMeters,
@@ -31,6 +34,9 @@ import {
 } from '../types/attendance';
 
 export const EmployeeAttendancePage: React.FC = () => {
+  const { user } = useAuthStore();
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+
   // Server & Attendance State
   const [todayData, setTodayData] = useState<TodayAttendanceData | null>(null);
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
@@ -53,6 +59,8 @@ export const EmployeeAttendancePage: React.FC = () => {
 
   // Modal Lightbox Foto Preview
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
+  // Modal Konfirmasi Absen Pulang < 8 Jam Kerja
+  const [earlyCheckOutModalOpen, setEarlyCheckOutModalOpen] = useState<boolean>(false);
 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -212,8 +220,19 @@ export const EmployeeAttendancePage: React.FC = () => {
     return locationsWithDistance[0];
   }, [locationsWithDistance]);
 
-  // Lokasi yang sedang aktif dipilih (prioritas utama: assigned_location sekolah penugasan karyawan)
+  // Lokasi yang sedang aktif dipilih (prioritas utama: Kantor Pusat jika Admin, atau assigned_location sekolah penugasan karyawan)
   const activeTargetLocation = useMemo(() => {
+    // POINT 10: Khusus akun Admin, lokasi terkunci secara ketat ke Kantor Pusat yang dibuat Super Admin
+    if (todayData?.is_admin_headquarters_enforced || user?.role === 'admin') {
+      const hq = todayData?.headquarters_location || todayData?.assigned_location;
+      if (hq) {
+        if (coords) {
+          const dist = calculateDistanceMeters(coords.lat, coords.lng, hq.latitude, hq.longitude);
+          return { ...hq, distance_meters: dist };
+        }
+        return hq;
+      }
+    }
     if (todayData?.assigned_location) {
       const foundAssigned = locationsWithDistance.find((loc) => loc.id === todayData.assigned_location?.id);
       if (foundAssigned) return foundAssigned;
@@ -228,7 +247,16 @@ export const EmployeeAttendancePage: React.FC = () => {
       if (found) return found;
     }
     return nearestLocation;
-  }, [todayData?.assigned_location, coords, selectedLocationId, locationsWithDistance, nearestLocation]);
+  }, [
+    todayData?.is_admin_headquarters_enforced,
+    todayData?.headquarters_location,
+    todayData?.assigned_location,
+    user?.role,
+    coords,
+    selectedLocationId,
+    locationsWithDistance,
+    nearestLocation,
+  ]);
 
   // Evaluasi Radius untuk Absen Masuk
   const liveDistance = activeTargetLocation?.distance_meters ?? null;
@@ -332,19 +360,68 @@ export const EmployeeAttendancePage: React.FC = () => {
     }
   };
 
-  // Handle Absen Pulang
-  const handleCheckOut = async () => {
-    if (!coords) {
-      setMessage({ text: 'Lokasi GPS belum terdeteksi. Silakan aktifkan GPS.', type: 'error' });
-      return;
-    }
+  // POINT 8: Kalkulasi Durasi Kerja Berjalan & Jam Kerja 8 Jam
+  const elapsedWorkMinutes = useMemo(() => {
+    if (!todayData?.attendance?.check_in_time) return null;
+    try {
+      const parts = todayData.attendance.check_in_time.split(':');
+      if (parts.length < 2) return null;
+      const inHours = parseInt(parts[0], 10);
+      const inMinutes = parseInt(parts[1], 10);
 
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+
+      let diff = (currentHours * 60 + currentMinutes) - (inHours * 60 + inMinutes);
+      if (diff < 0) diff += 24 * 60; // Antisipasi pergantian hari
+      return diff;
+    } catch {
+      return null;
+    }
+  }, [todayData?.attendance?.check_in_time, currentTime]);
+
+  const isEightHoursMet = elapsedWorkMinutes !== null && elapsedWorkMinutes >= 480;
+
+  const elapsedFormatted = useMemo(() => {
+    if (elapsedWorkMinutes === null) return '';
+    const h = Math.floor(elapsedWorkMinutes / 60);
+    const m = elapsedWorkMinutes % 60;
+    return `${h} jam ${m} menit`;
+  }, [elapsedWorkMinutes]);
+
+  const remainingToEightHours = useMemo(() => {
+    if (elapsedWorkMinutes === null || elapsedWorkMinutes >= 480) return 0;
+    return 480 - elapsedWorkMinutes;
+  }, [elapsedWorkMinutes]);
+
+  const remainingFormatted = useMemo(() => {
+    if (remainingToEightHours <= 0) return '';
+    const h = Math.floor(remainingToEightHours / 60);
+    const m = remainingToEightHours % 60;
+    return h > 0 ? `${h} jam ${m} menit` : `${m} menit`;
+  }, [remainingToEightHours]);
+
+  // POINT 8: Absensi Pulang Di-Los (Bebas Radius, Terpenting 8 Jam Kerja)
+  const handleCheckOutClick = () => {
+    if (hasCheckedOut) return;
+    // Jika durasi kerja < 8 jam (480 menit), tampilkan konfirmasi
+    if (elapsedWorkMinutes !== null && elapsedWorkMinutes < 480) {
+      setEarlyCheckOutModalOpen(true);
+    } else {
+      executeCheckOut();
+    }
+  };
+
+  const executeCheckOut = async () => {
+    setEarlyCheckOutModalOpen(false);
     try {
       setActionLoading(true);
       setMessage(null);
+      // Pulang di-los: kirim koordinat jika ada, fallback 0 jika belum terdeteksi
       const res = await attendanceService.checkOut({
-        latitude: coords.lat,
-        longitude: coords.lng,
+        latitude: coords?.lat ?? 0,
+        longitude: coords?.lng ?? 0,
       });
       setMessage({ text: res.message || 'Absen pulang berhasil tercatat!', type: 'success' });
       fetchData();
@@ -482,8 +559,44 @@ export const EmployeeAttendancePage: React.FC = () => {
               </div>
 
               <div className="py-4 space-y-4">
-                {/* Info Penugasan Sekolah Terkunci Otomatis */}
-                {todayData?.assigned_location ? (
+                {/* POINT 10: Info Khusus Akun Admin (Wajib di Kantor Pusat yang Dibuat Super Admin) */}
+                {(todayData?.is_admin_headquarters_enforced || user?.role === 'admin') ? (
+                  <div className="bg-blue-50/90 border border-blue-200/90 rounded-2xl p-4 shadow-2xs space-y-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-300 flex items-center justify-center shrink-0 mt-0.5">
+                          <Building className="w-5 h-5 text-blue-700" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">
+                              Mode Presensi Admin — Wajib Kantor Pusat
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-600 text-white shadow-2xs">
+                              Ditetapkan Super Admin
+                            </span>
+                          </div>
+                          <div className="text-sm font-bold text-text-primary mt-1">
+                            {activeTargetLocation?.name || todayData?.office_setting?.office_name || 'Kantor Pusat Operasional'}
+                          </div>
+                          <div className="text-xs text-text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>Batas Radius Kantor: <strong className="text-blue-700 font-semibold">{maxRadius} Meter</strong></span>
+                            {activeTargetLocation?.address && (
+                              <span>Alamat: {activeTargetLocation.address}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[11.5px] text-blue-800/90 bg-white/80 rounded-xl px-3 py-2 border border-blue-200/70 flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>
+                        Sesuai ketetapan sistem (Point 10), seluruh akun <strong>Admin wajib melakukan presensi di Kantor Pusat</strong> yang telah ditentukan oleh Super Admin.
+                      </span>
+                    </div>
+                  </div>
+                ) : todayData?.assigned_location ? (
+                  /* Info Penugasan Sekolah Terkunci Otomatis untuk Karyawan */
                   <div className="bg-emerald-50/90 border border-emerald-200/90 rounded-2xl p-4 shadow-2xs space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
@@ -680,6 +793,68 @@ export const EmployeeAttendancePage: React.FC = () => {
                 )}
               </div>
 
+              {/* POINT 8: Live Duration & 8-Hour Tracker */}
+              {hasCheckedIn && !hasCheckedOut && (
+                <div
+                  className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                    isEightHoursMet
+                      ? 'bg-emerald-50/90 border-emerald-200 text-emerald-900'
+                      : 'bg-amber-50/90 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Clock
+                      className={`w-4 h-4 shrink-0 ${
+                        isEightHoursMet ? 'text-emerald-600' : 'text-amber-600 animate-spin'
+                      }`}
+                    />
+                    <div>
+                      <div className="font-semibold text-[13px]">
+                        Durasi Kerja Berjalan: {elapsedFormatted}
+                      </div>
+                      <div className="text-[11px] opacity-90 mt-0.5">
+                        {isEightHoursMet
+                          ? '✓ Standar 8 jam kerja sudah terpenuhi. Anda dapat melakukan absen pulang.'
+                          : `Kurang ${remainingFormatted} lagi untuk mencapai standar 8 jam kerja.`}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={`px-2.5 py-1 rounded-full font-bold text-[10px] tracking-wide uppercase shrink-0 ${
+                      isEightHoursMet
+                        ? 'bg-emerald-200/80 text-emerald-900'
+                        : 'bg-amber-200/80 text-amber-900'
+                    }`}
+                  >
+                    {isEightHoursMet ? '8 Jam Terpenuhi' : '< 8 Jam'}
+                  </div>
+                </div>
+              )}
+
+              {/* Status Durasi Selesai Kerja */}
+              {hasCheckedOut && todayData?.attendance?.work_duration_formatted && (
+                <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                    <span>
+                      Total Jam Kerja Hari Ini:{' '}
+                      <strong>{todayData.attendance.work_duration_formatted}</strong>
+                    </span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full font-semibold text-[10.5px] ${
+                      todayData.attendance.is_eight_hours_met
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {todayData.attendance.is_eight_hours_met
+                      ? '✓ Memenuhi 8 Jam'
+                      : 'Kurang dari 8 Jam'}
+                  </span>
+                </div>
+              )}
+
               {/* Action Buttons: Absen Masuk & Absen Pulang */}
               <div className="pt-2 border-t border-border-subtle">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -701,24 +876,18 @@ export const EmployeeAttendancePage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={handleCheckOut}
-                    disabled={
-                      actionLoading ||
-                      isDetectingGps ||
-                      (!isDinasCheckedIn && !isWithinRadius) ||
-                      !hasCheckedIn ||
-                      hasCheckedOut
-                    }
+                    onClick={handleCheckOutClick}
+                    disabled={actionLoading || !hasCheckedIn || hasCheckedOut}
                     className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
                       hasCheckedOut
                         ? 'bg-blue-100 text-blue-800 border border-blue-200 cursor-not-allowed opacity-90'
-                        : hasCheckedIn && (isDinasCheckedIn || isWithinRadius)
+                        : hasCheckedIn
                         ? 'bg-rose-600 hover:bg-rose-700 text-white active:scale-98'
                         : 'bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed opacity-60'
                     }`}
                   >
                     <LogOut className="w-4 h-4" />
-                    <span>{hasCheckedOut ? '✓ Sudah Absen Pulang' : 'Absen Pulang'}</span>
+                    <span>{hasCheckedOut ? '✓ Sudah Absen Pulang' : 'Absen Pulang (Bebas Radius)'}</span>
                   </button>
                 </div>
 
@@ -873,7 +1042,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                     {!hasCheckedOut && (
                       <button
                         type="button"
-                        onClick={handleCheckOut}
+                        onClick={handleCheckOutClick}
                         disabled={actionLoading}
                         className="w-full h-12 bg-rose-600 hover:bg-rose-700 active:scale-98 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
                       >
@@ -1276,6 +1445,48 @@ export const EmployeeAttendancePage: React.FC = () => {
                 alt="Foto Kehadiran"
                 className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-md"
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POINT 8: Modal Konfirmasi Absen Pulang Sebelum 8 Jam Kerja */}
+      {earlyCheckOutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-text-primary">Konfirmasi Absen Pulang</h3>
+                <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                  Durasi jam kerja Anda hari ini baru berjalan{' '}
+                  <strong className="text-amber-700 font-semibold">{elapsedFormatted}</strong> (belum mencapai standar kerja 8 jam).
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50/90 rounded-xl border border-amber-200 text-xs text-amber-900 leading-relaxed">
+              Masih tersisa sekitar <strong>{remainingFormatted}</strong> untuk mencapai standar 8 jam kerja (480 menit). Absen pulang di-los (bebas lokasi), namun durasi kerja tetap tercatat di laporan. Tetap ingin absen pulang sekarang?
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setEarlyCheckOutModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-border-subtle text-text-secondary hover:bg-surface-container transition-all cursor-pointer"
+              >
+                Batal (Lanjut Kerja)
+              </button>
+              <button
+                type="button"
+                onClick={executeCheckOut}
+                disabled={actionLoading}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all cursor-pointer"
+              >
+                {actionLoading ? 'Menyimpan...' : 'Ya, Tetap Absen Pulang'}
+              </button>
             </div>
           </div>
         </div>

@@ -72,20 +72,15 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
 
         $cacheByNik = [];
         $cacheByNameSchool = [];
-        $cacheByNameProvince = [];
 
         foreach ($existingRecords as $rec) {
             $pPeriod = (string) $rec->period;
             if (!empty($rec->nik)) {
-                $cacheByNik[$pPeriod . '|' . trim((string) $rec->nik)] = $rec;
+                $cacheByNik[$pPeriod . '|' . trim((string) $rec->nik)][] = $rec;
             }
             if (!empty($rec->employee_name) && !empty($rec->school_unit)) {
                 $k = $pPeriod . '|' . mb_strtolower(trim($rec->employee_name)) . '|' . mb_strtolower(trim($rec->school_unit));
                 $cacheByNameSchool[$k] = $rec;
-            }
-            if (!empty($rec->employee_name) && !empty($rec->province)) {
-                $k = $pPeriod . '|' . mb_strtolower(trim($rec->employee_name)) . '|' . mb_strtolower(trim($rec->province));
-                $cacheByNameProvince[$k] = $rec;
             }
         }
 
@@ -221,11 +216,87 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 continue;
             }
 
-            $cleanNumber = function ($val) {
-                if (is_numeric($val)) return (float) $val;
-                $str = (string) $val;
-                $str = preg_replace('/[^\d.]/', '', str_replace(',', '', $str));
-                return (float) $str;
+            $cleanNumber = function ($val) use ($rowIndex, $name) {
+                if ($val === null || $val === '' || $val === '-') {
+                    return 0.0;
+                }
+
+                // If already numeric (float, int, or pure numeric string)
+                if (is_numeric($val)) {
+                    $num = (float) $val;
+                    // Protect against out-of-range numbers (MySQL decimal(15,2) limit is 9,999,999,999,999.99)
+                    if ($num > 999999999999.0 || $num < -999999999999.0) {
+                        $strVal = sprintf('%.0f', $num);
+                        // If cell contains duplicated digits e.g. 3433000343300000 from 3.433.000
+                        if (preg_match('/^([1-9]\d{6})(?:0{2,}|[1-9]\d{3,})?/', $strVal, $matches)) {
+                            return (float) $matches[1];
+                        }
+                        if (preg_match('/^([1-9]\d{5,7})/', $strVal, $matches)) {
+                            return (float) $matches[1];
+                        }
+                        return 0.0;
+                    }
+                    return round($num, 2);
+                }
+
+                $str = trim((string) $val);
+
+                // Ignore Excel formula errors
+                if (str_starts_with($str, '#')) {
+                    return 0.0;
+                }
+
+                // Remove currency prefixes
+                $str = preg_replace('/^(rp|idr|\$)\s*/i', '', $str);
+                $str = trim($str);
+
+                // Check for scientific notation string (e.g. "3.4330003433E+15")
+                if (preg_match('/[eE]\+?\d+/', $str)) {
+                    $num = (float) $str;
+                    $strVal = sprintf('%.0f', $num);
+                    if (preg_match('/^([1-9]\d{6})/', $strVal, $matches)) {
+                        return (float) $matches[1];
+                    }
+                    if (preg_match('/^([1-9]\d{5,7})/', $strVal, $matches)) {
+                        return (float) $matches[1];
+                    }
+                    return 0.0;
+                }
+
+                // Handle Indonesian thousand separator dots vs commas:
+                if (substr_count($str, '.') > 1) {
+                    // e.g. "3.433.000" or "3.433.000,00"
+                    $str = str_replace('.', '', $str);
+                    $str = str_replace(',', '.', $str);
+                } elseif (preg_match('/\.\d{3},\d{2}$/', $str)) {
+                    $str = str_replace('.', '', $str);
+                    $str = str_replace(',', '.', $str);
+                } elseif (preg_match('/,\d{3}\.\d{2}$/', $str)) {
+                    $str = str_replace(',', '', $str);
+                } elseif (substr_count($str, ',') > 1) {
+                    $str = str_replace(',', '', $str);
+                } elseif (preg_match('/\.\d{3}$/', $str)) {
+                    $str = str_replace('.', '', $str);
+                } else {
+                    $str = str_replace(',', '.', $str);
+                }
+
+                $str = preg_replace('/[^\d.]/', '', $str);
+                if ($str === '' || $str === '.') {
+                    return 0.0;
+                }
+
+                $num = (float) $str;
+                // Double check range constraint
+                if ($num > 999999999999.0 || $num < -999999999999.0) {
+                    $strVal = sprintf('%.0f', $num);
+                    if (preg_match('/^([1-9]\d{6})/', $strVal, $matches)) {
+                        return (float) $matches[1];
+                    }
+                    return 0.0;
+                }
+
+                return round($num, 2);
             };
 
             $netBase = $cleanNumber($netBase);
@@ -237,7 +308,17 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             $absenceDeduction = $cleanNumber($absenceDeduction);
             $pph21 = $cleanNumber($pph21);
 
-            // Calculate according to Excel rule: Gaji Pokok = netBase - bpjsKes - bpjsTk
+            // BPJS TK breakdown (JHT & JP)
+            $bpjsTkJht = $row['bpjs_tk_jht'] ?? $row['jht'] ?? null;
+            $bpjsTkJp = $row['bpjs_tk_jp'] ?? $row['jp'] ?? null;
+            $bpjsTkJht = $bpjsTkJht !== null ? $cleanNumber($bpjsTkJht) : null;
+            $bpjsTkJp = $bpjsTkJp !== null ? $cleanNumber($bpjsTkJp) : null;
+            if (($bpjsTkJht === null || $bpjsTkJht <= 0) && $bpjsTk > 0) {
+                $bpjsTkJht = round($bpjsTk * (2 / 3), 2);
+                $bpjsTkJp = round($bpjsTk - $bpjsTkJht, 2);
+            }
+
+            // Calculate according to Excel rule: Gaji Pokok = netBase - bpjsKes - bpjsTk (jika netBase ada)
             if ($netBase > 0) {
                 if ($bpjsKes <= 0) {
                     $bpjsKes = round($netBase * 0.05, 2);
@@ -255,45 +336,57 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 continue;
             }
 
-            // Match existing record strictly within target company using fast in-memory cache
+            // Match existing record strictly:
+            // 1. If NIK is present: match employee with the same NIK AND compatible name.
+            //    If name is completely different (different person with duplicate placeholder NIK),
+            //    do NOT overwrite! Treat as separate new employee!
+            // 2. If NIK is empty: match by Name + School Unit.
             $existing = null;
             if (!empty($nik)) {
-                $existing = $cacheByNik[$period . '|' . $nik] ?? null;
-            }
-            if (!$existing && !empty($schoolUnit)) {
+                $candidates = $cacheByNik[$period . '|' . $nik] ?? [];
+                if (!is_array($candidates)) {
+                    $candidates = [$candidates];
+                }
+                if (empty($candidates) && $period !== $this->defaultPeriod) {
+                    $candidates = Payroll::where('company', $targetCompany)->where('nik', $nik)->where('period', $period)->get()->all();
+                }
+
+                $currName = mb_strtolower(trim($name));
+                foreach ($candidates as $cand) {
+                    $candName = mb_strtolower(trim($cand->employee_name ?? ''));
+                    // 1. Exact match
+                    if ($candName === $currName) {
+                        $existing = $cand;
+                        break;
+                    }
+                    // 2. High similarity or substring match (e.g. abbreviations)
+                    similar_text($candName, $currName, $simPercent);
+                    if ($simPercent >= 50 || str_contains($candName, $currName) || str_contains($currName, $candName)) {
+                        $existing = $cand;
+                        break;
+                    }
+                }
+
+                if (!$existing && !empty($candidates)) {
+                    $firstCandName = $candidates[0]->employee_name ?? 'karyawan lain';
+                    $this->warnings[] = "Baris {$rowIndex} ({$name}): Menggunakan NIK '{$nik}' yang sama dengan {$firstCandName}, namun nama berbeda. Tetap disimpan sebagai karyawan baru agar data tidak tertimpa.";
+                }
+            } elseif (!empty($schoolUnit)) {
                 $k = $period . '|' . mb_strtolower($name) . '|' . mb_strtolower($schoolUnit);
                 $existing = $cacheByNameSchool[$k] ?? null;
-            }
-            if (!$existing) {
-                $k = $period . '|' . mb_strtolower($name) . '|' . mb_strtolower($province);
-                $existing = $cacheByNameProvince[$k] ?? null;
-            }
-
-            // Fallback to direct DB query only if row belongs to a different period than default
-            if (!$existing && $period !== $this->defaultPeriod) {
-                if (!empty($nik)) {
-                    $existing = Payroll::where('company', $targetCompany)->where('nik', $nik)->where('period', $period)->first();
-                }
-                if (!$existing && !empty($schoolUnit)) {
+                if (!$existing && $period !== $this->defaultPeriod) {
                     $existing = Payroll::where('company', $targetCompany)
                         ->where('employee_name', $name)
                         ->where('school_unit', $schoolUnit)
                         ->where('period', $period)
                         ->first();
                 }
-                if (!$existing) {
-                    $existing = Payroll::where('company', $targetCompany)
-                        ->where('employee_name', $name)
-                        ->where('province', $province)
-                        ->where('period', $period)
-                        ->first();
-                }
             }
 
-            // If Excel provided calculated Take Home Pay, use it; otherwise compute:
-            // Formula Resmi: (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (BPJS TK + Potongan Absensi + Potongan Lain + PPh21)
+            // Formula Resmi 2026: (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (Potongan Absensi + Potongan Lain + PPh21)
+            // PERHATIAN: BPJS TK BUKAN pengurang gaji (hanya ditampilkan di bawah sebagai BPJS yang bisa dicairkan)
             $parsedThp = $rawThp !== null ? $cleanNumber($rawThp) : 0;
-            $takeHomePay = $parsedThp > 0 ? $parsedThp : max(0, ($basicSalary + $bpjsKes + $allowance) - ($bpjsTk + $absenceDeduction + $deduction + $pph21));
+            $takeHomePay = $parsedThp > 0 ? $parsedThp : max(0, ($basicSalary + $bpjsKes + $allowance) - ($absenceDeduction + $deduction + $pph21));
 
             $payrollData = [
                 'row_no' => $rowNo,
@@ -314,6 +407,8 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                 'net_base_price' => $netBase,
                 'bpjs_kes' => $bpjsKes,
                 'bpjs_tk' => $bpjsTk,
+                'bpjs_tk_jht' => $bpjsTkJht,
+                'bpjs_tk_jp' => $bpjsTkJp,
                 'basic_salary' => $basicSalary,
                 'allowance' => $allowance,
                 'deduction' => $deduction,
@@ -341,23 +436,49 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
             }
             $this->totalEstimatedThp += $takeHomePay;
 
+            $isExistingInDb = ($existing instanceof Payroll);
+            $existingId = $isExistingInDb ? $existing->id : (is_object($existing) && isset($existing->id) ? $existing->id : null);
+
             if ($this->isPreview) {
                 $this->previewRows[] = array_merge($payrollData, [
-                    'is_existing' => (bool) $existing,
-                    'existing_id' => $existing ? $existing->id : null,
+                    'is_existing' => $isExistingInDb,
+                    'existing_id' => $existingId,
                 ]);
-            } else {
-                if ($existing) {
-                    $existing->update($payrollData);
-                    PayrollService::syncEmployeeAccount($existing);
-                    $this->updatedCount++;
-                } else {
-                    $newRecord = Payroll::create($payrollData);
-                    PayrollService::syncEmployeeAccount($newRecord);
-                    if (!empty($newRecord->nik)) {
-                        $cacheByNik[$period . '|' . $newRecord->nik] = $newRecord;
+                if (!$existing) {
+                    $previewCacheItem = (object) array_merge($payrollData, ['id' => null]);
+                    if (!empty($nik)) {
+                        $cacheByNik[$period . '|' . $nik][] = $previewCacheItem;
                     }
-                    $this->importedCount++;
+                    if (!empty($schoolUnit)) {
+                        $k = $period . '|' . mb_strtolower($name) . '|' . mb_strtolower($schoolUnit);
+                        $cacheByNameSchool[$k] = $previewCacheItem;
+                    }
+                }
+            } else {
+                try {
+                    if ($isExistingInDb) {
+                        $existing->update($payrollData);
+                        PayrollService::syncEmployeeAccount($existing);
+                        $this->updatedCount++;
+                    } else {
+                        $newRecord = Payroll::create($payrollData);
+                        PayrollService::syncEmployeeAccount($newRecord);
+                        if (!empty($newRecord->nik)) {
+                            $cacheByNik[$period . '|' . $newRecord->nik][] = $newRecord;
+                        }
+                        if (!empty($newRecord->school_unit)) {
+                            $k = $period . '|' . mb_strtolower(trim($newRecord->employee_name)) . '|' . mb_strtolower(trim($newRecord->school_unit));
+                            $cacheByNameSchool[$k] = $newRecord;
+                        }
+                        $this->importedCount++;
+                    }
+                } catch (\Throwable $e) {
+                    $this->errors[] = "Baris {$rowIndex} ({$name}): Gagal menyimpan ke database - " . $e->getMessage();
+                    \Illuminate\Support\Facades\Log::error("Import payroll error baris {$rowIndex} ({$name}): " . $e->getMessage(), [
+                        'row' => $rowIndex,
+                        'name' => $name,
+                        'payrollData' => $payrollData,
+                    ]);
                 }
             }
         }

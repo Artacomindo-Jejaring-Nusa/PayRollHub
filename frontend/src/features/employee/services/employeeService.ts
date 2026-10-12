@@ -1,6 +1,7 @@
 import { api } from '../../../lib/api';
 import { Announcement, User, WorkReport } from '../../../types/auth';
 import { PayrollItem } from '../../../types/payroll';
+import { Complaint, ComplaintSummary } from '../../complaints/types/complaint';
 
 export interface EmployeeDashboardData {
   user: User;
@@ -12,6 +13,8 @@ export interface EmployeeDashboardData {
     approved: number;
   };
   recent_announcements: Announcement[];
+  complaints_summary?: ComplaintSummary;
+  recent_complaints?: Complaint[];
 }
 
 export interface EmployeeProfileData {

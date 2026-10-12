@@ -42,6 +42,12 @@ export interface Announcement {
   content: string;
   category: string;
   company: 'all' | 'rbs' | 'rimamandiri';
+  attachment_path?: string | null;
+  attachment_name?: string | null;
+  attachment_type?: 'image' | 'file' | null;
+  attachment_mime?: string | null;
+  attachment_size?: number | null;
+  attachment_url?: string | null;
   author_id?: number;
   author?: {
     id: number;

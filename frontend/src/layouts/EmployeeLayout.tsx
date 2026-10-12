@@ -12,6 +12,7 @@ import {
   Bell,
   User,
   LogOut,
+  MessageSquareWarning,
 } from 'lucide-react';
 
 export const EmployeeLayout: React.FC = () => {
@@ -43,6 +44,7 @@ export const EmployeeLayout: React.FC = () => {
       isHold: true, // Di-hold sementara
     },
     { label: 'Pengumuman', path: '/employee/announcements', icon: Bell },
+    { label: 'Keluhan & Bantuan', path: '/employee/complaints', icon: MessageSquareWarning },
     { label: 'Profil Saya', path: '/employee/profile', icon: User },
   ];
 

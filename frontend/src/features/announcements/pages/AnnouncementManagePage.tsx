@@ -14,6 +14,13 @@ import {
   Building2,
   User,
   CheckCircle2,
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
+  ExternalLink,
+  X,
+  Download,
+  Upload,
 } from 'lucide-react';
 
 export const AnnouncementManagePage: React.FC = () => {
@@ -31,6 +38,11 @@ export const AnnouncementManagePage: React.FC = () => {
   const [company, setCompany] = useState<'all' | 'rbs' | 'rimamandiri'>('all');
   const [isPinned, setIsPinned] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Attachment State
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [removeAttachment, setRemoveAttachment] = useState(false);
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAnnouncements();
@@ -58,6 +70,8 @@ export const AnnouncementManagePage: React.FC = () => {
     setCategory('Umum');
     setCompany('all');
     setIsPinned(false);
+    setAttachmentFile(null);
+    setRemoveAttachment(false);
     setIsModalOpen(true);
   };
 
@@ -68,6 +82,8 @@ export const AnnouncementManagePage: React.FC = () => {
     setCategory(item.category);
     setCompany(item.company);
     setIsPinned(item.is_pinned);
+    setAttachmentFile(null);
+    setRemoveAttachment(false);
     setIsModalOpen(true);
   };
 
@@ -85,18 +101,24 @@ export const AnnouncementManagePage: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const payload = {
-        title: title.trim(),
-        content: content.trim(),
-        category,
-        company,
-        is_pinned: isPinned,
-      };
+      const formData = new FormData();
+      formData.append('title', title.trim());
+      formData.append('content', content.trim());
+      formData.append('category', category);
+      formData.append('company', company);
+      formData.append('is_pinned', isPinned ? '1' : '0');
+
+      if (attachmentFile) {
+        formData.append('attachment', attachmentFile);
+      }
+      if (removeAttachment) {
+        formData.append('remove_attachment', '1');
+      }
 
       if (editingItem) {
-        await announcementService.updateAnnouncement(editingItem.id, payload);
+        await announcementService.updateAnnouncement(editingItem.id, formData);
       } else {
-        await announcementService.createAnnouncement(payload);
+        await announcementService.createAnnouncement(formData);
       }
 
       setIsModalOpen(false);
@@ -219,6 +241,47 @@ export const AnnouncementManagePage: React.FC = () => {
               <div className="text-[13px] text-text-primary whitespace-pre-line leading-relaxed">
                 {item.content}
               </div>
+
+              {/* Attachment Display */}
+              {item.attachment_url && (
+                <div className="pt-2 border-t border-border-subtle/60 flex flex-wrap items-center gap-3">
+                  {item.attachment_type === 'image' ? (
+                    <div
+                      onClick={() => setPreviewPhotoUrl(item.attachment_url || null)}
+                      className="relative inline-flex items-center gap-2 p-1.5 bg-surface border border-border-subtle rounded-xl cursor-pointer group hover:border-primary/50 transition-colors"
+                    >
+                      <img
+                        src={item.attachment_url}
+                        alt={item.attachment_name || 'Foto Pengumuman'}
+                        className="w-16 h-12 object-cover rounded-lg"
+                      />
+                      <div className="pr-2">
+                        <span className="text-xs font-semibold text-text-primary block flex items-center gap-1 group-hover:text-primary transition-colors">
+                          <ImageIcon className="w-3.5 h-3.5 text-primary" />
+                          <span>{item.attachment_name || 'Foto Lampiran'}</span>
+                        </span>
+                        <span className="text-[10.5px] text-text-muted">Klik untuk memperbesar</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <a
+                      href={item.attachment_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-surface hover:bg-surface-container border border-border-subtle rounded-xl text-xs font-semibold text-primary transition-colors group"
+                    >
+                      <FileText className="w-4 h-4 text-primary" />
+                      <span>{item.attachment_name || 'Unduh Dokumen Lampiran'}</span>
+                      {item.attachment_size && (
+                        <span className="text-[10px] text-text-muted font-normal">
+                          ({(item.attachment_size / 1024).toFixed(0)} KB)
+                        </span>
+                      )}
+                      <Download className="w-3.5 h-3.5 ml-1 text-text-muted group-hover:text-primary transition-colors" />
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -294,6 +357,72 @@ export const AnnouncementManagePage: React.FC = () => {
             />
           </div>
 
+          {/* Attachment Input */}
+          <div>
+            <label className="block text-[12px] font-medium text-text-primary mb-1">
+              Lampiran Foto / Dokumen File (Opsional)
+            </label>
+            <p className="text-[11px] text-text-muted mb-2">
+              Dapat melampirkan foto pengumuman atau dokumen surat edaran (PDF, DOCX, XLSX, Gambar - Maksimal 25MB).
+            </p>
+
+            {editingItem?.attachment_name && !removeAttachment && !attachmentFile ? (
+              <div className="p-3 bg-surface border border-border-subtle rounded-xl flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs text-text-primary truncate">
+                  {editingItem.attachment_type === 'image' ? (
+                    <ImageIcon className="w-4 h-4 text-primary shrink-0" />
+                  ) : (
+                    <FileText className="w-4 h-4 text-primary shrink-0" />
+                  )}
+                  <span className="font-semibold truncate">{editingItem.attachment_name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRemoveAttachment(true)}
+                  className="px-2.5 py-1 text-xs text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                >
+                  Hapus Lampiran
+                </button>
+              </div>
+            ) : attachmentFile ? (
+              <div className="p-3 bg-surface border border-border-subtle rounded-xl flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs text-text-primary truncate">
+                  <Paperclip className="w-4 h-4 text-primary shrink-0" />
+                  <span className="font-semibold truncate">{attachmentFile.name}</span>
+                  <span className="text-[11px] text-text-muted">
+                    ({(attachmentFile.size / 1024).toFixed(0)} KB)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachmentFile(null)}
+                  className="p-1 text-text-muted hover:text-rose-600 rounded-lg cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-border-subtle hover:border-primary/50 bg-surface rounded-xl cursor-pointer transition-colors group">
+                <Upload className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors" />
+                <span className="text-xs font-semibold text-text-primary group-hover:text-primary">
+                  Pilih File Foto atau Dokumen
+                </span>
+                <input
+                  type="file"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setAttachmentFile(file);
+                      setRemoveAttachment(false);
+                    }
+                  }}
+                  className="hidden"
+                />
+              </label>
+            )}
+          </div>
+
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -317,6 +446,32 @@ export const AnnouncementManagePage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Lightbox Modal Foto */}
+      {previewPhotoUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in"
+          onClick={() => setPreviewPhotoUrl(null)}
+        >
+          <div
+            className="relative max-w-3xl max-h-[90vh] bg-surface rounded-2xl overflow-hidden p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewPhotoUrl(null)}
+              className="absolute top-4 right-4 p-2 bg-black/70 hover:bg-black text-white rounded-full transition-all cursor-pointer z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <img
+              src={previewPhotoUrl}
+              alt="Foto Pengumuman"
+              className="w-full max-h-[85vh] object-contain rounded-xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -50,3 +50,7 @@ Thumbs.db
 # Deployment & Scratch Artifacts
 deploy_cpanel/
 scratch/
+
+*.zip
+*.sql
+*.pdf

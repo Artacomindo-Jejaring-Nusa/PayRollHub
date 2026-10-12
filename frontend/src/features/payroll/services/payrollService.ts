@@ -6,6 +6,9 @@ import {
   PayrollImportResult,
   PayrollItem,
   PayrollListResponse,
+  ProvincePayrollSetting,
+  EmployeeReplacement,
+  OffEmployeeItem,
 } from '../../../types/payroll';
 
 export const payrollService = {
@@ -22,6 +25,7 @@ export const payrollService = {
     per_page?: number;
     sort_by?: string;
     sort_order?: string;
+    duplicate_account?: boolean;
   }): Promise<PayrollListResponse> => {
     const activeTenant = detectInitialTenant();
     const finalParams = {
@@ -205,4 +209,106 @@ export const payrollService = {
 
     return response.data.data;
   },
+
+  // --------------------------------------------------------------------------
+  // Pengaturan Perhitungan Gaji per Provinsi (UMP & BPJS TK/Kes)
+  // --------------------------------------------------------------------------
+  getProvinceSettings: async (company?: string): Promise<ProvincePayrollSetting[]> => {
+    const activeTenant = detectInitialTenant();
+    const response = await api.get<{ status: string; data: ProvincePayrollSetting[] }>(
+      '/province-settings',
+      { params: { company: company || activeTenant } }
+    );
+    return response.data.data;
+  },
+
+  updateProvinceSetting: async (
+    province: string,
+    data: {
+      ump: number;
+      bpjs_kes: number;
+      bpjs_tk_jht: number;
+      bpjs_tk_jp: number;
+      notes?: string;
+      apply_to_employees?: boolean;
+      company?: string;
+    }
+  ): Promise<{ status: string; message: string; data: ProvincePayrollSetting; affected_employees: number }> => {
+    const response = await api.put<{
+      status: string;
+      message: string;
+      data: ProvincePayrollSetting;
+      affected_employees: number;
+    }>(`/province-settings/${encodeURIComponent(province)}`, data);
+    return response.data;
+  },
+
+  applyProvinceSettingToEmployees: async (
+    province: string,
+    company?: string
+  ): Promise<{ status: string; message: string; affected_employees: number }> => {
+    const activeTenant = detectInitialTenant();
+    const response = await api.post<{
+      status: string;
+      message: string;
+      affected_employees: number;
+    }>(`/province-settings/${encodeURIComponent(province)}/apply`, null, {
+      params: { company: company || activeTenant },
+    });
+    return response.data;
+  },
+
+  // --------------------------------------------------------------------------
+  // Rekam Jejak Pergantian Karyawan (Penggantian Karyawan Off)
+  // --------------------------------------------------------------------------
+  getEmployeeReplacements: async (params?: {
+    search?: string;
+    company?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<{
+    status: string;
+    data: EmployeeReplacement[];
+    meta: { current_page: number; last_page: number; total: number };
+  }> => {
+    const activeTenant = detectInitialTenant();
+    const response = await api.get<{
+      status: string;
+      data: EmployeeReplacement[];
+      meta: { current_page: number; last_page: number; total: number };
+    }>('/employee-replacements', {
+      params: { company: params?.company || activeTenant, ...params },
+    });
+    return response.data;
+  },
+
+  getOffEmployees: async (search?: string, company?: string): Promise<OffEmployeeItem[]> => {
+    const activeTenant = detectInitialTenant();
+    const response = await api.get<{ status: string; data: OffEmployeeItem[] }>(
+      '/employee-replacements/off-employees',
+      { params: { search, company: company || activeTenant } }
+    );
+    return response.data.data;
+  },
+
+  createEmployeeReplacement: async (data: {
+    new_payroll_id: number;
+    old_payroll_id?: number | null;
+    old_employee_name?: string;
+    replacement_date: string;
+    reason?: string;
+    notes?: string;
+  }): Promise<EmployeeReplacement> => {
+    const response = await api.post<{
+      status: string;
+      message: string;
+      data: EmployeeReplacement;
+    }>('/employee-replacements', data);
+    return response.data.data;
+  },
+
+  deleteEmployeeReplacement: async (id: number): Promise<void> => {
+    await api.delete(`/employee-replacements/${id}`);
+  },
 };
+

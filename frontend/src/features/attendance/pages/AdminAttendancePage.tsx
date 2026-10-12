@@ -33,7 +33,12 @@ import {
   Car,
   Eye,
   Sparkles,
+  ShieldAlert,
+  ShieldCheck,
 } from 'lucide-react';
+import { useAuthStore } from '../../../store/authStore';
+import { api } from '../../../lib/api';
+import { SP_PERIOD_LIST } from '../../../lib/period';
 import { attendanceService } from '../services/attendanceService';
 import { Pagination } from '../../../components/shared/Pagination';
 import {
@@ -42,14 +47,20 @@ import {
   OfficeSetting,
   AttendanceLocation,
   SchoolUnitOption,
+  EmployeeRecapItem,
 } from '../types/attendance';
 
 export const AdminAttendancePage: React.FC = () => {
+  const { user: currentUser } = useAuthStore();
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+
   const [activeTab, setActiveTab] = useState<'recap' | 'locations' | 'settings'>('recap');
 
   // Recap & Filter State
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
+  const [filterType, setFilterType] = useState<'sp' | 'daily'>('sp');
+  const [selectedSp, setSelectedSp] = useState<string>('SP 8');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
   });
@@ -57,6 +68,66 @@ export const AdminAttendancePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
+
+  // Point 6: Rekapitulasi per Karyawan (SP 1-9)
+  const [recapViewMode, setRecapViewMode] = useState<'detail' | 'employee_recap'>('detail');
+  const [employeeRecapData, setEmployeeRecapData] = useState<EmployeeRecapItem[]>([]);
+  const [employeeRecapLoading, setEmployeeRecapLoading] = useState<boolean>(false);
+
+  // Point 7: Edit Absensi Karyawan
+  const [editAttendanceModalOpen, setEditAttendanceModalOpen] = useState<boolean>(false);
+  const [editingAttendance, setEditingAttendance] = useState<AttendanceRecord | null>(null);
+  const [editForm, setEditForm] = useState<{
+    date: string;
+    attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+    location_name: string;
+    check_in_time: string;
+    check_in_status: 'on_time' | 'late';
+    check_out_time: string;
+    status: 'present' | 'late' | 'holiday' | 'absent' | 'permit';
+    notes: string;
+  }>({
+    date: '',
+    attendance_type: 'masuk',
+    location_name: '',
+    check_in_time: '',
+    check_in_status: 'on_time',
+    check_out_time: '',
+    status: 'present',
+    notes: '',
+  });
+  const [editSaving, setEditSaving] = useState<boolean>(false);
+
+  // Point 7: Input Presensi Manual Karyawan
+  const [createAttendanceModalOpen, setCreateAttendanceModalOpen] = useState<boolean>(false);
+  const [allEmployees, setAllEmployees] = useState<any[]>([]);
+  const [createForm, setCreateForm] = useState<{
+    user_id: number | '';
+    date: string;
+    attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+    location_name: string;
+    check_in_time: string;
+    check_in_status: 'on_time' | 'late';
+    check_out_time: string;
+    status: 'present' | 'late' | 'holiday' | 'absent' | 'permit';
+    notes: string;
+  }>({
+    user_id: '',
+    date: new Date().toISOString().split('T')[0],
+    attendance_type: 'masuk',
+    location_name: '',
+    check_in_time: '08:00',
+    check_in_status: 'on_time',
+    check_out_time: '17:00',
+    status: 'present',
+    notes: '',
+  });
+  const [createSaving, setCreateSaving] = useState<boolean>(false);
+
+  // Point 7: Hapus Absensi
+  const [deleteConfirmModalOpen, setDeleteConfirmModalOpen] = useState<boolean>(false);
+  const [deletingAttendance, setDeletingAttendance] = useState<AttendanceRecord | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<boolean>(false);
 
   // Locations State (100+ Titik Radius)
   const [locations, setLocations] = useState<AttendanceLocation[]>([]);
@@ -112,6 +183,7 @@ export const AdminAttendancePage: React.FC = () => {
   const [clearLoading, setClearLoading] = useState<boolean>(false);
   const [templateDownloading, setTemplateDownloading] = useState<boolean>(false);
   const [exportLoading, setExportLoading] = useState<boolean>(false);
+  const [exportingAttendanceType, setExportingAttendanceType] = useState<'xlsx' | 'csv' | null>(null);
 
   // Settings State
   const [settings, setSettings] = useState<OfficeSetting | null>(null);
@@ -120,17 +192,26 @@ export const AdminAttendancePage: React.FC = () => {
   const [gpsDetecting, setGpsDetecting] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Fetch Attendance Records & Summary
+  // Fetch Attendance Records & Summary (Point 6: SP 1-9 & Harian)
   const fetchRecap = useCallback(async () => {
     try {
       setLoading(true);
+      const params: any = {
+        status: statusFilter,
+        search: searchQuery || undefined,
+      };
+      if (filterType === 'sp') {
+        params.sp_period = selectedSp;
+      } else {
+        params.date = selectedDate;
+      }
+
       const [listRes, sumRes] = await Promise.allSettled([
-        attendanceService.getAdminAttendances({
-          date: selectedDate,
-          status: statusFilter,
-          search: searchQuery || undefined,
-        }),
-        attendanceService.getAdminSummary(selectedDate),
+        attendanceService.getAdminAttendances(params),
+        attendanceService.getAdminSummary(
+          filterType === 'daily' ? selectedDate : undefined,
+          filterType === 'sp' ? selectedSp : undefined
+        ),
       ]);
       if (listRes.status === 'fulfilled') {
         setAttendances(listRes.value?.data || []);
@@ -143,7 +224,152 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, statusFilter, searchQuery]);
+  }, [filterType, selectedSp, selectedDate, statusFilter, searchQuery]);
+
+  // Point 6: Rekapitulasi Presensi per Karyawan
+  const fetchEmployeeRecap = useCallback(async () => {
+    try {
+      setEmployeeRecapLoading(true);
+      const res = await attendanceService.getRecapByEmployee({
+        sp_period: selectedSp,
+        search: searchQuery || undefined,
+      });
+      setEmployeeRecapData(res.items || []);
+    } catch (err: any) {
+      console.error('Error fetching employee recap:', err);
+    } finally {
+      setEmployeeRecapLoading(false);
+    }
+  }, [selectedSp, searchQuery]);
+
+  useEffect(() => {
+    if (activeTab === 'recap') {
+      fetchRecap();
+      if (recapViewMode === 'employee_recap') {
+        fetchEmployeeRecap();
+      }
+    }
+  }, [activeTab, fetchRecap, recapViewMode, fetchEmployeeRecap]);
+
+  // Point 7: Handlers untuk CRUD Presensi Manual & Edit
+  const handleOpenCreateAttendance = async (defaultUserId?: number) => {
+    setCreateForm({
+      user_id: defaultUserId || '',
+      date: filterType === 'daily' ? selectedDate : new Date().toISOString().split('T')[0],
+      attendance_type: 'masuk',
+      location_name: '',
+      check_in_time: '08:00',
+      check_in_status: 'on_time',
+      check_out_time: '17:00',
+      status: 'present',
+      notes: '',
+    });
+    setCreateAttendanceModalOpen(true);
+
+    if (allEmployees.length === 0) {
+      try {
+        const res = await api.get('/users', { params: { per_page: 500 } });
+        const list = res.data?.data || [];
+        setAllEmployees(list.filter((u: any) => u.role !== 'admin' && u.role !== 'super_admin'));
+      } catch (err) {
+        console.error('Failed to load employee list', err);
+      }
+    }
+  };
+
+  const handleSaveCreateAttendance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.user_id) {
+      alert('Silakan pilih karyawan terlebih dahulu.');
+      return;
+    }
+    try {
+      setCreateSaving(true);
+      await attendanceService.createAdminAttendance({
+        user_id: Number(createForm.user_id),
+        date: createForm.date,
+        attendance_type: createForm.attendance_type,
+        location_name: createForm.location_name || undefined,
+        check_in_time: createForm.check_in_time ? `${createForm.check_in_time}:00` : null,
+        check_in_status: createForm.check_in_status,
+        check_out_time: createForm.check_out_time ? `${createForm.check_out_time}:00` : null,
+        status: createForm.status,
+        notes: createForm.notes || undefined,
+      });
+      setNotification({ text: 'Presensi manual karyawan berhasil disimpan!', type: 'success' });
+      setCreateAttendanceModalOpen(false);
+      fetchRecap();
+      if (recapViewMode === 'employee_recap') fetchEmployeeRecap();
+    } catch (err: any) {
+      setNotification({ text: err.response?.data?.message || 'Gagal menambahkan presensi.', type: 'error' });
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  const handleOpenEditAttendance = (att: AttendanceRecord) => {
+    setEditingAttendance(att);
+    setEditForm({
+      date: att.date ? String(att.date).slice(0, 10) : '',
+      attendance_type: att.attendance_type || 'masuk',
+      location_name: att.location_name || att.location?.name || '',
+      check_in_time: att.check_in_time ? att.check_in_time.slice(0, 5) : '',
+      check_in_status: att.check_in_status || 'on_time',
+      check_out_time: att.check_out_time ? att.check_out_time.slice(0, 5) : '',
+      status: att.status || 'present',
+      notes: att.notes || '',
+    });
+    setEditAttendanceModalOpen(true);
+  };
+
+  const handleSaveEditAttendance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAttendance) return;
+    try {
+      setEditSaving(true);
+      await attendanceService.updateAdminAttendance(editingAttendance.id, {
+        date: editForm.date,
+        attendance_type: editForm.attendance_type,
+        location_name: editForm.location_name || undefined,
+        check_in_time: editForm.check_in_time ? `${editForm.check_in_time}:00` : null,
+        check_in_status: editForm.check_in_status,
+        check_out_time: editForm.check_out_time ? `${editForm.check_out_time}:00` : null,
+        status: editForm.status,
+        notes: editForm.notes || undefined,
+      });
+      setNotification({ text: `Data presensi untuk '${editingAttendance.user?.name || 'Karyawan'}' berhasil diperbarui!`, type: 'success' });
+      setEditAttendanceModalOpen(false);
+      setEditingAttendance(null);
+      fetchRecap();
+      if (recapViewMode === 'employee_recap') fetchEmployeeRecap();
+    } catch (err: any) {
+      setNotification({ text: err.response?.data?.message || 'Gagal menyimpan perubahan.', type: 'error' });
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleOpenDeleteAttendance = (att: AttendanceRecord) => {
+    setDeletingAttendance(att);
+    setDeleteConfirmModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingAttendance) return;
+    try {
+      setDeleteLoading(true);
+      await attendanceService.deleteAdminAttendance(deletingAttendance.id);
+      setNotification({ text: 'Data presensi berhasil dihapus.', type: 'success' });
+      setDeleteConfirmModalOpen(false);
+      setDeletingAttendance(null);
+      fetchRecap();
+      if (recapViewMode === 'employee_recap') fetchEmployeeRecap();
+    } catch (err: any) {
+      setNotification({ text: err.response?.data?.message || 'Gagal menghapus data.', type: 'error' });
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   // Fetch Locations (100+ Lokasi) with Pagination
   const fetchLocations = useCallback(async () => {
@@ -372,6 +598,26 @@ export const AdminAttendancePage: React.FC = () => {
     }
   };
 
+  // Handle Export Rekap Absensi (.xlsx / .csv) sesuai filter aktif via Authenticated Blob
+  const handleExportAttendance = async (format: 'xlsx' | 'csv') => {
+    try {
+      setExportingAttendanceType(format);
+      await attendanceService.downloadAttendanceExport({
+        format,
+        mode: recapViewMode,
+        sp_period: filterType === 'sp' ? selectedSp : undefined,
+        date: filterType === 'daily' ? selectedDate : undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        search: searchQuery.trim() || undefined,
+      });
+    } catch (err: any) {
+      console.error('Error exporting attendance report:', err);
+      alert(err.response?.data?.message || 'Gagal mengekspor laporan absensi.');
+    } finally {
+      setExportingAttendanceType(null);
+    }
+  };
+
   // Open Modal Tambah/Edit Lokasi Manual
   const handleOpenAddLocation = () => {
     setEditingLocation({
@@ -388,6 +634,10 @@ export const AdminAttendancePage: React.FC = () => {
   };
 
   const handleOpenEditLocation = (loc: AttendanceLocation) => {
+    if (loc.type === 'headquarters' && !isSuperAdmin) {
+      alert('Lokasi Kantor Pusat hanya dapat diubah oleh Super Admin melalui tab Pengaturan atau Master Lokasi.');
+      return;
+    }
     setEditingLocation({ ...loc });
     setLocationModalOpen(true);
   };
@@ -396,6 +646,11 @@ export const AdminAttendancePage: React.FC = () => {
   const handleSaveModalLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLocation || !editingLocation.name) return;
+
+    if (editingLocation.type === 'headquarters' && !isSuperAdmin) {
+      alert('Hanya Super Admin yang berhak membuat atau memperbarui titik lokasi Kantor Pusat.');
+      return;
+    }
 
     try {
       setModalSaving(true);
@@ -420,6 +675,10 @@ export const AdminAttendancePage: React.FC = () => {
 
   // Delete Location Single
   const handleDeleteLocation = async (loc: AttendanceLocation) => {
+    if (loc.type === 'headquarters' && !isSuperAdmin) {
+      alert('Hanya Super Admin yang memiliki wewenang untuk menghapus lokasi Kantor Pusat.');
+      return;
+    }
     if (!window.confirm(`Hapus titik lokasi '${loc.name}'?`)) return;
     try {
       await attendanceService.deleteLocation(loc.id);
@@ -578,282 +837,589 @@ export const AdminAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 1: REKAP KEHADIRAN KARYAWAN */}
+      {/* TAB 1: REKAP KEHADIRAN KARYAWAN (POINT 6 & POINT 7) */}
       {activeTab === 'recap' && (
         <div className="space-y-6">
-          {/* Summary KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5">
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-4 shadow-2xs">
-              <div className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+          {/* POINT 10: Status Presensi Mandiri Admin di Kantor Pusat */}
+          <div className="bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-indigo-50/80 border border-blue-200/90 rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Building className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+                    Presensi Mandiri Admin — Wajib Kantor Pusat
+                  </span>
+                </div>
+                <p className="text-xs text-blue-900/80 mt-0.5">
+                  Sesuai kebijakan sistem, seluruh akun Admin wajib absen masuk di radius Kantor Pusat yang ditentukan oleh Super Admin.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+              <a
+                href="/my-attendance"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-all cursor-pointer"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Buka Presensi Saya di Kantor Pusat &rarr;</span>
+              </a>
+            </div>
+          </div>
+
+          {/* Summary KPI Cards (Termasuk 8 Jam Kerja Terpenuhi) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-text-muted uppercase tracking-wider">
                 Total Karyawan
               </div>
-              <div className="text-2xl font-bold text-text-primary mt-1">
+              <div className="text-xl font-bold text-text-primary mt-1">
                 {summary?.total_employees ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-4 shadow-2xs">
-              <div className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-emerald-800 uppercase tracking-wider">
                 Hadir Masuk
               </div>
-              <div className="text-2xl font-bold text-emerald-700 mt-1">
+              <div className="text-xl font-bold text-emerald-700 mt-1">
                 {summary?.total_present ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-4 shadow-2xs">
-              <div className="text-[11px] font-semibold text-indigo-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-indigo-800 uppercase tracking-wider">
                 Dinas Luar
               </div>
-              <div className="text-2xl font-bold text-indigo-700 mt-1">
+              <div className="text-xl font-bold text-indigo-700 mt-1">
                 {summary?.total_business_trip ?? 0}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-4 shadow-2xs">
-              <div className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-amber-800 uppercase tracking-wider">
                 Libur / Off
               </div>
-              <div className="text-2xl font-bold text-amber-700 mt-1">
+              <div className="text-xl font-bold text-amber-700 mt-1">
                 {summary?.total_holiday ?? 0}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-4 shadow-2xs">
-              <div className="text-[11px] font-semibold text-blue-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-blue-800 uppercase tracking-wider">
                 Tepat Waktu
               </div>
-              <div className="text-2xl font-bold text-blue-700 mt-1">
+              <div className="text-xl font-bold text-blue-700 mt-1">
                 {summary?.total_on_time ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-4 shadow-2xs">
-              <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-rose-800 uppercase tracking-wider">
                 Terlambat
               </div>
-              <div className="text-2xl font-bold text-rose-700 mt-1">
+              <div className="text-xl font-bold text-rose-700 mt-1">
                 {summary?.total_late ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-4 shadow-2xs">
-              <div className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-gray-600 uppercase tracking-wider">
                 Belum Absen
               </div>
-              <div className="text-2xl font-bold text-gray-700 mt-1">
+              <div className="text-xl font-bold text-gray-700 mt-1">
                 {summary?.total_not_checked_in ?? '-'}
               </div>
             </div>
-          </div>
 
-          {/* Filter Bar */}
-          <div className="bg-surface-panel border border-border-subtle rounded-2xl p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
-              {/* Date Filter */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted font-medium">Tanggal:</span>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+            <div className="bg-surface-panel border border-emerald-200/80 bg-emerald-50/30 rounded-xl p-3.5 shadow-2xs">
+              <div className="text-[10.5px] font-semibold text-emerald-900 uppercase tracking-wider flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>8 Jam Kerja</span>
               </div>
-
-              {/* Status Filter */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted font-medium">Status:</span>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="all">Semua Status</option>
-                  <option value="on_time">Tepat Waktu</option>
-                  <option value="late">Terlambat</option>
-                  <option value="dinas_luar">Perjalanan Dinas</option>
-                  <option value="holiday">Libur / Off</option>
-                </select>
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Cari Nama / NIK / Email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+              <div className="text-xl font-bold text-emerald-800 mt-1">
+                {summary?.total_eight_hours_met ?? 0}
               </div>
             </div>
-
-            {/* Export CSV Button */}
-            <a
-              href={attendanceService.exportCsvUrl(selectedDate)}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/15 border border-primary/20 rounded-lg transition-all"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export CSV Rekap</span>
-            </a>
           </div>
 
-          {/* Table List */}
-          <div className="bg-surface-panel border border-border-subtle rounded-2xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="w-full min-w-[950px] text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-border-subtle bg-surface-container/40 text-text-muted font-semibold whitespace-nowrap">
-                    <th className="py-3 px-4">Karyawan</th>
-                    <th className="py-3 px-3">Foto Bukti</th>
-                    <th className="py-3 px-3">Jenis Absen</th>
-                    <th className="py-3 px-3">Titik Lokasi / Unit</th>
-                    <th className="py-3 px-3">Jam Masuk</th>
-                    <th className="py-3 px-3">Jarak Masuk</th>
-                    <th className="py-3 px-3">Jam Pulang</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-3">Catatan</th>
-                    <th className="py-3 px-4">Koordinat GPS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-subtle">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={10} className="py-10 text-center text-text-muted">
-                        Memuat data absensi karyawan...
-                      </td>
+          {/* Filter Bar & Control Panel */}
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl p-4 shadow-2xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Left: Filter Periode & Tanggal */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Switcher Filter Mode: SP 1-9 vs Harian */}
+                <div className="flex items-center p-0.5 bg-surface-container rounded-lg border border-border-subtle">
+                  <button
+                    type="button"
+                    onClick={() => setFilterType('sp')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      filterType === 'sp'
+                        ? 'bg-surface-panel text-primary shadow-2xs'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    Periode SP (1-12)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterType('daily')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      filterType === 'daily'
+                        ? 'bg-surface-panel text-primary shadow-2xs'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    Tanggal Harian
+                  </button>
+                </div>
+
+                {/* Dropdown SP 1 - 9 jika mode SP */}
+                {filterType === 'sp' ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-text-muted font-medium">Surat Pesanan:</span>
+                    <select
+                      value={selectedSp}
+                      onChange={(e) => setSelectedSp(e.target.value)}
+                      className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-semibold focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    >
+                      {SP_PERIOD_LIST.map((sp) => (
+                        <option key={sp.code} value={sp.code}>
+                          {sp.fullLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-text-muted font-medium">Tanggal:</span>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    />
+                  </div>
+                )}
+
+                {/* Status Filter */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-text-muted font-medium">Status:</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="all">Semua Status</option>
+                    <option value="on_time">Tepat Waktu</option>
+                    <option value="late">Terlambat</option>
+                    <option value="dinas_luar">Perjalanan Dinas</option>
+                    <option value="holiday">Libur / Off</option>
+                  </select>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative min-w-[200px]">
+                  <Search className="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Cari Nama / NIK / Unit..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Right: View Mode Toggle & Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* View Mode Toggle */}
+                <div className="flex items-center p-0.5 bg-surface-container rounded-lg border border-border-subtle">
+                  <button
+                    type="button"
+                    onClick={() => setRecapViewMode('detail')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      recapViewMode === 'detail'
+                        ? 'bg-surface-panel text-primary shadow-2xs'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    Log Detail
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecapViewMode('employee_recap');
+                      fetchEmployeeRecap();
+                    }}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                      recapViewMode === 'employee_recap'
+                        ? 'bg-surface-panel text-primary shadow-2xs'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                  >
+                    Rekap per Karyawan (SP)
+                  </button>
+                </div>
+
+                {/* Point 7: Button Tambah Presensi Manual */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenCreateAttendance()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-2xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Input Presensi Manual</span>
+                </button>
+
+                {/* Export Buttons: Excel (.xlsx) & CSV */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleExportAttendance('xlsx')}
+                    disabled={exportingAttendanceType !== null}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 rounded-lg transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                    title={`Export ${recapViewMode === 'employee_recap' ? 'Rekap Karyawan' : 'Log Detail'} ke format Excel (.xlsx)`}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>
+                      {exportingAttendanceType === 'xlsx' ? 'Mengekspor...' : 'Export Excel (.xlsx)'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleExportAttendance('csv')}
+                    disabled={exportingAttendanceType !== null}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-text-primary bg-surface-container hover:bg-surface-container/80 border border-border-subtle rounded-lg transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                    title={`Export ${recapViewMode === 'employee_recap' ? 'Rekap Karyawan' : 'Log Detail'} ke format CSV`}
+                  >
+                    <Download className="w-3.5 h-3.5 text-text-muted" />
+                    <span>
+                      {exportingAttendanceType === 'csv' ? '...' : 'CSV'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* VIEW 1: DETAIL LOG HARIAN (DENGAN ACTION EDIT & HAPUS) */}
+          {recapViewMode === 'detail' && (
+            <div className="bg-surface-panel border border-border-subtle rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto scrollbar-thin">
+                <table className="w-full min-w-[1100px] text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-border-subtle bg-surface-container/40 text-text-muted font-semibold whitespace-nowrap">
+                      <th className="py-3 px-4">Karyawan</th>
+                      <th className="py-3 px-3">Tanggal</th>
+                      <th className="py-3 px-3">Foto Bukti</th>
+                      <th className="py-3 px-3">Jenis Absen</th>
+                      <th className="py-3 px-3">Titik Lokasi / Unit</th>
+                      <th className="py-3 px-3">Jam Masuk</th>
+                      <th className="py-3 px-3">Jarak</th>
+                      <th className="py-3 px-3">Jam Pulang</th>
+                      <th className="py-3 px-3">Durasi Kerja</th>
+                      <th className="py-3 px-3">Target 8 Jam</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3">Catatan</th>
+                      <th className="py-3 px-3">GPS</th>
+                      <th className="py-3 px-4 text-center">Aksi</th>
                     </tr>
-                  ) : attendances.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="py-10 text-center text-text-muted">
-                        Tidak ada data absensi untuk tanggal {selectedDate}.
-                      </td>
+                  </thead>
+                  <tbody className="divide-y divide-border-subtle">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={14} className="py-10 text-center text-text-muted">
+                          Memuat data absensi karyawan...
+                        </td>
+                      </tr>
+                    ) : attendances.length === 0 ? (
+                      <tr>
+                        <td colSpan={14} className="py-10 text-center text-text-muted">
+                          Tidak ada data absensi untuk filter {filterType === 'sp' ? selectedSp : selectedDate}.
+                        </td>
+                      </tr>
+                    ) : (
+                      attendances.map((row) => {
+                        const isLibur = row.attendance_type === 'libur' || row.status === 'holiday';
+                        const isDinas = row.attendance_type === 'dinas_luar';
+                        const photoSrc = row.photo_full_url || row.photo_url;
+                        return (
+                          <tr key={row.id} className="hover:bg-surface-container/20 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-text-primary">{row.user?.name || '-'}</div>
+                              <div className="text-[11px] text-text-muted font-mono">
+                                NIK: {row.user?.nik || '-'} {row.user?.school_unit ? `• Unit: ${row.user.school_unit}` : ''}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 font-mono text-[11px] text-text-secondary whitespace-nowrap">
+                              {row.date ? String(row.date).slice(0, 10) : '-'}
+                            </td>
+                            <td className="py-3 px-3">
+                              {photoSrc ? (
+                                <div
+                                  onClick={() => setPreviewPhotoModal(photoSrc)}
+                                  className="flex items-center gap-1.5 cursor-pointer group"
+                                  title="Klik untuk memperbesar foto bukti"
+                                >
+                                  <img
+                                    src={photoSrc}
+                                    alt="Bukti Kehadiran"
+                                    className="w-8 h-8 rounded-lg object-cover border border-border-subtle group-hover:scale-105 shadow-2xs transition-transform"
+                                  />
+                                  <Eye className="w-3.5 h-3.5 text-text-muted group-hover:text-primary shrink-0" />
+                                </div>
+                              ) : (
+                                <span className="text-text-muted text-[11px]">-</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  isLibur
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : isDinas
+                                    ? 'bg-indigo-100 text-indigo-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {isLibur ? (
+                                  <>
+                                    <SunMedium className="w-3 h-3 text-amber-600" />
+                                    <span>Libur / Off</span>
+                                  </>
+                                ) : isDinas ? (
+                                  <>
+                                    <Car className="w-3 h-3 text-indigo-600" />
+                                    <span>Dinas Luar</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Briefcase className="w-3 h-3 text-emerald-600" />
+                                    <span>Masuk Kerja</span>
+                                  </>
+                                )}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-text-secondary font-medium">
+                              {row.location_name || (row.location?.name ?? '-')}
+                            </td>
+                            <td className="py-3 px-3 font-mono font-medium">
+                              {row.check_in_time ? row.check_in_time.substring(0, 5) : '-'}
+                            </td>
+                            <td className="py-3 px-3 text-text-muted">
+                              {row.check_in_distance_meters !== null ? `${row.check_in_distance_meters} m` : '-'}
+                            </td>
+                            <td className="py-3 px-3 font-mono font-medium">
+                              {row.check_out_time ? row.check_out_time.substring(0, 5) : '-'}
+                            </td>
+                            <td className="py-3 px-3 font-mono text-[11px] font-semibold text-text-primary">
+                              {row.work_duration_formatted || '-'}
+                            </td>
+                            <td className="py-3 px-3">
+                              {row.is_eight_hours_met === true ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                  <Check className="w-3 h-3" /> 8 Jam OK
+                                </span>
+                              ) : row.is_eight_hours_met === false ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
+                                  &lt; 8 Jam
+                                </span>
+                              ) : (
+                                <span className="text-text-muted text-[11px]">-</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  isLibur
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : isDinas
+                                    ? 'bg-indigo-100 text-indigo-800'
+                                    : row.check_in_status === 'late'
+                                    ? 'bg-rose-100 text-rose-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {isLibur
+                                  ? 'Libur'
+                                  : isDinas
+                                  ? 'Dinas Luar'
+                                  : row.check_in_status === 'late'
+                                  ? 'Terlambat'
+                                  : 'Tepat Waktu'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-text-muted max-w-[140px] truncate" title={row.notes || '-'}>
+                              {row.notes || '-'}
+                            </td>
+                            <td className="py-3 px-3 font-mono text-[11px] text-text-muted">
+                              {row.check_in_lat && row.check_in_lng ? (
+                                <a
+                                  href={`https://www.google.com/maps?q=${row.check_in_lat},${row.check_in_lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary hover:underline flex items-center gap-1"
+                                  title="Lihat titik di Google Maps"
+                                >
+                                  <span>{row.check_in_lat.toFixed(4)}, {row.check_in_lng.toFixed(4)}</span>
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                </a>
+                              ) : (
+                                '-'
+                              )}
+                            </td>
+                            {/* Point 7: Kolom Aksi Edit & Hapus */}
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditAttendance(row)}
+                                  className="p-1.5 text-text-muted hover:text-primary hover:bg-surface-container rounded-lg transition-colors cursor-pointer"
+                                  title="Edit Presensi"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenDeleteAttendance(row)}
+                                  className="p-1.5 text-text-muted hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Hapus Presensi"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 2: REKAPITULASI PER KARYAWAN (POINT 6: PERIODE SP 1-9) */}
+          {recapViewMode === 'employee_recap' && (
+            <div className="bg-surface-panel border border-border-subtle rounded-2xl overflow-hidden shadow-xs">
+              <div className="p-4 bg-surface-container/30 border-b border-border-subtle flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4 text-primary" />
+                    <span>Rekapitulasi Kehadiran per Karyawan — {selectedSp}</span>
+                  </h3>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Total akumulasi kehadiran, keterlambatan, dan pencapaian 8 jam kerja selama periode {selectedSp}.
+                  </p>
+                </div>
+                <div className="text-xs font-semibold text-text-secondary bg-surface-panel px-3 py-1.5 rounded-lg border border-border-subtle">
+                  Total: {employeeRecapData.length} Karyawan
+                </div>
+              </div>
+
+              <div className="overflow-x-auto scrollbar-thin">
+                <table className="w-full min-w-[1000px] text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-border-subtle bg-surface-container/50 text-text-muted font-semibold whitespace-nowrap">
+                      <th className="py-3 px-3 text-center w-12">No</th>
+                      <th className="py-3 px-4">Nama & NIK</th>
+                      <th className="py-3 px-3">Unit Sekolah / Lokasi</th>
+                      <th className="py-3 px-3">Perusahaan</th>
+                      <th className="py-3 px-3 text-center">Hadir Masuk</th>
+                      <th className="py-3 px-3 text-center">Tepat Waktu</th>
+                      <th className="py-3 px-3 text-center">Terlambat</th>
+                      <th className="py-3 px-3 text-center">Dinas Luar</th>
+                      <th className="py-3 px-3 text-center">Libur</th>
+                      <th className="py-3 px-3 text-center">8 Jam OK</th>
+                      <th className="py-3 px-3 text-center">Total Jam Kerja</th>
+                      <th className="py-3 px-4 text-center">Aksi</th>
                     </tr>
-                  ) : (
-                    attendances.map((row) => {
-                      const isLibur = row.attendance_type === 'libur' || row.status === 'holiday';
-                      const isDinas = row.attendance_type === 'dinas_luar';
-                      const photoSrc = row.photo_full_url || row.photo_url;
-                      return (
-                        <tr key={row.id} className="hover:bg-surface-container/20 transition-colors">
+                  </thead>
+                  <tbody className="divide-y divide-border-subtle">
+                    {employeeRecapLoading ? (
+                      <tr>
+                        <td colSpan={12} className="py-10 text-center text-text-muted">
+                          Menghitung rekapitulasi data kehadiran per karyawan untuk {selectedSp}...
+                        </td>
+                      </tr>
+                    ) : employeeRecapData.length === 0 ? (
+                      <tr>
+                        <td colSpan={12} className="py-10 text-center text-text-muted">
+                          Tidak ada data karyawan ditemukan.
+                        </td>
+                      </tr>
+                    ) : (
+                      employeeRecapData.map((emp, idx) => (
+                        <tr key={emp.user_id} className="hover:bg-surface-container/20 transition-colors">
+                          <td className="py-3 px-3 text-center text-text-muted font-mono">{idx + 1}</td>
                           <td className="py-3 px-4">
-                            <div className="font-semibold text-text-primary">{row.user?.name || '-'}</div>
+                            <div className="font-semibold text-text-primary">{emp.name}</div>
                             <div className="text-[11px] text-text-muted font-mono">
-                              NIK: {row.user?.nik || '-'} {row.user?.school_unit ? `• Unit: ${row.user.school_unit}` : ''}
+                              NIK: {emp.nik || '-'} {emp.position ? `• ${emp.position}` : ''}
                             </div>
                           </td>
-                          <td className="py-3 px-3">
-                            {photoSrc ? (
-                              <div
-                                onClick={() => setPreviewPhotoModal(photoSrc)}
-                                className="flex items-center gap-1.5 cursor-pointer group"
-                                title="Klik untuk memperbesar foto bukti"
-                              >
-                                <img
-                                  src={photoSrc}
-                                  alt="Bukti Kehadiran"
-                                  className="w-8 h-8 rounded-lg object-cover border border-border-subtle group-hover:scale-105 shadow-2xs transition-transform"
-                                />
-                                <Eye className="w-3.5 h-3.5 text-text-muted group-hover:text-primary shrink-0" />
-                              </div>
-                            ) : (
-                              <span className="text-text-muted text-[11px]">-</span>
-                            )}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                isLibur
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : isDinas
-                                  ? 'bg-indigo-100 text-indigo-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}
-                            >
-                              {isLibur ? (
-                                <>
-                                  <SunMedium className="w-3 h-3 text-amber-600" />
-                                  <span>Libur / Off</span>
-                                </>
-                              ) : isDinas ? (
-                                <>
-                                  <Car className="w-3 h-3 text-indigo-600" />
-                                  <span>Dinas Luar</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Briefcase className="w-3 h-3 text-emerald-600" />
-                                  <span>Masuk Kerja</span>
-                                </>
-                              )}
-                            </span>
-                          </td>
                           <td className="py-3 px-3 text-text-secondary font-medium">
-                            {row.location_name || (row.location?.name ?? '-')}
+                            {emp.school_unit || '-'}
                           </td>
-                          <td className="py-3 px-3 font-mono font-medium">
-                            {row.check_in_time ? row.check_in_time.substring(0, 5) : '-'}
+                          <td className="py-3 px-3 uppercase font-mono text-[11px] font-semibold text-text-muted">
+                            {emp.company || '-'}
                           </td>
-                          <td className="py-3 px-3 text-text-muted">
-                            {row.check_in_distance_meters !== null ? `${row.check_in_distance_meters} m` : '-'}
-                          </td>
-                          <td className="py-3 px-3 font-mono font-medium">
-                            {row.check_out_time ? row.check_out_time.substring(0, 5) : '-'}
-                          </td>
-                          <td className="py-3 px-3">
-                            <span
-                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                isLibur
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : isDinas
-                                  ? 'bg-indigo-100 text-indigo-800'
-                                  : row.check_in_status === 'late'
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}
-                            >
-                              {isLibur
-                                ? 'Libur'
-                                : isDinas
-                                ? 'Dinas Luar'
-                                : row.check_in_status === 'late'
-                                ? 'Terlambat'
-                                : 'Tepat Waktu'}
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              {emp.total_present}
                             </span>
                           </td>
-                          <td className="py-3 px-3 text-text-muted max-w-[150px] truncate" title={row.notes || '-'}>
-                            {row.notes || '-'}
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800">
+                              {emp.total_on_time}
+                            </span>
                           </td>
-                          <td className="py-3 px-4 font-mono text-[11px] text-text-muted">
-                            {row.check_in_lat && row.check_in_lng ? (
-                              <a
-                                href={`https://www.google.com/maps?q=${row.check_in_lat},${row.check_in_lng}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-primary hover:underline flex items-center gap-1"
-                                title="Lihat titik di Google Maps"
-                              >
-                                <span>
-                                  {row.check_in_lat.toFixed(4)}, {row.check_in_lng.toFixed(4)}
-                                </span>
-                                <ExternalLink className="w-3 h-3 shrink-0" />
-                              </a>
-                            ) : (
-                              '-'
-                            )}
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800">
+                              {emp.total_late}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-800">
+                              {emp.total_business_trip}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
+                              {emp.total_holiday}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {emp.eight_hours_met_count} Hari
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono font-semibold text-text-primary text-[11.5px]">
+                            {emp.total_work_formatted}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCreateAttendance(emp.user_id)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all flex items-center gap-1 mx-auto cursor-pointer"
+                              title="Tambah Presensi untuk Karyawan Ini"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>+ Presensi</span>
+                            </button>
                           </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -1051,9 +1617,15 @@ export const AdminAttendancePage: React.FC = () => {
                           {loc.code || '-'}
                         </td>
                         <td className="py-3 px-3">
-                          <span className="capitalize px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-container border border-border-subtle text-text-secondary">
-                            {loc.type === 'school' ? 'Sekolah Rakyat' : loc.type === 'headquarters' ? 'Kantor Pusat' : loc.type}
-                          </span>
+                          {loc.type === 'headquarters' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              🏢 Kantor Pusat (Super Admin)
+                            </span>
+                          ) : (
+                            <span className="capitalize px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-container border border-border-subtle text-text-secondary">
+                              {loc.type === 'school' ? 'Sekolah Rakyat' : loc.type === 'branch' ? 'Cabang' : loc.type}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3">
                           <button
@@ -1106,16 +1678,34 @@ export const AdminAttendancePage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenEditLocation(loc)}
-                            className="p-1.5 text-text-muted hover:text-primary hover:bg-surface-container rounded-md transition-all cursor-pointer mr-1"
-                            title="Edit Lokasi"
+                            disabled={loc.type === 'headquarters' && !isSuperAdmin}
+                            className={`p-1.5 rounded-md transition-all mr-1 ${
+                              loc.type === 'headquarters' && !isSuperAdmin
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-text-muted hover:text-primary hover:bg-surface-container cursor-pointer'
+                            }`}
+                            title={
+                              loc.type === 'headquarters' && !isSuperAdmin
+                                ? 'Hanya Super Admin yang dapat mengedit Kantor Pusat'
+                                : 'Edit Lokasi'
+                            }
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteLocation(loc)}
-                            className="p-1.5 text-text-muted hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all cursor-pointer"
-                            title="Hapus Lokasi"
+                            disabled={loc.type === 'headquarters' && !isSuperAdmin}
+                            className={`p-1.5 rounded-md transition-all ${
+                              loc.type === 'headquarters' && !isSuperAdmin
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-text-muted hover:text-rose-600 hover:bg-rose-50 cursor-pointer'
+                            }`}
+                            title={
+                              loc.type === 'headquarters' && !isSuperAdmin
+                                ? 'Kantor Pusat dikunci dan tidak dapat dihapus oleh Admin'
+                                : 'Hapus Lokasi'
+                            }
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -1615,6 +2205,19 @@ export const AdminAttendancePage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveModalLocation} className="space-y-4">
+              {editingLocation.type === 'headquarters' && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Titik Kantor Pusat (Point 10):</span>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      {isSuperAdmin
+                        ? 'Sebagai Super Admin, koordinat dan radius yang Anda simpan di sini akan otomatis disinkronkan ke Pengaturan Kantor Pusat Absensi Admin.'
+                        : 'Hanya Super Admin yang berwenang mengubah atau mengatur koordinat Kantor Pusat.'}
+                    </p>
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-semibold text-text-primary block">
@@ -1703,10 +2306,17 @@ export const AdminAttendancePage: React.FC = () => {
                   <select
                     value={editingLocation.type || 'school'}
                     onChange={(e) => setEditingLocation({ ...editingLocation, type: e.target.value as any })}
-                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    disabled={editingLocation.type === 'headquarters' && !isSuperAdmin}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="school">Sekolah Rakyat</option>
-                    <option value="headquarters">Kantor Pusat</option>
+                    {isSuperAdmin ? (
+                      <option value="headquarters">Kantor Pusat (Super Admin Only)</option>
+                    ) : (
+                      editingLocation.type === 'headquarters' && (
+                        <option value="headquarters">Kantor Pusat (Terkunci)</option>
+                      )
+                    )}
                     <option value="branch">Cabang</option>
                     <option value="other">Lainnya</option>
                   </select>
@@ -1773,8 +2383,8 @@ export const AdminAttendancePage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={modalSaving}
-                  className="px-5 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  disabled={modalSaving || (editingLocation.type === 'headquarters' && !isSuperAdmin)}
+                  className="px-5 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {modalSaving ? 'Menyimpan...' : 'Simpan Lokasi'}
                 </button>
@@ -1941,25 +2551,52 @@ export const AdminAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: PENGATURAN RADIUS KANTOR PUSAT & JAM KERJA */}
+      {/* TAB 3: PENGATURAN RADIUS KANTOR PUSAT & JAM KERJA (POINT 10: SUPER ADMIN ONLY) */}
       {activeTab === 'settings' && (
-        <div className="bg-surface-panel border border-border-subtle rounded-2xl p-6 shadow-xs max-w-4xl mx-auto">
+        <div className="bg-surface-panel border border-border-subtle rounded-2xl p-6 shadow-xs max-w-4xl mx-auto space-y-6">
           <div className="pb-4 border-b border-border-subtle">
-            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
-              <Compass className="w-5 h-5 text-primary" />
-              <span>Konfigurasi Standar Jam Kerja & Toleransi</span>
-            </h2>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <Compass className="w-5 h-5 text-primary" />
+                <span>Konfigurasi Kantor Pusat & Jam Kerja Baku</span>
+              </h2>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider ${
+                isSuperAdmin
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  : 'bg-amber-100 text-amber-800 border border-amber-200'
+              }`}>
+                {isSuperAdmin ? 'Akses Super Admin (Full Edit)' : 'Mode Hanya-Baca (Admin)'}
+              </span>
+            </div>
             <p className="text-xs text-text-muted mt-1">
-              Atur jam masuk, jam pulang, dan toleransi keterlambatan baku untuk presensi karyawan.
+              Titik patokan Kantor Pusat ini dibuat/ditetapkan oleh Super Admin sebagai lokasi wajib presensi seluruh Admin (Point 10).
             </p>
           </div>
+
+          {/* Warning Banner jika bukan Super Admin */}
+          {!isSuperAdmin && (
+            <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/90 flex items-start gap-3 text-amber-900 text-xs">
+              <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-[13px] text-amber-800 flex items-center gap-2">
+                  <span>Pengaturan Kantor Pusat Dikelola Eksklusif oleh Super Admin</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-200/80 text-amber-900 font-bold uppercase">
+                    Read-Only
+                  </span>
+                </div>
+                <p className="mt-1 leading-relaxed text-amber-800/90">
+                  Sesuai kebijakan sistem (Point 10), seluruh akun Admin diwajibkan melakukan presensi di Kantor Pusat ini. Pengaturan koordinat GPS dan batas radius Kantor Pusat hanya dapat diubah oleh akun <strong>Super Admin</strong> untuk menjamin kepatuhan lokasi kerja.
+                </p>
+              </div>
+            </div>
+          )}
 
           {settingsLoading || !settings ? (
             <div className="py-12 text-center text-text-muted text-xs">
               Memuat konfigurasi kantor...
             </div>
           ) : (
-            <form onSubmit={handleSaveSettings} className="mt-6 space-y-6">
+            <form onSubmit={handleSaveSettings} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Nama Kantor */}
                 <div className="md:col-span-2">
@@ -1971,10 +2608,11 @@ export const AdminAttendancePage: React.FC = () => {
                     <input
                       type="text"
                       required
+                      disabled={!isSuperAdmin}
                       value={settings.office_name}
                       onChange={(e) => setSettings({ ...settings, office_name: e.target.value })}
                       placeholder="Contoh: Kantor Pusat RBS / Riama Mandiri"
-                      className="w-full pl-9 pr-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full pl-9 pr-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1982,52 +2620,56 @@ export const AdminAttendancePage: React.FC = () => {
                 {/* Latitude */}
                 <div>
                   <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Latitude Kantor Default
+                    Latitude Kantor Pusat
                   </label>
                   <input
                     type="number"
                     step="any"
                     required
+                    disabled={!isSuperAdmin}
                     value={settings.latitude}
                     onChange={(e) => setSettings({ ...settings, latitude: parseFloat(e.target.value) || 0 })}
                     placeholder="-6.2088000"
-                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
                   />
                 </div>
 
                 {/* Longitude */}
                 <div>
                   <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Longitude Kantor Default
+                    Longitude Kantor Pusat
                   </label>
                   <input
                     type="number"
                     step="any"
                     required
+                    disabled={!isSuperAdmin}
                     value={settings.longitude}
                     onChange={(e) => setSettings({ ...settings, longitude: parseFloat(e.target.value) || 0 })}
                     placeholder="106.8456000"
-                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
                   />
                 </div>
 
-                {/* Tombol Ambil Lokasi Admin Saat Ini */}
-                <div className="md:col-span-2">
-                  <button
-                    type="button"
-                    onClick={handleUseCurrentLocation}
-                    disabled={gpsDetecting}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all cursor-pointer"
-                  >
-                    <Crosshair className={`w-3.5 h-3.5 ${gpsDetecting ? 'animate-spin' : ''}`} />
-                    <span>{gpsDetecting ? 'Mengambil GPS Admin...' : 'Gunakan Koordinat GPS Saya Saat Ini'}</span>
-                  </button>
-                </div>
+                {/* Tombol Ambil Lokasi Super Admin Saat Ini */}
+                {isSuperAdmin && (
+                  <div className="md:col-span-2">
+                    <button
+                      type="button"
+                      onClick={handleUseCurrentLocation}
+                      disabled={gpsDetecting}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all cursor-pointer"
+                    >
+                      <Crosshair className={`w-3.5 h-3.5 ${gpsDetecting ? 'animate-spin' : ''}`} />
+                      <span>{gpsDetecting ? 'Mengambil GPS...' : 'Gunakan Koordinat GPS Super Admin Saat Ini'}</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Radius Meter */}
                 <div>
                   <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Batas Radius Default (Meter)
+                    Batas Radius Presensi Admin (Meter)
                   </label>
                   <div className="relative">
                     <input
@@ -2035,16 +2677,17 @@ export const AdminAttendancePage: React.FC = () => {
                       min={10}
                       max={10000}
                       required
+                      disabled={!isSuperAdmin}
                       value={settings.radius_meters}
                       onChange={(e) => setSettings({ ...settings, radius_meters: parseInt(e.target.value) || 50 })}
-                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text-muted font-medium">
                       Meter
                     </span>
                   </div>
                   <span className="text-[11px] text-text-muted mt-1 block">
-                    Disarankan 50–150 meter untuk area gedung kantor.
+                    Batas toleransi radius presensi wajib bagi seluruh akun Admin di Kantor Pusat.
                   </span>
                 </div>
 
@@ -2059,9 +2702,10 @@ export const AdminAttendancePage: React.FC = () => {
                       min={0}
                       max={120}
                       required
+                      disabled={!isSuperAdmin}
                       value={settings.late_tolerance_minutes}
                       onChange={(e) => setSettings({ ...settings, late_tolerance_minutes: parseInt(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text-muted font-medium">
                       Menit
@@ -2077,9 +2721,10 @@ export const AdminAttendancePage: React.FC = () => {
                   <input
                     type="time"
                     required
+                    disabled={!isSuperAdmin}
                     value={settings.work_start_time}
                     onChange={(e) => setSettings({ ...settings, work_start_time: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -2091,23 +2736,31 @@ export const AdminAttendancePage: React.FC = () => {
                   <input
                     type="time"
                     required
+                    disabled={!isSuperAdmin}
                     value={settings.work_end_time}
                     onChange={(e) => setSettings({ ...settings, work_end_time: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* Submit Button */}
               <div className="pt-4 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={settingsSaving}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{settingsSaving ? 'Menyimpan...' : 'Simpan Pengaturan'}</span>
-                </button>
+                {isSuperAdmin ? (
+                  <button
+                    type="submit"
+                    disabled={settingsSaving}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{settingsSaving ? 'Menyimpan...' : 'Simpan Pengaturan Kantor Pusat'}</span>
+                  </button>
+                ) : (
+                  <div className="text-xs font-medium text-text-muted italic flex items-center gap-1.5 bg-surface-container px-3 py-2 rounded-xl border border-border-subtle">
+                    <ShieldAlert className="w-4 h-4 text-amber-600" />
+                    <span>Hanya akun Super Admin yang berwenang menyimpan konfigurasi Kantor Pusat.</span>
+                  </div>
+                )}
               </div>
             </form>
           )}
@@ -2143,6 +2796,416 @@ export const AdminAttendancePage: React.FC = () => {
                 alt="Foto Bukti Kehadiran"
                 className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-md"
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POINT 7: MODAL EDIT PRESENSI KARYAWAN */}
+      {editAttendanceModalOpen && editingAttendance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-primary" />
+                <h3 className="text-base font-bold text-text-primary">Edit Data Presensi Karyawan</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditAttendanceModalOpen(false)}
+                className="text-text-muted hover:text-text-primary p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Info Karyawan */}
+            <div className="p-3 bg-surface-container rounded-xl border border-border-subtle flex items-center justify-between">
+              <div>
+                <div className="font-bold text-sm text-text-primary">{editingAttendance.user?.name || '-'}</div>
+                <div className="text-xs text-text-muted font-mono mt-0.5">
+                  NIK: {editingAttendance.user?.nik || '-'} • Unit: {editingAttendance.user?.school_unit || '-'}
+                </div>
+              </div>
+              <span className="text-[10.5px] uppercase font-mono font-semibold px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                ID #{editingAttendance.id}
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveEditAttendance} className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Tanggal */}
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">
+                    Tanggal Presensi <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editForm.date}
+                    onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Jenis Presensi */}
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">
+                    Jenis Presensi <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={editForm.attendance_type}
+                    onChange={(e) => setEditForm({ ...editForm, attendance_type: e.target.value as any })}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-medium"
+                  >
+                    <option value="masuk">Masuk Kerja (Kantor / Sekolah)</option>
+                    <option value="dinas_luar">Perjalanan Dinas</option>
+                    <option value="libur">Libur / Hari Off</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Lokasi / Unit Sekolah */}
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Nama Titik Lokasi / Unit Sekolah
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: SMAN 1 Jakarta / Unit Penugasan"
+                  value={editForm.location_name}
+                  onChange={(e) => setEditForm({ ...editForm, location_name: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {editForm.attendance_type !== 'libur' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-surface-container/50 rounded-xl border border-border-subtle">
+                  {/* Jam Masuk */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Jam Masuk (WIB)
+                    </label>
+                    <input
+                      type="time"
+                      value={editForm.check_in_time}
+                      onChange={(e) => setEditForm({ ...editForm, check_in_time: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+
+                  {/* Status Masuk */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Ketepatan Masuk
+                    </label>
+                    <select
+                      value={editForm.check_in_status}
+                      onChange={(e) => setEditForm({ ...editForm, check_in_status: e.target.value as any })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="on_time">Tepat Waktu</option>
+                      <option value="late">Terlambat</option>
+                    </select>
+                  </div>
+
+                  {/* Jam Pulang */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Jam Pulang (WIB)
+                    </label>
+                    <input
+                      type="time"
+                      value={editForm.check_out_time}
+                      onChange={(e) => setEditForm({ ...editForm, check_out_time: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+
+                  {/* Status Keseluruhan */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Status Kehadiran
+                    </label>
+                    <select
+                      value={editForm.status}
+                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="present">Hadir Normal</option>
+                      <option value="late">Terlambat</option>
+                      <option value="absent">Alpa / Tidak Hadir</option>
+                      <option value="permit">Izin / Cuti</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Catatan Admin */}
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Catatan / Keterangan Edit
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Alasan perubahan data presensi oleh admin..."
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditAttendanceModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-border-subtle text-text-secondary hover:bg-surface-container transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold bg-primary hover:bg-primary/90 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{editSaving ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* POINT 7: MODAL INPUT PRESENSI MANUAL */}
+      {createAttendanceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <Plus className="w-5 h-5 text-primary" />
+                <h3 className="text-base font-bold text-text-primary">Input Presensi Karyawan Manual</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateAttendanceModalOpen(false)}
+                className="text-text-muted hover:text-text-primary p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCreateAttendance} className="space-y-3.5">
+              {/* Pilih Karyawan */}
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Pilih Karyawan <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  required
+                  value={createForm.user_id}
+                  onChange={(e) => setCreateForm({ ...createForm, user_id: Number(e.target.value) })}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value="">-- Pilih Karyawan --</option>
+                  {allEmployees.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} (NIK: {u.nik || '-'}) {u.school_unit ? `• ${u.school_unit}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Tanggal */}
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">
+                    Tanggal Presensi <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={createForm.date}
+                    onChange={(e) => setCreateForm({ ...createForm, date: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Jenis Presensi */}
+                <div>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1">
+                    Jenis Presensi <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={createForm.attendance_type}
+                    onChange={(e) => setCreateForm({ ...createForm, attendance_type: e.target.value as any })}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-medium"
+                  >
+                    <option value="masuk">Masuk Kerja (Kantor / Sekolah)</option>
+                    <option value="dinas_luar">Perjalanan Dinas</option>
+                    <option value="libur">Libur / Hari Off</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Titik Lokasi */}
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Nama Titik Lokasi / Unit Sekolah
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: SMAN 1 Jakarta / Unit Penugasan"
+                  value={createForm.location_name}
+                  onChange={(e) => setCreateForm({ ...createForm, location_name: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {createForm.attendance_type !== 'libur' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-surface-container/50 rounded-xl border border-border-subtle">
+                  {/* Jam Masuk */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Jam Masuk (WIB)
+                    </label>
+                    <input
+                      type="time"
+                      value={createForm.check_in_time}
+                      onChange={(e) => setCreateForm({ ...createForm, check_in_time: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+
+                  {/* Ketepatan Masuk */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Ketepatan Masuk
+                    </label>
+                    <select
+                      value={createForm.check_in_status}
+                      onChange={(e) => setCreateForm({ ...createForm, check_in_status: e.target.value as any })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="on_time">Tepat Waktu</option>
+                      <option value="late">Terlambat</option>
+                    </select>
+                  </div>
+
+                  {/* Jam Pulang */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Jam Pulang (WIB)
+                    </label>
+                    <input
+                      type="time"
+                      value={createForm.check_out_time}
+                      onChange={(e) => setCreateForm({ ...createForm, check_out_time: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+
+                  {/* Status Kehadiran */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Status Kehadiran
+                    </label>
+                    <select
+                      value={createForm.status}
+                      onChange={(e) => setCreateForm({ ...createForm, status: e.target.value as any })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    >
+                      <option value="present">Hadir Normal</option>
+                      <option value="late">Terlambat</option>
+                      <option value="absent">Alpa / Tidak Hadir</option>
+                      <option value="permit">Izin / Cuti</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Catatan */}
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Catatan Admin (Opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Keterangan input manual..."
+                  value={createForm.notes}
+                  onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCreateAttendanceModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-border-subtle text-text-secondary hover:bg-surface-container transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={createSaving}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold bg-primary hover:bg-primary/90 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{createSaving ? 'Menyimpan...' : 'Simpan Presensi'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* POINT 7: MODAL KONFIRMASI HAPUS PRESENSI */}
+      {deleteConfirmModalOpen && deletingAttendance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-text-primary">Hapus Data Presensi</h3>
+                <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                  Apakah Anda yakin ingin menghapus catatan presensi untuk{' '}
+                  <strong className="text-text-primary font-semibold">
+                    {deletingAttendance.user?.name || 'Karyawan'}
+                  </strong>{' '}
+                  pada tanggal{' '}
+                  <strong className="text-text-primary font-semibold">
+                    {deletingAttendance.date ? String(deletingAttendance.date).slice(0, 10) : '-'}
+                  </strong>
+                  ?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-rose-50/80 rounded-xl border border-rose-200 text-xs text-rose-900 leading-relaxed">
+              Tindakan ini tidak dapat dibatalkan. Riwayat kehadiran ini akan dihapus dari sistem dan dicatat pada log audit aktivitas.
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-border-subtle text-text-secondary hover:bg-surface-container transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                {deleteLoading ? 'Menghapus...' : 'Ya, Hapus Data'}
+              </button>
             </div>
           </div>
         </div>

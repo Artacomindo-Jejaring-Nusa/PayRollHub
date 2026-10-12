@@ -41,6 +41,19 @@ export interface PayrollItem {
   bank_account?: string | null;
   bank_name?: string | null;
 
+  is_duplicate_bank_account?: boolean;
+  duplicate_account_count?: number;
+
+  replaced_payroll_id?: number | null;
+  replaced_employee_name?: string | null;
+  replacement_note?: string | null;
+  replacement_date?: string | null;
+
+  bpjs_tk_jht?: number;
+  bpjs_tk_jp?: number;
+  formatted_bpjs_tk_jht?: string;
+  formatted_bpjs_tk_jp?: string;
+
   formatted_pph21?: string;
 
   formatted_net_base_price?: string;
@@ -78,6 +91,7 @@ export interface PayrollMetrics {
   total_take_home_pay: number;
   total_provinces?: number;
   total_locations?: number;
+  total_duplicate_accounts?: number;
 }
 
 export interface PayrollFilterOptions {
@@ -124,6 +138,14 @@ export interface PayrollFormData {
 
   bank_account?: string;
   bank_name?: string;
+
+  bpjs_tk_jht?: number | string;
+  bpjs_tk_jp?: number | string;
+
+  replaced_payroll_id?: number | null;
+  replaced_employee_name?: string | null;
+  replacement_note?: string | null;
+  replacement_date?: string | null;
 }
 
 export interface PayrollImportResult {
@@ -173,5 +195,54 @@ export interface PayrollImportPreviewData {
   rows: PayrollImportPreviewRow[];
   warnings: string[];
   errors: string[];
+}
+
+export interface ProvincePayrollSetting {
+  id: number;
+  company: string;
+  province: string;
+  ump: number;
+  bpjs_kes: number;
+  bpjs_tk_jht: number;
+  bpjs_tk_jp: number;
+  bpjs_tk: number;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface EmployeeReplacement {
+  id: number;
+  company: string;
+  new_payroll_id: number;
+  new_employee_name: string;
+  new_nik?: string | null;
+  old_payroll_id?: number | null;
+  old_employee_name: string;
+  old_nik?: string | null;
+  school_unit?: string | null;
+  position?: string | null;
+  replacement_date: string;
+  reason?: string | null;
+  notes?: string | null;
+  created_by?: number | null;
+  creator?: {
+    id: number;
+    name: string;
+  } | null;
+  new_payroll?: PayrollItem | null;
+  old_payroll?: PayrollItem | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OffEmployeeItem {
+  id: number;
+  employee_name: string;
+  nik: string | null;
+  school_unit?: string | null;
+  position?: string | null;
+  resign_date?: string | null;
+  company?: string | null;
 }
 

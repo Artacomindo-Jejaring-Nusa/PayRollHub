@@ -55,7 +55,7 @@ class AttendanceSetting extends Model
     public static function getActiveSetting(?string $tenantId = null): self
     {
         $setting = null;
-        if ($tenantId) {
+        if ($tenantId && $tenantId !== 'all') {
             $setting = self::where('tenant_id', $tenantId)->where('is_active', true)->first();
         }
 
@@ -66,10 +66,10 @@ class AttendanceSetting extends Model
         if (!$setting) {
             // Buat default jika belum ada di database
             $setting = self::create([
-                'tenant_id' => $tenantId ?: 'default',
+                'tenant_id' => ($tenantId && $tenantId !== 'all') ? $tenantId : 'rbs',
                 'office_name' => 'Kantor Pusat Operasional',
-                'latitude' => -6.2088000,
-                'longitude' => 106.8456000,
+                'latitude' => -6.2236611,
+                'longitude' => 106.9481394,
                 'radius_meters' => 100,
                 'work_start_time' => '08:00',
                 'work_end_time' => '17:00',
@@ -79,5 +79,29 @@ class AttendanceSetting extends Model
         }
 
         return $setting;
+    }
+
+    /**
+     * POINT 10: Sinkronisasikan pengaturan Kantor Pusat ke tabel attendance_locations (tipe 'headquarters').
+     * Kantor Pusat ini dibuat/ditetapkan oleh Super Admin sebagai patokan wajib absensi seluruh Admin.
+     */
+    public static function syncHeadquartersLocation(self $setting): AttendanceLocation
+    {
+        $tenant = $setting->tenant_id ?: 'rbs';
+        return AttendanceLocation::updateOrCreate(
+            [
+                'tenant_id' => $tenant,
+                'type' => 'headquarters',
+            ],
+            [
+                'name' => $setting->office_name ?: 'Kantor Pusat Operasional',
+                'code' => 'KP-01',
+                'address' => 'Kantor Pusat Operasional (' . strtoupper($tenant) . ')',
+                'latitude' => $setting->latitude,
+                'longitude' => $setting->longitude,
+                'radius_meters' => $setting->radius_meters,
+                'is_active' => true,
+            ]
+        );
     }
 }

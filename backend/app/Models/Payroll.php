@@ -36,11 +36,17 @@ class Payroll extends Model
         'join_date',
         'resign_date',
         'status',
+        'replaced_payroll_id',
+        'replaced_employee_name',
+        'replacement_note',
+        'replacement_date',
         'company',
         'period',
         'net_base_price',
         'bpjs_kes',
         'bpjs_tk',
+        'bpjs_tk_jht',
+        'bpjs_tk_jp',
         'basic_salary',
         'allowance',
         'deduction',
@@ -66,6 +72,8 @@ class Payroll extends Model
             'net_base_price' => 'decimal:2',
             'bpjs_kes' => 'decimal:2',
             'bpjs_tk' => 'decimal:2',
+            'bpjs_tk_jht' => 'decimal:2',
+            'bpjs_tk_jp' => 'decimal:2',
             'basic_salary' => 'decimal:2',
             'allowance' => 'decimal:2',
             'deduction' => 'decimal:2',
@@ -75,6 +83,7 @@ class Payroll extends Model
             'absence_deduction' => 'decimal:2',
             'pph21' => 'decimal:2',
             'take_home_pay' => 'decimal:2',
+            'replacement_date' => 'date',
         ];
     }
 
@@ -105,14 +114,38 @@ class Payroll extends Model
                 $payroll->status = 'active';
             }
 
-            // Formula Resmi THP: (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (BPJS TK + Potongan Absensi + Potongan Lainnya + PPh21)
+            // Break down BPJS TK to JHT (2%) and JP (1%) jika belum terisi
+            if ((float) $payroll->bpjs_tk > 0 && empty($payroll->bpjs_tk_jht) && empty($payroll->bpjs_tk_jp)) {
+                $jht = round((float) $payroll->bpjs_tk * (2 / 3), 2);
+                $payroll->bpjs_tk_jht = $jht;
+                $payroll->bpjs_tk_jp = round((float) $payroll->bpjs_tk - $jht, 2);
+            }
+
+            // Formula Resmi THP Sesuai Format Baru 2026:
+            // (Gaji Pokok + BPJS Kesehatan + Tunjangan) - (Potongan Absensi + Potongan Lainnya + PPh21)
+            // PERHATIAN ATURAN KLIEN: BPJS TK BUKAN pengurang, melainkan ditampilkan di bawah sebagai "BPJS yang bisa dicairkan"
             if (! $payroll->isDirty('take_home_pay') || (float) $payroll->take_home_pay <= 0) {
                 $totalEarnings = (float) $payroll->basic_salary + (float) $payroll->bpjs_kes + (float) $payroll->allowance;
-                $totalDeductions = (float) $payroll->bpjs_tk + (float) $payroll->absence_deduction + (float) $payroll->deduction + (float) $payroll->pph21;
+                $totalDeductions = (float) $payroll->absence_deduction + (float) $payroll->deduction + (float) $payroll->pph21;
                 $thp = $totalEarnings - $totalDeductions;
                 $payroll->take_home_pay = max(0, $thp);
             }
         });
+    }
+
+    public function replacedEmployee(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Payroll::class, 'replaced_payroll_id');
+    }
+
+    public function replacedBy(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Payroll::class, 'replaced_payroll_id');
+    }
+
+    public function replacementRecord(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(EmployeeReplacement::class, 'new_payroll_id');
     }
 
     /**

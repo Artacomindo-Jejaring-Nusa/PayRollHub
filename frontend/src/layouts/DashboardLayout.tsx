@@ -19,6 +19,8 @@ import {
   Clock,
   ChevronDown,
   ShieldAlert,
+  CheckCircle2,
+  MessageSquareWarning,
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
@@ -29,17 +31,33 @@ export const DashboardLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [absensiDropdownOpen, setAbsensiDropdownOpen] = useState(false);
+  const [systemDropdownOpen, setSystemDropdownOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const absensiRef = useRef<HTMLDivElement>(null);
+  const systemRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileDropdownOpen(false);
       }
+      if (absensiRef.current && !absensiRef.current.contains(e.target as Node)) {
+        setAbsensiDropdownOpen(false);
+      }
+      if (systemRef.current && !systemRef.current.contains(e.target as Node)) {
+        setSystemDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    setProfileDropdownOpen(false);
+    setAbsensiDropdownOpen(false);
+    setSystemDropdownOpen(false);
+  }, [location.pathname]);
 
   const isTopNavLayout = tenantId === 'rimamandiri';
   const isRima = tenantId === 'rimamandiri';
@@ -67,6 +85,12 @@ export const DashboardLayout: React.FC = () => {
       adminOnly: true,
     },
     {
+      label: 'Presensi Saya',
+      path: '/my-attendance',
+      icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+      adminOnly: true,
+    },
+    {
       label: 'Data Penggajian',
       path: '/payrolls',
       icon: <FileSpreadsheet className="w-4 h-4" />,
@@ -85,6 +109,12 @@ export const DashboardLayout: React.FC = () => {
       path: '/announcements',
       icon: <Bell className="w-4 h-4" />,
       adminOnly: false,
+    },
+    {
+      label: 'Keluhan Karyawan',
+      path: '/complaints',
+      icon: <MessageSquareWarning className="w-4 h-4 text-amber-500" />,
+      adminOnly: true,
     },
     {
       label: 'Manajemen Pengguna',
@@ -158,52 +188,193 @@ export const DashboardLayout: React.FC = () => {
               </div>
             </div>
 
-            {/* Desktop Horizontal Navigation Links (Menu di atas) */}
-            <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 2xl:gap-1.5 mx-1 flex-1 min-w-0 justify-center overflow-x-auto no-scrollbar scrollbar-none py-1">
-              {visibleNavItems.map((item) => {
-                const active = isItemActive(item.path);
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center gap-1.5 px-2 xl:px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] 2xl:text-[13px] font-medium transition-all whitespace-nowrap ${
-                      active
+            {/* Desktop Horizontal Navigation Links (Menu di atas dengan Dropdown Rapi) */}
+            <nav className="hidden lg:flex items-center gap-1.5 xl:gap-2 mx-3 flex-1 min-w-0 justify-start 2xl:justify-center py-1">
+              {/* 1. Dashboard */}
+              <Link
+                to="/dashboard"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                  isItemActive('/dashboard')
+                    ? 'bg-primary text-white shadow-xs font-semibold'
+                    : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                }`}
+              >
+                <LayoutDashboard className={`w-4 h-4 shrink-0 ${isItemActive('/dashboard') ? 'text-white' : 'text-text-muted'}`} />
+                <span>Dashboard</span>
+              </Link>
+
+              {/* 2. Data Penggajian */}
+              <Link
+                to="/payrolls"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                  isItemActive('/payrolls')
+                    ? 'bg-primary text-white shadow-xs font-semibold'
+                    : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                }`}
+              >
+                <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isItemActive('/payrolls') ? 'text-white' : 'text-text-muted'}`} />
+                <span>Data Penggajian</span>
+              </Link>
+
+              {/* 3. Absensi (Dropdown untuk Admin, Link untuk Staf) */}
+              {isAdmin ? (
+                <div className="relative shrink-0" ref={absensiRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAbsensiDropdownOpen(!absensiDropdownOpen);
+                      setSystemDropdownOpen(false);
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all cursor-pointer whitespace-nowrap ${
+                      isItemActive('/attendances') || isItemActive('/my-attendance')
                         ? 'bg-primary text-white shadow-xs font-semibold'
                         : 'text-text-primary hover:bg-surface-container hover:text-primary'
                     }`}
                   >
-                    <span className={active ? 'text-white' : 'text-text-muted'}>
-                      {item.icon}
-                    </span>
-                    <span>
-                      {item.label === 'Data Penggajian' ? (
-                        <>
-                          <span className="hidden 2xl:inline">Data </span>
-                          <span>Penggajian</span>
-                        </>
-                      ) : item.label === 'Laporan Kerja' ? (
-                        <>
-                          <span className="hidden 2xl:inline">Laporan </span>
-                          <span>Kerja</span>
-                        </>
-                      ) : item.label === 'Manajemen Pengguna' ? (
-                        <>
-                          <span className="hidden 2xl:inline">Manajemen </span>
-                          <span>Pengguna</span>
-                        </>
-                      ) : item.label === 'Log Aktivitas' ? (
-                        <>
-                          <span className="hidden 2xl:inline">Log </span>
-                          <span>Aktivitas</span>
-                        </>
-                      ) : (
-                        item.label
-                      )}
-                    </span>
-                    {item.badge && <span className="text-[10px] ml-0.5">{item.badge}</span>}
-                  </Link>
-                );
-              })}
+                    <Clock className={`w-4 h-4 shrink-0 ${isItemActive('/attendances') || isItemActive('/my-attendance') ? 'text-white' : 'text-text-muted'}`} />
+                    <span>Absensi</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${absensiDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {absensiDropdownOpen && (
+                    <div className="absolute left-0 top-full mt-2 w-64 rounded-xl bg-white bg-surface-panel border border-border-subtle shadow-2xl z-50 py-1.5 divide-y divide-border-row animate-in fade-in zoom-in-95 duration-100">
+                      <div className="py-1">
+                        <Link
+                          to="/attendances"
+                          onClick={() => setAbsensiDropdownOpen(false)}
+                          className={`flex items-start gap-2.5 px-3 py-2 text-[12.5px] transition-colors ${
+                            isItemActive('/attendances')
+                              ? 'bg-primary/10 text-primary font-semibold'
+                              : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                          }`}
+                        >
+                          <Clock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                          <div>
+                            <div className="leading-tight">Rekap Absensi Karyawan</div>
+                            <div className="text-[10.5px] text-text-muted mt-0.5">Pantau status & lokasi hadir staf</div>
+                          </div>
+                        </Link>
+                        <Link
+                          to="/my-attendance"
+                          onClick={() => setAbsensiDropdownOpen(false)}
+                          className={`flex items-start gap-2.5 px-3 py-2 text-[12.5px] transition-colors ${
+                            isItemActive('/my-attendance')
+                              ? 'bg-emerald-50 text-emerald-700 font-semibold'
+                              : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                          }`}
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <div className="leading-tight">Presensi Harian Saya</div>
+                            <div className="text-[10.5px] text-text-muted mt-0.5">Check-in & Check-out GPS</div>
+                          </div>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  to="/my-attendance"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                    isItemActive('/my-attendance')
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                  }`}
+                >
+                  <CheckCircle2 className={`w-4 h-4 shrink-0 ${isItemActive('/my-attendance') ? 'text-white' : 'text-emerald-500'}`} />
+                  <span>Presensi Saya</span>
+                </Link>
+              )}
+
+              {/* 4. Pengumuman */}
+              <Link
+                to="/announcements"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                  isItemActive('/announcements')
+                    ? 'bg-primary text-white shadow-xs font-semibold'
+                    : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                }`}
+              >
+                <Bell className={`w-4 h-4 shrink-0 ${isItemActive('/announcements') ? 'text-white' : 'text-text-muted'}`} />
+                <span>Pengumuman</span>
+              </Link>
+
+              {/* 5. Keluhan Karyawan (Admin Only) */}
+              {isAdmin && (
+                <Link
+                  to="/complaints"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                    isItemActive('/complaints')
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                  }`}
+                >
+                  <MessageSquareWarning className={`w-4 h-4 shrink-0 ${isItemActive('/complaints') ? 'text-white' : 'text-amber-500'}`} />
+                  <span>Keluhan Karyawan</span>
+                </Link>
+              )}
+
+              {/* 6. Kelola Sistem (Dropdown untuk Manajemen Pengguna & Log Aktivitas) */}
+              {isAdmin && (
+                <div className="relative shrink-0" ref={systemRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSystemDropdownOpen(!systemDropdownOpen);
+                      setAbsensiDropdownOpen(false);
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all cursor-pointer whitespace-nowrap ${
+                      isItemActive('/users') || isItemActive('/activity-logs')
+                        ? 'bg-primary text-white shadow-xs font-semibold'
+                        : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                    }`}
+                  >
+                    <Users className={`w-4 h-4 shrink-0 ${isItemActive('/users') || isItemActive('/activity-logs') ? 'text-white' : 'text-text-muted'}`} />
+                    <span>Kelola Sistem</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${systemDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {systemDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-white bg-surface-panel border border-border-subtle shadow-2xl z-50 py-1.5 divide-y divide-border-row animate-in fade-in zoom-in-95 duration-100">
+                      <div className="py-1">
+                        <Link
+                          to="/users"
+                          onClick={() => setSystemDropdownOpen(false)}
+                          className={`flex items-start gap-2.5 px-3 py-2 text-[12.5px] transition-colors ${
+                            isItemActive('/users')
+                              ? 'bg-primary/10 text-primary font-semibold'
+                              : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                          }`}
+                        >
+                          <Users className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                          <div>
+                            <div className="leading-tight">Manajemen Pengguna</div>
+                            <div className="text-[10.5px] text-text-muted mt-0.5">Kelola akun admin & staf</div>
+                          </div>
+                        </Link>
+                        {isSuperAdmin && (
+                          <Link
+                            to="/activity-logs"
+                            onClick={() => setSystemDropdownOpen(false)}
+                            className={`flex items-start gap-2.5 px-3 py-2 text-[12.5px] transition-colors ${
+                              isItemActive('/activity-logs')
+                                ? 'bg-amber-50 text-amber-800 font-semibold'
+                                : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                            }`}
+                          >
+                            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                              <div className="leading-tight">Log Aktivitas</div>
+                              <div className="text-[10.5px] text-text-muted mt-0.5">Audit trail & riwayat sistem</div>
+                            </div>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </nav>
 
             {/* Right Controls */}
@@ -296,7 +467,7 @@ export const DashboardLayout: React.FC = () => {
 
           {/* Mobile Drawer Navigation */}
           {mobileMenuOpen && (
-            <div className="md:hidden border-t border-border-row bg-surface-panel px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
+            <div className="lg:hidden border-t border-border-row bg-surface-panel px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
               <div className="px-2 pb-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
                 Menu Utama — {tenant.shortName}
               </div>

@@ -303,6 +303,8 @@ export interface PayrollPeriodItem {
   is_sp?: boolean;
   is_visible_to_user?: boolean;
   description?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   employee_count?: number;
 }
 

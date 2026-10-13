@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
+use App\Models\PayrollPeriod;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -21,8 +22,9 @@ use PhpOffice\PhpSpreadsheet\Style\Color;
 class AdminAttendanceController extends Controller
 {
     /**
-     * Konversi kode SP (SP 1 - SP 12) ke rentang tanggal kalender tahun 2026.
-     * SP 1 = Jan 2026, SP 2 = Feb 2026, ..., SP 8 = Agt 2026, SP 9 = Sep 2026.
+     * Konversi kode SP/Periode ke rentang tanggal.
+     * Prioritas: 1) Baca start_date/end_date dari tabel payroll_periods (DB-driven)
+     *            2) Fallback ke mapping bulan kalender 2026 (backward compat)
      */
     public static function getSpDateRange(?string $sp): ?array
     {
@@ -30,6 +32,13 @@ class AdminAttendanceController extends Controller
             return null;
         }
 
+        // Prioritas 1: Ambil dari database payroll_periods
+        $dbRange = PayrollPeriod::resolveDateRange($sp);
+        if ($dbRange) {
+            return $dbRange;
+        }
+
+        // Fallback: mapping bulan kalender (backward compat jika belum ada di DB)
         $clean = trim($sp);
         if (preg_match('/(?:SP|Surat\s+Pesanan)?\s*(\d+)/i', $clean, $matches)) {
             $monthNum = (int) $matches[1];

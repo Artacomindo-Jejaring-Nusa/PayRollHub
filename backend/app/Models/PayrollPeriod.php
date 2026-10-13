@@ -19,6 +19,8 @@ class PayrollPeriod extends Model
         'is_sp',
         'is_visible_to_user',
         'description',
+        'start_date',
+        'end_date',
     ];
 
     protected function casts(): array
@@ -26,7 +28,31 @@ class PayrollPeriod extends Model
         return [
             'is_sp' => 'boolean',
             'is_visible_to_user' => 'boolean',
+            'start_date' => 'date:Y-m-d',
+            'end_date' => 'date:Y-m-d',
         ];
+    }
+
+    /**
+     * Resolve date range [start, end] from a period code (e.g. "SP 1", "SP 10").
+     * Returns null if code not found or no dates configured.
+     */
+    public static function resolveDateRange(?string $code): ?array
+    {
+        if (blank($code) || strtolower(trim($code)) === 'all') {
+            return null;
+        }
+
+        $period = static::where('code', trim($code))->first();
+
+        if ($period && $period->start_date && $period->end_date) {
+            return [
+                $period->start_date->toDateString(),
+                $period->end_date->toDateString(),
+            ];
+        }
+
+        return null;
     }
 
     /**

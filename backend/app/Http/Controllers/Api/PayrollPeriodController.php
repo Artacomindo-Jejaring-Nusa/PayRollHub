@@ -64,6 +64,8 @@ class PayrollPeriodController extends Controller
             'is_sp' => ['nullable', 'boolean'],
             'is_visible_to_user' => ['nullable', 'boolean'],
             'description' => ['nullable', 'string', 'max:500'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);
 
         $code = trim($validated['code']);
@@ -90,6 +92,8 @@ class PayrollPeriodController extends Controller
             'is_sp' => $request->boolean('is_sp', false),
             'is_visible_to_user' => $request->boolean('is_visible_to_user', false),
             'description' => $validated['description'] ?? null,
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
         ]);
 
         ActivityLog::record(
@@ -119,6 +123,8 @@ class PayrollPeriodController extends Controller
             'is_sp' => ['nullable', 'boolean'],
             'is_visible_to_user' => ['nullable', 'boolean'],
             'description' => ['nullable', 'string', 'max:500'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'sync_payrolls' => ['nullable', 'boolean'],
         ]);
 
@@ -130,6 +136,8 @@ class PayrollPeriodController extends Controller
             'is_sp' => $request->has('is_sp') ? $request->boolean('is_sp') : $payrollPeriod->is_sp,
             'is_visible_to_user' => $request->has('is_visible_to_user') ? $request->boolean('is_visible_to_user') : $payrollPeriod->is_visible_to_user,
             'description' => $validated['description'] ?? $payrollPeriod->description,
+            'start_date' => array_key_exists('start_date', $validated) ? $validated['start_date'] : $payrollPeriod->start_date,
+            'end_date' => array_key_exists('end_date', $validated) ? $validated['end_date'] : $payrollPeriod->end_date,
         ]);
 
         // Jika visibilitas berubah dan diminta sync_payrolls, update seluruh payroll terkait

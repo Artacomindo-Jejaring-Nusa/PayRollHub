@@ -801,5 +801,58 @@ class PayrollHubApiTest extends TestCase
         $this->assertEquals('resolved', $userFeedbackItem['status']);
         $this->assertEquals('Terima kasih atas sarannya, fitur sudah ditambahkan.', $userFeedbackItem['admin_notes']);
     }
+
+    public function test_admin_can_manage_payroll_period_date_ranges_and_resolve_attendance_window(): void
+    {
+        $admin = User::factory()->admin()->create(['company' => 'rbs']);
+
+        // 1. Find or create SP 2 period
+        $sp2 = \App\Models\PayrollPeriod::firstOrCreate(
+            ['code' => 'SP 2'],
+            ['name' => 'Surat Pesanan 2', 'company' => 'all', 'is_sp' => true, 'is_visible_to_user' => true]
+        );
+
+        // 2. Admin updates SP 2 with custom cut-off window (26 Jan s/d 25 Feb)
+        $updateRes = $this->actingAs($admin, 'sanctum')->putJson("/api/admin/payroll-periods/{$sp2->id}", [
+            'start_date' => '2026-01-26',
+            'end_date' => '2026-02-25',
+        ]);
+
+        $updateRes->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        // 3. Verify DB and resolveDateRange
+        $this->assertEquals(['2026-01-26', '2026-02-25'], \App\Models\PayrollPeriod::resolveDateRange('SP 2'));
+
+        // 4. Verify AdminAttendanceController dynamically uses the custom cut-off
+        $range = \App\Http\Controllers\Api\AdminAttendanceController::getSpDateRange('SP 2');
+        $this->assertEquals(['2026-01-26', '2026-02-25'], $range);
+
+        // 5. Admin creates custom period with cut-off dates
+        $createRes = $this->actingAs($admin, 'sanctum')->postJson('/api/admin/payroll-periods', [
+            'code' => 'Kustom-Ambon',
+            'name' => 'Karyawan Ambon Periode 1',
+            'company' => 'rbs',
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-02-28',
+        ]);
+
+        $createRes->assertStatus(201)
+            ->assertJsonPath('status', 'success');
+
+        $this->assertEquals(['2026-02-01', '2026-02-28'], \App\Models\PayrollPeriod::resolveDateRange('Kustom-Ambon'));
+        $this->assertEquals(['2026-02-01', '2026-02-28'], \App\Http\Controllers\Api\AdminAttendanceController::getSpDateRange('Kustom-Ambon'));
+
+        // 6. Validation: end_date cannot be earlier than start_date
+        $invalidRes = $this->actingAs($admin, 'sanctum')->postJson('/api/admin/payroll-periods', [
+            'code' => 'Invalid-Dates',
+            'name' => 'Periode Salah Tanggal',
+            'company' => 'rbs',
+            'start_date' => '2026-05-20',
+            'end_date' => '2026-05-10',
+        ]);
+
+        $invalidRes->assertStatus(422);
+    }
 }
 

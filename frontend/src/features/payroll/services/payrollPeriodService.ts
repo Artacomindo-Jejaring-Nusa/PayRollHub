@@ -34,6 +34,8 @@ export const payrollPeriodService = {
     is_sp?: boolean;
     is_visible_to_user?: boolean;
     description?: string;
+    start_date?: string | null;
+    end_date?: string | null;
   }): Promise<PayrollPeriodItem> => {
     const res = await api.post<{ status: string; message: string; data: PayrollPeriodItem }>(
       '/admin/payroll-periods',
@@ -43,7 +45,7 @@ export const payrollPeriodService = {
   },
 
   /**
-   * Update period details / visibility toggle.
+   * Update period details / visibility toggle / date range.
    */
   updatePeriod: async (
     id: number,
@@ -53,6 +55,8 @@ export const payrollPeriodService = {
       is_sp?: boolean;
       is_visible_to_user?: boolean;
       description?: string;
+      start_date?: string | null;
+      end_date?: string | null;
       sync_payrolls?: boolean;
     }
   ): Promise<PayrollPeriodItem> => {

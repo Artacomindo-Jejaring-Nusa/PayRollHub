@@ -4,6 +4,7 @@ import { Complaint, ComplaintStatus, ComplaintSummary } from '../types/complaint
 import { CreateUserFeedbackModal } from '../components/CreateUserFeedbackModal';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
+import { getStorageUrl } from '../../../lib/utils';
 import {
   MessageSquarePlus,
   Clock,
@@ -248,11 +249,11 @@ export const UserFeedbackPage: React.FC = () => {
               </div>
 
               {/* Photo Attachment if available */}
-              {item.photo_full_url && (
+              {(item.photo_path || item.photo_full_url) && (
                 <div className="pt-2">
                   <button
                     type="button"
-                    onClick={() => setPreviewPhotoUrl(item.photo_full_url || null)}
+                    onClick={() => setPreviewPhotoUrl(getStorageUrl(item.photo_path || item.photo_full_url))}
                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-container/60 hover:bg-surface-container border border-border-subtle text-xs text-text-primary transition-colors cursor-pointer"
                   >
                     <ImageIcon className="w-4 h-4 text-primary" />
@@ -304,14 +305,22 @@ export const UserFeedbackPage: React.FC = () => {
           <div className="space-y-4">
             <div className="rounded-xl overflow-hidden bg-black/5 border border-border-subtle flex items-center justify-center max-h-[75vh]">
               <img
-                src={previewPhotoUrl}
+                src={getStorageUrl(previewPhotoUrl)}
                 alt="Foto Lampiran"
                 className="max-h-[75vh] w-auto object-contain rounded-lg"
+                onError={(e) => {
+                  const target = e.currentTarget as HTMLImageElement;
+                  if (!target.dataset.triedFallback && previewPhotoUrl) {
+                    target.dataset.triedFallback = 'true';
+                    const clean = previewPhotoUrl.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
+                    target.src = `/storage/${clean}`;
+                  }
+                }}
               />
             </div>
             <div className="flex justify-end">
               <a
-                href={previewPhotoUrl}
+                href={getStorageUrl(previewPhotoUrl)}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors"

@@ -181,3 +181,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payroll-periods', [\App\Http\Controllers\Api\PayrollPeriodController::class, 'index']);
 });
 
+// Public Storage File Fallback Viewer via API prefix
+Route::get('/storage/{path}', function ($path) {
+    $decodedPath = urldecode($path);
+    $storageRoot = realpath(storage_path('app/public'));
+    $fullPath = realpath(storage_path('app/public/' . $decodedPath));
+    if (!$fullPath || !$storageRoot || !str_starts_with($fullPath, $storageRoot) || !file_exists($fullPath)) {
+        abort(404, 'File lampiran tidak ditemukan.');
+    }
+    return response()->file($fullPath, [
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+})->where('path', '.*');
+

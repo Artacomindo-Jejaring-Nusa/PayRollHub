@@ -10,13 +10,18 @@ Route::get('/', function () {
 
 
 /**
- * Fallback Storage File Viewer (Jika cPanel mematikan symlink atau FollowSymLinks)
+ * Fallback Storage File Viewer (Jika symlink belum dibuat atau diakses langsung)
  */
 Route::get('/storage/{path}', function ($path) {
+    $decodedPath = urldecode($path);
     $storageRoot = realpath(storage_path('app/public'));
-    $fullPath = realpath(storage_path('app/public/' . $path));
+    $fullPath = realpath(storage_path('app/public/' . $decodedPath));
     if (!$fullPath || !$storageRoot || !str_starts_with($fullPath, $storageRoot) || !file_exists($fullPath)) {
         abort(404, 'File lampiran tidak ditemukan.');
     }
-    return response()->file($fullPath);
+    return response()->file($fullPath, [
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
 })->where('path', '.*');

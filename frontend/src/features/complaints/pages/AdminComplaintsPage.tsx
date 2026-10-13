@@ -5,6 +5,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { Button } from '../../../components/ui/Button';
 import { Modal } from '../../../components/ui/Modal';
 import { Pagination } from '../../../components/shared/Pagination';
+import { getStorageUrl } from '../../../lib/utils';
 import {
   MessageSquareWarning,
   Search,
@@ -343,20 +344,34 @@ export const AdminComplaintsPage: React.FC = () => {
                     </td>
 
                     <td className="py-3 px-4 whitespace-nowrap">
-                      {item.photo_full_url ? (
-                        <div
-                          onClick={() => setPreviewPhotoUrl(item.photo_full_url || null)}
-                          className="relative inline-block border border-border-subtle rounded-lg overflow-hidden cursor-pointer group"
-                        >
-                          <img
-                            src={item.photo_full_url}
-                            alt="Bukti"
-                            className="w-14 h-11 object-cover group-hover:scale-105 transition-transform"
-                          />
-                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                            <ExternalLink className="w-3 h-3" />
-                          </div>
-                        </div>
+                      {item.photo_path || item.photo_full_url ? (
+                        (() => {
+                          const rawPhoto = item.photo_path || item.photo_full_url;
+                          const photoSrc = getStorageUrl(rawPhoto);
+                          return (
+                            <div
+                              onClick={() => setPreviewPhotoUrl(photoSrc)}
+                              className="relative inline-block border border-border-subtle rounded-lg overflow-hidden cursor-pointer group"
+                            >
+                              <img
+                                src={photoSrc}
+                                alt="Bukti"
+                                className="w-14 h-11 object-cover group-hover:scale-105 transition-transform"
+                                onError={(e) => {
+                                  const target = e.currentTarget as HTMLImageElement;
+                                  if (!target.dataset.triedFallback && rawPhoto) {
+                                    target.dataset.triedFallback = 'true';
+                                    const clean = rawPhoto.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
+                                    target.src = `/storage/${clean}`;
+                                  }
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                <ExternalLink className="w-3 h-3" />
+                              </div>
+                            </div>
+                          );
+                        })()
                       ) : (
                         <span className="text-text-muted text-[11px] italic">Tanpa Foto</span>
                       )}
@@ -529,9 +544,17 @@ export const AdminComplaintsPage: React.FC = () => {
               <X className="w-4 h-4" />
             </button>
             <img
-              src={previewPhotoUrl}
+              src={getStorageUrl(previewPhotoUrl)}
               alt="Foto Bukti"
               className="w-full max-h-[85vh] object-contain rounded-xl"
+              onError={(e) => {
+                const target = e.currentTarget as HTMLImageElement;
+                if (!target.dataset.triedFallback && previewPhotoUrl) {
+                  target.dataset.triedFallback = 'true';
+                  const clean = previewPhotoUrl.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
+                  target.src = `/storage/${clean}`;
+                }
+              }}
             />
           </div>
         </div>

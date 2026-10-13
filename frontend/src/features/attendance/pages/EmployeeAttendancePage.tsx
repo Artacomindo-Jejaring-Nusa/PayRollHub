@@ -32,6 +32,7 @@ import {
   AttendanceRecord,
   AttendanceLocation,
 } from '../types/attendance';
+import { LiveCameraModal } from '../components/LiveCameraModal';
 
 export const EmployeeAttendancePage: React.FC = () => {
   const { user } = useAuthStore();
@@ -56,6 +57,44 @@ export const EmployeeAttendancePage: React.FC = () => {
   const dinasFileInputRef = useRef<HTMLInputElement>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  // Live Camera Modal State
+  const [isLiveCameraOpen, setIsLiveCameraOpen] = useState<boolean>(false);
+  const [liveCameraConfig, setLiveCameraConfig] = useState<{
+    title: string;
+    description: string;
+    facingMode: 'user' | 'environment';
+    showFaceGuide: boolean;
+  }>({
+    title: 'Ambil Foto Selfie Kehadiran',
+    description: 'Posisikan wajah Anda tepat di dalam lingkaran pemandu untuk absensi langsung.',
+    facingMode: 'user',
+    showFaceGuide: true,
+  });
+
+  const handleOpenLiveCamera = (mode: 'selfie' | 'dinas') => {
+    if (mode === 'selfie') {
+      setLiveCameraConfig({
+        title: 'Ambil Foto Selfie Kehadiran (Live Sensor)',
+        description: 'Posisikan wajah Anda tepat di dalam lingkaran pemandu untuk absensi masuk live.',
+        facingMode: 'user',
+        showFaceGuide: true,
+      });
+    } else {
+      setLiveCameraConfig({
+        title: 'Ambil Foto Dokumentasi Dinas Lapangan',
+        description: 'Arahkan kamera ke lokasi kegiatan dinas atau bukti surat tugas lapangan.',
+        facingMode: 'environment',
+        showFaceGuide: false,
+      });
+    }
+    setIsLiveCameraOpen(true);
+  };
+
+  const handleCameraCaptured = (file: File, previewUrl: string) => {
+    setPhotoFile(file);
+    setPhotoPreview(previewUrl);
+  };
 
   // Modal Lightbox Foto Preview
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
@@ -753,15 +792,20 @@ export const EmployeeAttendancePage: React.FC = () => {
                     {!photoPreview ? (
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-4 px-4 rounded-xl border-2 border-dashed border-primary/30 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-all flex flex-col sm:flex-row items-center justify-center gap-3 text-primary font-medium text-xs cursor-pointer group"
+                        onClick={() => handleOpenLiveCamera('selfie')}
+                        className="w-full py-4 px-4 rounded-xl border-2 border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-all flex flex-col sm:flex-row items-center justify-center gap-3 text-primary font-medium text-xs cursor-pointer group shadow-2xs"
                       >
-                        <div className="w-10 h-10 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0">
-                          <Camera className="w-5 h-5 text-primary" />
+                        <div className="w-11 h-11 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0">
+                          <Camera className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
                         </div>
                         <div className="text-center sm:text-left">
-                          <div className="font-semibold text-text-primary text-[13px]">Buka Kamera / Ambil Foto Selfie</div>
-                          <div className="text-[11px] text-text-muted">Ketuk di sini untuk foto selfie langsung dari kamera perangkat Anda</div>
+                          <div className="font-bold text-text-primary text-[13px] flex items-center justify-center sm:justify-start gap-1.5">
+                            <span>Buka Kamera & Ambil Foto Selfie Langsung</span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          </div>
+                          <div className="text-[11px] text-text-muted mt-0.5">
+                            Nyalakan kamera live (webcam/kamera depan) untuk jepret foto bukti kehadiran
+                          </div>
                         </div>
                       </button>
                     ) : (
@@ -790,7 +834,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                           </div>
                           <button
                             type="button"
-                            onClick={handleResetPhoto}
+                            onClick={() => handleOpenLiveCamera('selfie')}
                             className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
                           >
                             <RotateCcw className="w-3 h-3" />
@@ -1008,11 +1052,11 @@ export const EmployeeAttendancePage: React.FC = () => {
                       {!photoPreview ? (
                         <button
                           type="button"
-                          onClick={() => dinasFileInputRef.current?.click()}
-                          className="w-full py-3 px-4 rounded-xl border border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/40 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 text-indigo-700 font-medium text-xs cursor-pointer"
+                          onClick={() => handleOpenLiveCamera('dinas')}
+                          className="w-full py-3.5 px-4 rounded-xl border border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/50 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2.5 text-indigo-700 font-semibold text-xs cursor-pointer shadow-2xs group"
                         >
-                          <Camera className="w-4 h-4 text-indigo-600" />
-                          <span>Ambil / Unggah Foto Bukti Tugas Lapangan</span>
+                          <Camera className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform" />
+                          <span>Buka Kamera & Ambil Foto Bukti Lapangan</span>
                         </button>
                       ) : (
                         <div className="flex items-center gap-3.5 p-3 bg-surface-container rounded-xl border border-border-subtle">
@@ -1028,7 +1072,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                             </div>
                             <button
                               type="button"
-                              onClick={handleResetPhoto}
+                              onClick={() => handleOpenLiveCamera('dinas')}
                               className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:underline cursor-pointer"
                             >
                               <RotateCcw className="w-3 h-3" />
@@ -1517,6 +1561,17 @@ export const EmployeeAttendancePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* POINT 4 & 5: Live Camera Viewfinder Modal */}
+      <LiveCameraModal
+        isOpen={isLiveCameraOpen}
+        onClose={() => setIsLiveCameraOpen(false)}
+        onCapture={handleCameraCaptured}
+        title={liveCameraConfig.title}
+        description={liveCameraConfig.description}
+        defaultFacingMode={liveCameraConfig.facingMode}
+        showFaceGuide={liveCameraConfig.showFaceGuide}
+      />
     </div>
   );
 };

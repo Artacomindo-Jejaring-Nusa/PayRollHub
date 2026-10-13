@@ -39,18 +39,59 @@ export function formatPeriod(period: string | undefined): string {
 }
 
 /**
- * Build absolute storage URL pointing to the API host
+ * Build absolute storage URL pointing to the API host or origin.
+ * Automatically rewrites localhost:8000 URLs when accessed from remote VPS / LAN IPs.
  */
 export function getStorageUrl(path: string | null | undefined): string {
   if (!path) return '';
-  if (path.startsWith('http://') || path.startsWith('https://')) {
+  if (path.startsWith('data:image') || path.startsWith('blob:')) {
     return path;
   }
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-  const rootHost = apiBase.replace(/\/api\/?$/, '');
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  if (cleanPath.startsWith('/storage/')) {
-    return `${rootHost}${cleanPath}`;
+
+  // 1. Determine active backend host
+  let rootHost = '';
+  const apiBase = import.meta.env.VITE_API_URL;
+  if (apiBase && (apiBase.startsWith('http://') || apiBase.startsWith('https://'))) {
+    rootHost = apiBase.replace(/\/api\/?$/, '');
+  } else if (typeof window !== 'undefined') {
+    // If running in browser without explicit full VITE_API_URL
+    if (window.location.port === '5173') {
+      rootHost = `${window.location.protocol}//${window.location.hostname}:8000`;
+    } else {
+      rootHost = window.location.origin;
+    }
+  } else {
+    rootHost = 'http://localhost:8000';
   }
-  return `${rootHost}/storage${cleanPath}`;
+
+  // 2. If path is already an absolute URL
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const parsed = new URL(path);
+      // If the URL has localhost/127.0.0.1 but the user is accessing the app from a VPS or LAN IP
+      if (
+        (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+        typeof window !== 'undefined' &&
+        window.location.hostname !== 'localhost' &&
+        window.location.hostname !== '127.0.0.1'
+      ) {
+        return `${rootHost}${parsed.pathname}`;
+      }
+      return path;
+    } catch {
+      return path;
+    }
+  }
+
+  // 3. Normalize relative path
+  let cleanPath = path.trim().replace(/\\/g, '/');
+  if (cleanPath.startsWith('/')) {
+    cleanPath = cleanPath.slice(1);
+  }
+
+  if (cleanPath.startsWith('storage/')) {
+    return `${rootHost}/${cleanPath}`;
+  }
+
+  return `${rootHost}/storage/${cleanPath}`;
 }

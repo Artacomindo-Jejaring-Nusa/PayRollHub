@@ -39,6 +39,7 @@ import {
 import { useAuthStore } from '../../../store/authStore';
 import { api } from '../../../lib/api';
 import { SP_PERIOD_LIST } from '../../../lib/period';
+import { getStorageUrl } from '../../../lib/utils';
 import { attendanceService } from '../services/attendanceService';
 import { Pagination } from '../../../components/shared/Pagination';
 import {
@@ -1591,7 +1592,8 @@ export const AdminAttendancePage: React.FC = () => {
                       attendances.map((row) => {
                         const isLibur = row.attendance_type === 'libur' || row.status === 'holiday';
                         const isDinas = row.attendance_type === 'dinas_luar';
-                        const photoSrc = row.photo_full_url || row.photo_url;
+                        const rawPhoto = row.photo_url || row.photo_full_url;
+                        const photoSrc = rawPhoto ? getStorageUrl(rawPhoto) : null;
                         const isRowSelected = row.user_id ? selectedEmployeeIds.includes(row.user_id) : false;
                         return (
                           <tr key={row.id} className={`hover:bg-surface-container/20 transition-colors ${isRowSelected ? 'bg-primary/5' : ''}`}>
@@ -1624,6 +1626,14 @@ export const AdminAttendancePage: React.FC = () => {
                                     src={photoSrc}
                                     alt="Bukti Kehadiran"
                                     className="w-8 h-8 rounded-lg object-cover border border-border-subtle group-hover:scale-105 shadow-2xs transition-transform"
+                                    onError={(e) => {
+                                      const target = e.currentTarget as HTMLImageElement;
+                                      if (!target.dataset.triedFallback && rawPhoto) {
+                                        target.dataset.triedFallback = 'true';
+                                        const clean = rawPhoto.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
+                                        target.src = `/storage/${clean}`;
+                                      }
+                                    }}
                                   />
                                   <Eye className="w-3.5 h-3.5 text-text-muted group-hover:text-primary shrink-0" />
                                 </div>
@@ -4223,9 +4233,17 @@ export const AdminAttendancePage: React.FC = () => {
             </div>
             <div className="p-2 bg-black/90 flex items-center justify-center max-h-[75vh] overflow-hidden">
               <img
-                src={previewPhotoModal}
+                src={getStorageUrl(previewPhotoModal)}
                 alt="Foto Bukti Kehadiran"
                 className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-md"
+                onError={(e) => {
+                  const target = e.currentTarget as HTMLImageElement;
+                  if (!target.dataset.triedFallback && previewPhotoModal) {
+                    target.dataset.triedFallback = 'true';
+                    const clean = previewPhotoModal.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
+                    target.src = `/storage/${clean}`;
+                  }
+                }}
               />
             </div>
           </div>

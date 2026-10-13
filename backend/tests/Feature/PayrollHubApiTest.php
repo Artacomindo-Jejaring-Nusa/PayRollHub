@@ -405,8 +405,8 @@ class PayrollHubApiTest extends TestCase
 
         $this->assertEquals(2969799, $data['basic_salary']);
         $this->assertEquals(100000, $data['absence_deduction']);
-        // Take Home Pay Resmi = (Gaji Pokok + BPJS Kesehatan) - (BPJS TK + Potongan Absensi)
-        $expectedThp = (2969799 + 173146) - (319974 + 100000);
+        // Take Home Pay Resmi 2026 = (Gaji Pokok + BPJS Kesehatan) - Potongan Absensi (BPJS TK tidak dipotong dari THP)
+        $expectedThp = (2969799 + 173146) - 100000;
         $this->assertEquals($expectedThp, $data['take_home_pay']);
     }
 
@@ -726,6 +726,28 @@ class PayrollHubApiTest extends TestCase
 
         $responseRiamaDelete = $this->actingAs($riamaAdmin, 'sanctum')->deleteJson("/api/payrolls/{$riamaPayroll->id}");
         $responseRiamaDelete->assertStatus(200);
+    }
+
+    public function test_admin_can_access_work_reports_and_role_user_is_forbidden(): void
+    {
+        // 1. Role 'user' accesses admin work reports -> 403 Forbidden
+        $userRole = User::factory()->create([
+            'role' => 'user',
+            'company' => 'rbs',
+        ]);
+
+        $responseUser = $this->actingAs($userRole, 'sanctum')->getJson('/api/admin/work-reports');
+        $responseUser->assertStatus(403)
+            ->assertJsonPath('status', 'error');
+
+        // 2. Role 'admin' accesses admin work reports -> 200 OK
+        $admin = User::factory()->admin()->create([
+            'company' => 'rbs',
+        ]);
+
+        $responseAdmin = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/work-reports');
+        $responseAdmin->assertStatus(200)
+            ->assertJsonPath('status', 'success');
     }
 }
 

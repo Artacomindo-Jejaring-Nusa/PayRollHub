@@ -69,9 +69,17 @@ export const DashboardLayout: React.FC = () => {
     navigate('/login');
   };
 
-  const isWorkReportUnlocked = typeof window !== 'undefined' && localStorage.getItem('dev_unlocked_work_reports') === 'true';
+  interface NavItem {
+    label: string;
+    path: string;
+    icon: React.ReactNode;
+    adminOnly?: boolean;
+    superAdminOnly?: boolean;
+    badge?: string;
+    isHold?: boolean;
+  }
 
-  const navItems = [
+  const navItems: NavItem[] = [
     {
       label: 'Dashboard',
       path: '/dashboard',
@@ -100,9 +108,7 @@ export const DashboardLayout: React.FC = () => {
       label: 'Laporan Kerja',
       path: '/work-reports',
       icon: <ClipboardList className="w-4 h-4" />,
-      adminOnly: false,
-      badge: isWorkReportUnlocked ? undefined : '🔒',
-      isHold: true, // Fitur Laporan Kerja di-hold sementara (dapat diaktifkan kembali sewaktu-waktu)
+      adminOnly: true, // Khusus Admin & Super Admin (Role User disembunyikan)
     },
     {
       label: 'Pengumuman',

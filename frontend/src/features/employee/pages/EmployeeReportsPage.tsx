@@ -21,7 +21,6 @@ import {
   AlertCircle,
   Eye,
 } from 'lucide-react';
-import { DevFeatureLock } from '../../../components/shared/DevFeatureLock';
 
 interface ActivitySlot {
   key: 'absen' | 'kegiatan1' | 'kegiatan2' | 'kegiatan_lain';
@@ -264,8 +263,7 @@ export const EmployeeReportsPage: React.FC = () => {
   };
 
   return (
-    <DevFeatureLock featureName="Laporan Kerja (Karyawan)">
-      <div className="space-y-6">
+    <div className="space-y-6">
       {/* Header & Toggle Form Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border-subtle">
         <div>
@@ -842,7 +840,6 @@ export const EmployeeReportsPage: React.FC = () => {
           </div>
         </Modal>
       )}
-      </div>
-    </DevFeatureLock>
+    </div>
   );
 };

@@ -30,9 +30,15 @@ export const EmployeeLayout: React.FC = () => {
     navigate('/login');
   };
 
-  const isWorkReportUnlocked = typeof window !== 'undefined' && localStorage.getItem('dev_unlocked_work_reports') === 'true';
+  interface EmployeeNavItem {
+    label: string;
+    path: string;
+    icon: any;
+    badge?: string;
+    isHold?: boolean;
+  }
 
-  const navItems = [
+  const navItems: EmployeeNavItem[] = [
     { label: 'Beranda', path: '/employee/dashboard', icon: Home },
     { label: 'Absensi', path: '/employee/attendance', icon: Clock },
     { label: 'Slip Gaji', path: '/employee/payrolls', icon: FileText },
@@ -40,15 +46,18 @@ export const EmployeeLayout: React.FC = () => {
       label: 'Laporan Kerja',
       path: '/employee/reports',
       icon: ClipboardList,
-      badge: isWorkReportUnlocked ? undefined : '🔒',
-      isHold: true, // Di-hold sementara
     },
     { label: 'Pengumuman', path: '/employee/announcements', icon: Bell },
     { label: 'Keluhan & Bantuan', path: '/employee/complaints', icon: MessageSquareWarning },
     { label: 'Profil Saya', path: '/employee/profile', icon: User },
   ];
 
-  const visibleNavItems = navItems.filter((item) => !(item as any).isHold);
+  const visibleNavItems = navItems.filter((item) => {
+    if ((item as any).isHold) return false;
+    // Role User tidak boleh melihat menu Laporan Kerja
+    if (item.path === '/employee/reports' && user?.role === 'user') return false;
+    return true;
+  });
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'K';
 

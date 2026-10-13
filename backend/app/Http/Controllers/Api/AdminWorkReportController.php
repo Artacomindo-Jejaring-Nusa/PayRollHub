@@ -19,6 +19,13 @@ class AdminWorkReportController extends Controller
     public function index(Request $request): JsonResponse
     {
         $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akses ditolak: Pengguna dengan role User tidak memiliki wewenang mengakses menu Laporan Kerja.',
+            ], 403);
+        }
+
         $status = $request->input('status');
         $search = $request->input('search');
         $date = $request->input('date');
@@ -63,6 +70,13 @@ class AdminWorkReportController extends Controller
     public function updateStatus(Request $request, WorkReport $workReport): JsonResponse
     {
         $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akses ditolak: Pengguna dengan role User tidak memiliki wewenang mengelola Laporan Kerja.',
+            ], 403);
+        }
+
         $workReport->load('user');
         if (!$currentUser->isSuperAdmin()) {
             if ($workReport->user && $workReport->user->company !== $currentUser->company) {
@@ -95,6 +109,10 @@ class AdminWorkReportController extends Controller
     public function export(Request $request)
     {
         $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->isAdmin()) {
+            abort(403, 'Akses ditolak: Pengguna dengan role User tidak memiliki wewenang mengunduh Laporan Kerja.');
+        }
+
         $targetCompany = $currentUser->isSuperAdmin()
             ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
             : ($currentUser->company ?: 'rbs');
@@ -144,6 +162,10 @@ class AdminWorkReportController extends Controller
     public function downloadSinglePdf(WorkReport $workReport)
     {
         $currentUser = request()->user();
+        if (!$currentUser || !$currentUser->isAdmin()) {
+            abort(403, 'Akses ditolak: Pengguna dengan role User tidak memiliki wewenang mengunduh Laporan Kerja.');
+        }
+
         $workReport->load(['user', 'reviewer']);
 
         if ($currentUser && !$currentUser->isSuperAdmin()) {

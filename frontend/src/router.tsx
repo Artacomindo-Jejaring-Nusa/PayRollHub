@@ -144,7 +144,14 @@ export const AppRouter: React.FC = () => {
         <Route path="/payrolls/:id" element={<PayrollDetailPage />} />
 
         {/* Laporan Kerja Review & Papan Pengumuman */}
-        <Route path="/work-reports" element={<AdminWorkReportsPage />} />
+        <Route
+          path="/work-reports"
+          element={
+            <AdminRoute>
+              <AdminWorkReportsPage />
+            </AdminRoute>
+          }
+        />
         <Route path="/announcements" element={<AnnouncementManagePage />} />
         {/* Keluhan Karyawan (Point 11) */}
         <Route path="/complaints" element={<AdminComplaintsPage />} />

@@ -24,7 +24,6 @@ import {
   LayoutGrid,
   Download,
 } from 'lucide-react';
-import { DevFeatureLock } from '../../../components/shared/DevFeatureLock';
 
 interface ActivitySlot {
   key: 'absen' | 'kegiatan1' | 'kegiatan2' | 'kegiatan_lain';
@@ -239,8 +238,7 @@ export const AdminWorkReportsPage: React.FC = () => {
   };
 
   return (
-    <DevFeatureLock featureName="Laporan Kerja (Admin)">
-      <div className="space-y-6">
+    <div className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
@@ -938,7 +936,6 @@ export const AdminWorkReportsPage: React.FC = () => {
           </div>
         </Modal>
       )}
-      </div>
-    </DevFeatureLock>
+    </div>
   );
 };

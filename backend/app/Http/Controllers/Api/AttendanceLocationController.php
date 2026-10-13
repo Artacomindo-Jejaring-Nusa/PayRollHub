@@ -468,7 +468,12 @@ class AttendanceLocationController extends Controller
             }
 
             // Tautkan karyawan di sekolah tersebut ke titik lokasi ini
-            $affected = \App\Models\User::where('company', $targetCompany)
+            $affected = \App\Models\User::where(function ($q) use ($targetCompany) {
+                    $q->where('company', $targetCompany);
+                    if ($targetCompany === 'rbs') {
+                        $q->orWhereNull('company');
+                    }
+                })
                 ->where('school_unit', $schoolName)
                 ->update(['attendance_location_id' => $existing->id]);
             $linkedEmployees += $affected;

@@ -220,7 +220,7 @@ export const EmployeeAttendancePage: React.FC = () => {
     return locationsWithDistance[0];
   }, [locationsWithDistance]);
 
-  // Lokasi yang sedang aktif dipilih (prioritas utama: Kantor Pusat jika Admin, atau assigned_location sekolah penugasan karyawan)
+  // Lokasi yang sedang aktif (prioritas utama: Kantor Pusat jika Admin, atau assigned_location sekolah penugasan karyawan)
   const activeTargetLocation = useMemo(() => {
     // POINT 10: Khusus akun Admin, lokasi terkunci secara ketat ke Kantor Pusat yang dibuat Super Admin
     if (todayData?.is_admin_headquarters_enforced || user?.role === 'admin') {
@@ -233,29 +233,23 @@ export const EmployeeAttendancePage: React.FC = () => {
         return hq;
       }
     }
-    if (todayData?.assigned_location) {
-      const foundAssigned = locationsWithDistance.find((loc) => loc.id === todayData.assigned_location?.id);
-      if (foundAssigned) return foundAssigned;
+    // Sesuai arahan Bang Maun: Karyawan otomatis terkunci ke lokasi penugasannya (tidak memilih bebas)
+    const target = todayData?.assigned_location || todayData?.locations?.[0] || null;
+    if (target) {
       if (coords) {
-        const dist = calculateDistanceMeters(coords.lat, coords.lng, todayData.assigned_location.latitude, todayData.assigned_location.longitude);
-        return { ...todayData.assigned_location, distance_meters: dist };
+        const dist = calculateDistanceMeters(coords.lat, coords.lng, target.latitude, target.longitude);
+        return { ...target, distance_meters: dist };
       }
-      return todayData.assigned_location;
+      return target;
     }
-    if (selectedLocationId) {
-      const found = locationsWithDistance.find((loc) => loc.id === selectedLocationId);
-      if (found) return found;
-    }
-    return nearestLocation;
+    return null;
   }, [
     todayData?.is_admin_headquarters_enforced,
     todayData?.headquarters_location,
     todayData?.assigned_location,
+    todayData?.locations,
     user?.role,
     coords,
-    selectedLocationId,
-    locationsWithDistance,
-    nearestLocation,
   ]);
 
   // Evaluasi Radius untuk Absen Masuk
@@ -642,8 +636,8 @@ export const EmployeeAttendancePage: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                ) : todayData?.assigned_location ? (
-                  /* Info Penugasan Sekolah Terkunci Otomatis untuk Karyawan */
+                ) : (activeTargetLocation || todayData?.assigned_location) ? (
+                  /* Info Penugasan Terkunci Otomatis untuk Karyawan (Sesuai arahan Bang Maun) */
                   <div className="bg-emerald-50/90 border border-emerald-200/90 rounded-2xl p-4 shadow-2xs space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
@@ -653,19 +647,19 @@ export const EmployeeAttendancePage: React.FC = () => {
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                              Lokasi Sekolah Penugasan Anda
+                              Lokasi Penugasan Anda
                             </span>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white shadow-2xs">
                               Terkunci Otomatis
                             </span>
                           </div>
                           <div className="text-sm font-bold text-text-primary mt-1">
-                            {todayData.assigned_location.name} {todayData.assigned_location.code ? `[${todayData.assigned_location.code}]` : ''}
+                            {(activeTargetLocation || todayData?.assigned_location)?.name} {(activeTargetLocation || todayData?.assigned_location)?.code ? `[${(activeTargetLocation || todayData?.assigned_location)?.code}]` : ''}
                           </div>
                           <div className="text-xs text-text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span>Batas Radius: <strong className="text-emerald-700 font-semibold">{todayData.assigned_location.radius_meters} Meter</strong></span>
-                            {todayData.assigned_location.address && (
-                              <span>Alamat: {todayData.assigned_location.address}</span>
+                            <span>Batas Radius: <strong className="text-emerald-700 font-semibold">{maxRadius} Meter</strong></span>
+                            {(activeTargetLocation || todayData?.assigned_location)?.address && (
+                              <span>Alamat: {(activeTargetLocation || todayData?.assigned_location)?.address}</span>
                             )}
                           </div>
                         </div>
@@ -674,37 +668,22 @@ export const EmployeeAttendancePage: React.FC = () => {
                     <div className="text-[11.5px] text-emerald-800/80 bg-white/70 rounded-xl px-3 py-2 border border-emerald-200/60 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                       <span>
-                        Lokasi absensi Anda telah otomatis disesuaikan dengan data unit sekolah Anda. Anda <strong>tidak perlu lagi memilih lokasi manual</strong>.
+                        Lokasi absensi Anda telah terdaftar dan <strong>terkunci otomatis sesuai data penugasan</strong> Anda. Anda tidak perlu memilih lokasi secara manual.
                       </span>
                     </div>
                   </div>
                 ) : (
-                  /* Dropdown Selector Lokasi jika belum terdaftar unit sekolah */
-                  <div className="space-y-1.5">
-                    <label className="text-[12px] font-semibold text-text-secondary flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-primary" />
-                        <span>Target Lokasi Absensi ({todayData?.total_locations || locationsWithDistance.length} Lokasi Tersedia):</span>
-                      </span>
-                      {nearestLocation?.distance_meters !== undefined && (
-                        <span className="text-[11px] text-primary font-medium">
-                          Terdekat: {nearestLocation.name.substring(0, 24)}... ({nearestLocation.distance_meters}m)
-                        </span>
-                      )}
-                    </label>
-                    <select
-                      value={activeTargetLocation?.id || ''}
-                      onChange={(e) => setSelectedLocationId(Number(e.target.value))}
-                      disabled={hasCheckedIn}
-                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-70"
-                    >
-                      {locationsWithDistance.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.name} {loc.code ? `[${loc.code}]` : ''} - Radius {loc.radius_meters}m
-                          {loc.distance_meters !== undefined ? ` (Jarak: ${loc.distance_meters} m)` : ''}
-                        </option>
-                      ))}
-                    </select>
+                  /* Peringatan jika belum memiliki penugasan lokasi */
+                  <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-4 shadow-2xs flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                        Lokasi Penugasan Belum Ditetapkan
+                      </div>
+                      <div className="text-xs text-amber-800 mt-1">
+                        Akun Anda belum memiliki lokasi penugasan absensi. Silakan hubungi Admin / HRD untuk menetapkan unit penugasan kerja Anda.
+                      </div>
+                    </div>
                   </div>
                 )}
 

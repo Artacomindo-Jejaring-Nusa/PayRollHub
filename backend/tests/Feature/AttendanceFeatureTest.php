@@ -234,6 +234,8 @@ class AttendanceFeatureTest extends TestCase
             'company' => 'rbs',
         ]);
 
+        AttendanceLocation::query()->delete();
+
         AttendanceLocation::create([
             'tenant_id' => 'rbs',
             'name' => 'Lokasi Test 1',
@@ -396,5 +398,61 @@ class AttendanceFeatureTest extends TestCase
 
         $this->assertEquals($location->id, $emp1->fresh()->attendance_location_id);
         $this->assertEquals($location->id, $emp2->fresh()->attendance_location_id);
+    }
+
+    public function test_employee_location_is_strictly_locked_and_cannot_spoof_other_location(): void
+    {
+        $setting = AttendanceSetting::getActiveSetting('rbs');
+        $setting->update([
+            'latitude' => -6.2088,
+            'longitude' => 106.8456,
+            'radius_meters' => 100,
+        ]);
+
+        $locHome = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'Sekolah Ditugaskan',
+            'latitude' => -6.2088,
+            'longitude' => 106.8456,
+            'radius_meters' => 100,
+            'is_active' => true,
+        ]);
+
+        $locOther = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'Sekolah Lain Jauh',
+            'latitude' => -7.2575,
+            'longitude' => 112.7521,
+            'radius_meters' => 100,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'attendance_location_id' => $locHome->id,
+            'school_unit' => 'Sekolah Ditugaskan',
+        ]);
+
+        // 1. In today endpoint, employee only receives their locked location
+        $todayRes = $this->actingAs($employee, 'sanctum')->getJson('/api/employee/attendance/today');
+        $todayRes->assertStatus(200)
+            ->assertJsonPath('data.is_location_locked', true)
+            ->assertJsonPath('data.total_locations', 1)
+            ->assertJsonPath('data.assigned_location.id', $locHome->id);
+
+        // 2. If employee tries to check-in near locOther by sending location_id = locOther->id,
+        // it must be rejected because they are outside their assigned location radius
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'masuk',
+            'latitude' => -7.2575,
+            'longitude' => 112.7521,
+            'location_id' => $locOther->id,
+            'photo' => 'data:image/jpeg;base64,' . base64_encode(str_repeat('A', 200)),
+        ]);
+
+        $checkInRes->assertStatus(422)
+            ->assertJsonPath('status', 'error')
+            ->assertJsonPath('nearest_location', 'Sekolah Ditugaskan');
     }
 }

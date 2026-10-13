@@ -38,37 +38,11 @@ class EmployeeAttendanceController extends Controller
             ->where('date', $today)
             ->first();
 
-        // POINT 10: Khusus Admin, lokasi penugasan otomatis dikunci ke Kantor Pusat yang dibuat Super Admin
+        // POINT 10 & Note Bang Maun: Karyawan tidak perlu memilih lokasi karena sudah terdaftar dan terkunci
+        // sesuai penugasannya (Admin wajib di Kantor Pusat, Karyawan di unit sekolah / kantor).
         $isAdmin = $user->role === 'admin';
-        $assignedLocation = null;
-
-        if ($isAdmin) {
-            $assignedLocation = $hqLocation;
-            $isLocationLocked = true;
-        } else {
-            // Cari lokasi penugasan jika karyawan memiliki attendance_location_id atau unit sekolah
-            if (!empty($user->attendance_location_id)) {
-                $assignedLocation = $locations->firstWhere('id', $user->attendance_location_id);
-            }
-
-            if (!$assignedLocation && !empty($user->school_unit)) {
-                $cleanUserSchool = strtolower(trim($user->school_unit));
-                $assignedLocation = $locations->first(function ($loc) use ($cleanUserSchool) {
-                    $locName = strtolower(trim($loc->name));
-                    $locCode = strtolower(trim($loc->code ?? ''));
-                    return $locCode === $cleanUserSchool
-                        || $locName === $cleanUserSchool
-                        || ($locCode !== '' && str_contains($cleanUserSchool, $locCode))
-                        || ($locName !== '' && (str_contains($cleanUserSchool, $locName) || str_contains($locName, $cleanUserSchool)));
-                });
-
-                // Tautkan otomatis ke attendance_location_id jika cocok
-                if ($assignedLocation && empty($user->attendance_location_id)) {
-                    $user->update(['attendance_location_id' => $assignedLocation->id]);
-                }
-            }
-            $isLocationLocked = $assignedLocation !== null;
-        }
+        $assignedLocation = $this->resolveUserAssignedLocation($user, $targetCompany, $setting, $hqLocation);
+        $isLocationLocked = true;
 
         $assignedShift = $user->shift ?: \App\Models\Shift::where('code', 'REGULER')->first();
 
@@ -79,14 +53,14 @@ class EmployeeAttendanceController extends Controller
                 'server_time' => Carbon::now('Asia/Jakarta')->format('H:i:s'),
                 'attendance' => $attendance,
                 'assigned_location' => $assignedLocation,
-                'is_location_locked' => $isLocationLocked,
+                'is_location_locked' => true,
                 'assigned_shift' => $assignedShift,
                 'available_shifts' => \App\Models\Shift::getAvailableForCompany($targetCompany),
                 'is_admin_user' => $isAdmin,
                 'is_admin_headquarters_enforced' => $isAdmin,
                 'headquarters_location' => $hqLocation,
-                'total_locations' => $locations->count(),
-                'locations' => $isAdmin ? collect([$hqLocation]) : $locations,
+                'total_locations' => 1,
+                'locations' => collect([$assignedLocation]),
                 'office_setting' => [
                     'office_name' => $setting->office_name,
                     'latitude' => $setting->latitude,
@@ -221,113 +195,34 @@ class EmployeeAttendanceController extends Controller
         // =========================================================================
         // POINT 10: KHUSUS ADMIN — WAJIB ABSEN DI KANTOR PUSAT YANG DIBUAT SUPER ADMIN
         // =========================================================================
-        $matchedLocation = null;
-        $distance = null;
-        $isWithinRadius = false;
-        $locationName = '';
-        $radiusLimit = 100;
-        $locationId = null;
+        $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
+        $hqLocation = \App\Models\AttendanceSetting::syncHeadquartersLocation($setting);
 
-        if ($user->role === 'admin') {
-            $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
-            $hqLocation = \App\Models\AttendanceSetting::syncHeadquartersLocation($setting);
+        // Note Bang Maun: Karyawan tidak perlu memilih lokasi karena sudah terdaftar dan terkunci
+        // sesuai penugasan masing-masing (Admin wajib di Kantor Pusat, Karyawan di unit sekolah / kantor).
+        $matchedLocation = $this->resolveUserAssignedLocation($user, $targetCompany, $setting, $hqLocation);
 
-            $distance = \App\Models\AttendanceSetting::calculateDistanceInMeters(
-                $lat, $lng,
-                $hqLocation->latitude, $hqLocation->longitude
-            );
-            $isWithinRadius = $distance <= $hqLocation->radius_meters;
-            $locationName = $hqLocation->name;
-            $radiusLimit = $hqLocation->radius_meters;
-            $locationId = $hqLocation->id;
-            $matchedLocation = $hqLocation;
+        $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters(
+            $lat, $lng,
+            $matchedLocation->latitude, $matchedLocation->longitude
+        );
+        $isWithinRadius = $distance <= $matchedLocation->radius_meters;
+        $locationName = $matchedLocation->name;
+        $radiusLimit = $matchedLocation->radius_meters;
+        $locationId = $matchedLocation->id;
 
-            if (!$isWithinRadius) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "Gagal Absen: Sebagai Admin, Anda wajib melakukan absensi di Kantor Pusat ({$locationName}) yang telah ditetapkan oleh Super Admin! Jarak Anda saat ini: {$distance} meter dari Kantor Pusat (Batas radius kantor: {$radiusLimit} meter). Presensi di unit sekolah atau lokasi lain tidak diizinkan untuk akun Admin.",
-                    'distance_meters' => $distance,
-                    'max_radius_meters' => $radiusLimit,
-                    'nearest_location' => $locationName,
-                    'is_admin_violation' => true,
-                ], 422);
-            }
-        } else {
-            // Prioritaskan lokasi penugasan karyawan jika ada (baik via attendance_location_id atau unit sekolah)
-            $assignedLocation = null;
-            if (!empty($user->attendance_location_id)) {
-                $assignedLocation = \App\Models\AttendanceLocation::where('id', $user->attendance_location_id)
-                    ->where('is_active', true)
-                    ->first();
-            }
-
-            if (!$assignedLocation && !empty($user->school_unit)) {
-                $cleanUserSchool = strtolower(trim($user->school_unit));
-                $assignedLocation = \App\Models\AttendanceLocation::forTenant($targetCompany)
-                    ->where('is_active', true)
-                    ->get()
-                    ->first(function ($loc) use ($cleanUserSchool) {
-                        $locName = strtolower(trim($loc->name));
-                        $locCode = strtolower(trim($loc->code ?? ''));
-                        return $locCode === $cleanUserSchool
-                            || $locName === $cleanUserSchool
-                            || ($locCode !== '' && str_contains($cleanUserSchool, $locCode))
-                            || ($locName !== '' && (str_contains($cleanUserSchool, $locName) || str_contains($locName, $cleanUserSchool)));
-                    });
-                if ($assignedLocation && empty($user->attendance_location_id)) {
-                    $user->update(['attendance_location_id' => $assignedLocation->id]);
-                }
-            }
-
-            // Cari lokasi tujuan karyawan biasa:
-            if ($assignedLocation) {
-                $matchedLocation = $assignedLocation;
-                $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters($lat, $lng, $matchedLocation->latitude, $matchedLocation->longitude);
-                $isWithinRadius = $distance <= $matchedLocation->radius_meters;
-            } elseif (!empty($validated['location_id'])) {
-                $matchedLocation = \App\Models\AttendanceLocation::where('id', $validated['location_id'])
-                    ->where('is_active', true)
-                    ->first();
-                if ($matchedLocation) {
-                    $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters($lat, $lng, $matchedLocation->latitude, $matchedLocation->longitude);
-                    $isWithinRadius = $distance <= $matchedLocation->radius_meters;
-                }
-            }
-
-            if (!$matchedLocation) {
-                // Cari lokasi terdekat dari 100+ lokasi aktif (prioritaskan unit sekolah user jika ada)
-                $nearestResult = \App\Models\AttendanceLocation::findNearest($lat, $lng, $targetCompany, $user->school_unit);
-                $matchedLocation = $nearestResult['location'];
-                $distance = $nearestResult['distance_meters'];
-                $isWithinRadius = $nearestResult['is_within_radius'];
-            }
-
-            // Fallback jika belum ada data di attendance_locations
-            if (!$matchedLocation) {
-                $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
-                $distance = \App\Models\AttendanceSetting::calculateDistanceInMeters(
-                    $lat, $lng,
-                    $setting->latitude, $setting->longitude
-                );
-                $isWithinRadius = $distance <= $setting->radius_meters;
-                $locationName = $setting->office_name;
-                $radiusLimit = $setting->radius_meters;
-                $locationId = null;
-            } else {
-                $locationName = $matchedLocation->name;
-                $radiusLimit = $matchedLocation->radius_meters;
-                $locationId = $matchedLocation->id;
-            }
-        }
-
-        // Validasi Radius Geofencing
         if (!$isWithinRadius) {
+            $failMsg = ($user->role === 'admin' || $user->role === 'super_admin')
+                ? "Gagal Absen: Sebagai Admin, Anda wajib melakukan absensi di Kantor Pusat ({$locationName}) yang telah ditetapkan oleh Super Admin! Jarak Anda saat ini: {$distance} meter dari Kantor Pusat (Batas radius kantor: {$radiusLimit} meter). Presensi di unit sekolah atau lokasi lain tidak diizinkan untuk akun Admin."
+                : "Gagal Absen: Anda berada di luar radius lokasi penugasan Anda ({$locationName})! Jarak Anda saat ini: {$distance} meter (Batas radius lokasi: {$radiusLimit} meter). Presensi wajib dilakukan di area penugasan.";
+
             return response()->json([
                 'status' => 'error',
-                'message' => "Gagal Absen: Anda berada di luar radius lokasi terdekat ({$locationName})! Jarak Anda saat ini: {$distance} meter (Batas radius lokasi: {$radiusLimit} meter). Silakan mendekat ke lokasi kerja.",
+                'message' => $failMsg,
                 'distance_meters' => $distance,
                 'max_radius_meters' => $radiusLimit,
                 'nearest_location' => $locationName,
+                'is_admin_violation' => ($user->role === 'admin' || $user->role === 'super_admin'),
             ], 422);
         }
 
@@ -551,4 +446,74 @@ class EmployeeAttendanceController extends Controller
 
         return null;
     }
+
+    /**
+     * Resolves the locked attendance location for the user.
+     * Sesuai arahan Bang Maun: Karyawan tidak perlu memilih lokasi karena sudah terdaftar dan
+     * terkunci otomatis sesuai data penugasan (unit sekolah / kantor pusat).
+     */
+    protected function resolveUserAssignedLocation($user, string $targetCompany, $setting, $hqLocation): \App\Models\AttendanceLocation
+    {
+        // 1. Admin wajib terkunci di Kantor Pusat
+        if ($user->role === 'admin' || $user->role === 'super_admin') {
+            return $hqLocation;
+        }
+
+        // 2. Jika user sudah memiliki attendance_location_id yang valid & aktif
+        if (!empty($user->attendance_location_id)) {
+            $loc = \App\Models\AttendanceLocation::where('id', $user->attendance_location_id)
+                ->where('is_active', true)
+                ->first();
+            if ($loc) {
+                return $loc;
+            }
+        }
+
+        // 3. Jika user memiliki school_unit, cocokkan ke master lokasi atau otomatis buat titik lokasinya
+        if (!empty($user->school_unit)) {
+            $cleanUserSchool = trim($user->school_unit);
+            $cleanLower = strtolower($cleanUserSchool);
+
+            $loc = \App\Models\AttendanceLocation::where('is_active', true)
+                ->where(function ($q) use ($targetCompany) {
+                    $q->where('tenant_id', $targetCompany)->orWhere('tenant_id', 'all');
+                })
+                ->get()
+                ->first(function ($l) use ($cleanLower) {
+                    $name = strtolower(trim($l->name));
+                    $code = strtolower(trim($l->code ?? ''));
+                    return $name === $cleanLower
+                        || $code === $cleanLower
+                        || ($code !== '' && str_contains($cleanLower, $code))
+                        || ($name !== '' && (str_contains($cleanLower, $name) || str_contains($name, $cleanLower)));
+                });
+
+            if (!$loc) {
+                $loc = \App\Models\AttendanceLocation::create([
+                    'tenant_id' => $targetCompany,
+                    'name' => $cleanUserSchool,
+                    'code' => null,
+                    'address' => 'Unit Penugasan ' . $cleanUserSchool,
+                    'latitude' => $setting->latitude ?: -6.2088,
+                    'longitude' => $setting->longitude ?: 106.8456,
+                    'radius_meters' => $setting->radius_meters ?: 100,
+                    'type' => 'school',
+                    'is_active' => true,
+                ]);
+            }
+
+            // Tautkan user ke lokasi ini
+            $user->update(['attendance_location_id' => $loc->id]);
+            return $loc;
+        }
+
+        // 4. Staf umum/kantor yang belum memiliki unit sekolah otomatis ditautkan ke Kantor Pusat
+        if ($hqLocation) {
+            $user->update(['attendance_location_id' => $hqLocation->id]);
+            return $hqLocation;
+        }
+
+        return $hqLocation;
+    }
 }
+

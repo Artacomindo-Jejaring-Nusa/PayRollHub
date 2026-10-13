@@ -265,7 +265,8 @@ class PayrollService
             $name = trim($payroll->employee_name ?? '');
             $nik = trim($payroll->nik ?? '');
             $schoolUnit = trim($payroll->school_unit ?? '');
-            $company = in_array(strtolower($payroll->company ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
+            $companyRaw = strtolower(trim($payroll->company ?: ''));
+            $company = in_array($companyRaw, ['rimamandiri', 'riama', 'riamamandiri', 'riamamandiripratama', 'rima']) ? 'rimamandiri' : 'rbs';
 
             if (empty($name) && empty($nik)) {
                 return null;

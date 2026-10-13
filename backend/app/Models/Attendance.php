@@ -97,7 +97,7 @@ class Attendance extends Model
 
         $cleanPath = ltrim($this->photo_url, '/');
         $root = request() && request()->root() ? request()->root() : url('/');
-        return rtrim($root, '/') . '/storage/' . $cleanPath;
+        return rtrim($root, '/') . '/api/storage/' . $cleanPath;
     }
 
     public function user(): BelongsTo

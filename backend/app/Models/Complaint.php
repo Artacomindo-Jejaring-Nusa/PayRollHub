@@ -58,7 +58,7 @@ class Complaint extends Model
 
         $cleanPath = ltrim($this->photo_path, '/');
         $root = request() && request()->root() ? request()->root() : url('/');
-        return rtrim($root, '/') . '/storage/' . $cleanPath;
+        return rtrim($root, '/') . '/api/storage/' . $cleanPath;
     }
 
     public function getCategoryLabelAttribute(): string

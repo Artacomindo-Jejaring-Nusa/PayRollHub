@@ -1630,8 +1630,8 @@ export const AdminAttendancePage: React.FC = () => {
                                       const target = e.currentTarget as HTMLImageElement;
                                       if (!target.dataset.triedFallback && rawPhoto) {
                                         target.dataset.triedFallback = 'true';
-                                        const clean = rawPhoto.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
-                                        target.src = `/storage/${clean}`;
+                                        const clean = rawPhoto.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(api\/storage|storage)\/?/, '');
+                                        target.src = `/api/storage/${clean}`;
                                       }
                                     }}
                                   />
@@ -4240,8 +4240,8 @@ export const AdminAttendancePage: React.FC = () => {
                   const target = e.currentTarget as HTMLImageElement;
                   if (!target.dataset.triedFallback && previewPhotoModal) {
                     target.dataset.triedFallback = 'true';
-                    const clean = previewPhotoModal.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
-                    target.src = `/storage/${clean}`;
+                    const clean = previewPhotoModal.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(api\/storage|storage)\/?/, '');
+                    target.src = `/api/storage/${clean}`;
                   }
                 }}
               />

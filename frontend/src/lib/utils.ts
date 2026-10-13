@@ -40,7 +40,7 @@ export function formatPeriod(period: string | undefined): string {
 
 /**
  * Build absolute storage URL pointing to the API host or origin.
- * Automatically rewrites localhost:8000 URLs when accessed from remote VPS / LAN IPs.
+ * Automatically routes via /api/storage/ so Nginx proxies properly to Laravel backend.
  */
 export function getStorageUrl(path: string | null | undefined): string {
   if (!path) return '';
@@ -54,7 +54,6 @@ export function getStorageUrl(path: string | null | undefined): string {
   if (apiBase && (apiBase.startsWith('http://') || apiBase.startsWith('https://'))) {
     rootHost = apiBase.replace(/\/api\/?$/, '');
   } else if (typeof window !== 'undefined') {
-    // If running in browser without explicit full VITE_API_URL
     if (window.location.port === '5173') {
       rootHost = `${window.location.protocol}//${window.location.hostname}:8000`;
     } else {
@@ -64,34 +63,29 @@ export function getStorageUrl(path: string | null | undefined): string {
     rootHost = 'http://localhost:8000';
   }
 
-  // 2. If path is already an absolute URL
+  // 2. Extract path if absolute URL
+  let relativePath = path;
   if (path.startsWith('http://') || path.startsWith('https://')) {
     try {
       const parsed = new URL(path);
-      // If the URL has localhost/127.0.0.1 but the user is accessing the app from a VPS or LAN IP
-      if (
-        (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
-        typeof window !== 'undefined' &&
-        window.location.hostname !== 'localhost' &&
-        window.location.hostname !== '127.0.0.1'
-      ) {
-        return `${rootHost}${parsed.pathname}`;
+      const isCurrentHost = typeof window !== 'undefined' && parsed.hostname === window.location.hostname;
+      const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      // If it's a 3rd party external image, return directly
+      if (!isCurrentHost && !isLocalhost && !parsed.hostname.includes('rimbunbuanasejahtera.com')) {
+        return path;
       }
-      return path;
+      relativePath = parsed.pathname;
     } catch {
-      return path;
+      relativePath = path;
     }
   }
 
-  // 3. Normalize relative path
-  let cleanPath = path.trim().replace(/\\/g, '/');
-  if (cleanPath.startsWith('/')) {
-    cleanPath = cleanPath.slice(1);
-  }
+  // 3. Normalize path: strip leading slashes and storage / api prefixes
+  let cleanPath = relativePath.trim().replace(/\\/g, '/');
+  cleanPath = cleanPath.replace(/^\/+/, '');
+  cleanPath = cleanPath.replace(/^(api\/storage\/|storage\/|api\/)/, '');
+  cleanPath = cleanPath.replace(/^\/+/, '');
 
-  if (cleanPath.startsWith('storage/')) {
-    return `${rootHost}/${cleanPath}`;
-  }
-
-  return `${rootHost}/storage/${cleanPath}`;
+  // 4. Always use /api/storage/ endpoint which is guaranteed to be proxied to Laravel by Nginx
+  return `${rootHost}/api/storage/${cleanPath}`;
 }

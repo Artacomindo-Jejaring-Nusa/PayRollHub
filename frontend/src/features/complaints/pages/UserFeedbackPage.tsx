@@ -312,8 +312,8 @@ export const UserFeedbackPage: React.FC = () => {
                   const target = e.currentTarget as HTMLImageElement;
                   if (!target.dataset.triedFallback && previewPhotoUrl) {
                     target.dataset.triedFallback = 'true';
-                    const clean = previewPhotoUrl.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?storage\/?/, '');
-                    target.src = `/storage/${clean}`;
+                    const clean = previewPhotoUrl.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(api\/storage|storage)\/?/, '');
+                    target.src = `/api/storage/${clean}`;
                   }
                 }}
               />

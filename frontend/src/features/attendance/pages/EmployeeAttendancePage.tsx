@@ -33,6 +33,7 @@ import {
   AttendanceLocation,
 } from '../types/attendance';
 import { LiveCameraModal } from '../components/LiveCameraModal';
+import { getStorageUrl } from '../../../lib/utils';
 
 export const EmployeeAttendancePage: React.FC = () => {
   const { user } = useAuthStore();
@@ -1313,16 +1314,25 @@ export const EmployeeAttendancePage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <img
-                      src={todayData.attendance.photo_full_url || todayData.attendance.photo_url || ''}
+                      src={getStorageUrl(todayData.attendance.photo_full_url || todayData.attendance.photo_url)}
                       alt="Foto Bukti Kehadiran"
                       className="w-14 h-14 rounded-xl object-cover border border-border-subtle shadow-2xs cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => setPreviewModalUrl(todayData.attendance?.photo_full_url || todayData.attendance?.photo_url || null)}
+                      onClick={() => setPreviewModalUrl(getStorageUrl(todayData.attendance?.photo_full_url || todayData.attendance?.photo_url))}
+                      onError={(e) => {
+                        const target = e.currentTarget as HTMLImageElement;
+                        const raw = todayData.attendance?.photo_full_url || todayData.attendance?.photo_url;
+                        if (!target.dataset.triedFallback && raw) {
+                          target.dataset.triedFallback = 'true';
+                          const clean = raw.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(api\/storage|storage)\/?/, '');
+                          target.src = `/api/storage/${clean}`;
+                        }
+                      }}
                     />
                     <div>
                       <div className="text-xs font-semibold text-text-primary">Foto Terverifikasi</div>
                       <button
                         type="button"
-                        onClick={() => setPreviewModalUrl(todayData.attendance?.photo_full_url || todayData.attendance?.photo_url || null)}
+                        onClick={() => setPreviewModalUrl(getStorageUrl(todayData.attendance?.photo_full_url || todayData.attendance?.photo_url))}
                         className="text-[11px] text-primary hover:underline mt-0.5 flex items-center gap-1 font-medium cursor-pointer"
                       >
                         <Eye className="w-3 h-3" />
@@ -1409,7 +1419,8 @@ export const EmployeeAttendancePage: React.FC = () => {
                 history.map((row) => {
                   const isLibur = row.attendance_type === 'libur' || row.status === 'holiday';
                   const isDinas = row.attendance_type === 'dinas_luar';
-                  const photoSrc = row.photo_full_url || row.photo_url;
+                  const rawPhoto = row.photo_full_url || row.photo_url;
+                  const photoSrc = rawPhoto ? getStorageUrl(rawPhoto) : null;
                   return (
                     <tr key={row.id} className="hover:bg-surface-container/20 transition-colors">
                       <td className="py-3 px-3 font-medium text-text-primary">{row.date}</td>
@@ -1470,6 +1481,14 @@ export const EmployeeAttendancePage: React.FC = () => {
                               src={photoSrc}
                               alt="Bukti"
                               className="w-7 h-7 rounded-lg object-cover border border-border-subtle group-hover:scale-105 transition-transform"
+                              onError={(e) => {
+                                const target = e.currentTarget as HTMLImageElement;
+                                if (!target.dataset.triedFallback && rawPhoto) {
+                                  target.dataset.triedFallback = 'true';
+                                  const clean = rawPhoto.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(api\/storage|storage)\/?/, '');
+                                  target.src = `/api/storage/${clean}`;
+                                }
+                              }}
                             />
                             <Eye className="w-3 h-3 text-text-muted group-hover:text-primary" />
                           </div>
@@ -1511,9 +1530,17 @@ export const EmployeeAttendancePage: React.FC = () => {
             </div>
             <div className="p-2 bg-black/90 flex items-center justify-center max-h-[75vh] overflow-hidden">
               <img
-                src={previewModalUrl}
+                src={getStorageUrl(previewModalUrl)}
                 alt="Foto Kehadiran"
                 className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-md"
+                onError={(e) => {
+                  const target = e.currentTarget as HTMLImageElement;
+                  if (!target.dataset.triedFallback && previewModalUrl) {
+                    target.dataset.triedFallback = 'true';
+                    const clean = previewModalUrl.replace(/^https?:\/\/[^/]+/, '').replace(/^\/?(api\/storage|storage)\/?/, '');
+                    target.src = `/api/storage/${clean}`;
+                  }
+                }}
               />
             </div>
           </div>

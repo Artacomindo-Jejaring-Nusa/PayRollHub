@@ -183,13 +183,24 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Public Storage File Fallback Viewer via API prefix
 Route::get('/storage/{path}', function ($path) {
-    $decodedPath = urldecode($path);
-    $storageRoot = realpath(storage_path('app/public'));
-    $fullPath = realpath(storage_path('app/public/' . $decodedPath));
-    if (!$fullPath || !$storageRoot || !str_starts_with($fullPath, $storageRoot) || !file_exists($fullPath)) {
-        abort(404, 'File lampiran tidak ditemukan.');
+    $decodedPath = str_replace(['../', '..\\'], '', urldecode($path));
+    $baseDir = storage_path('app/public');
+    $fullPath = $baseDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $decodedPath);
+
+    if (!file_exists($fullPath) || is_dir($fullPath)) {
+        // Coba juga cek di public/storage jika symlink dibuat
+        $publicPath = public_path('storage' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $decodedPath));
+        if (file_exists($publicPath) && !is_dir($publicPath)) {
+            $fullPath = $publicPath;
+        } else {
+            abort(404, 'File lampiran tidak ditemukan.');
+        }
     }
+
+    $mimeType = @mime_content_type($fullPath) ?: 'image/jpeg';
+
     return response()->file($fullPath, [
+        'Content-Type' => $mimeType,
         'Access-Control-Allow-Origin' => '*',
         'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
         'Cache-Control' => 'public, max-age=86400',

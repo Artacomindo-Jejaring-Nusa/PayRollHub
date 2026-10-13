@@ -559,7 +559,7 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-3 sm:p-5 lg:p-6 max-w-7xl w-full mx-auto overflow-x-hidden">
+        <main className="flex-1 px-3 sm:px-4 lg:px-6 py-4 sm:py-6 w-full max-w-[1780px] 2xl:max-w-[1920px] mx-auto overflow-x-hidden">
           <Outlet />
         </main>
       </div>
@@ -777,7 +777,7 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-3 sm:p-5 lg:p-6 max-w-7xl w-full mx-auto overflow-x-hidden">
+        <main className="flex-1 px-3 sm:px-4 lg:px-6 py-4 sm:py-6 w-full max-w-[1780px] 2xl:max-w-[1920px] mx-auto overflow-x-hidden">
           <Outlet />
         </main>
       </div>

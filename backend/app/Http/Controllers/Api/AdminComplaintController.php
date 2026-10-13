@@ -25,7 +25,7 @@ class AdminComplaintController extends Controller
             ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
             : ($currentUser->company ?: 'rbs');
 
-        $query = Complaint::with(['user:id,name,nik,school_unit,company', 'resolver:id,name'])
+        $query = Complaint::with(['user:id,name,nik,school_unit,company,email,role', 'resolver:id,name'])
             ->latest();
 
         if ($targetCompany) {
@@ -36,7 +36,7 @@ class AdminComplaintController extends Controller
             $query->where('status', $status);
         }
 
-        if ($category && in_array($category, ['gaji', 'absensi', 'fasilitas', 'teknis', 'lainnya'])) {
+        if ($category && in_array($category, ['gaji', 'absensi', 'fasilitas', 'teknis', 'sistem', 'saran', 'lainnya'])) {
             $query->where('category', $category);
         }
 
@@ -106,7 +106,7 @@ class AdminComplaintController extends Controller
     {
         return response()->json([
             'status' => 'success',
-            'data' => $complaint->load(['user:id,name,nik,school_unit,company', 'resolver:id,name']),
+            'data' => $complaint->load(['user:id,name,nik,school_unit,company,email,role', 'resolver:id,name']),
         ]);
     }
 

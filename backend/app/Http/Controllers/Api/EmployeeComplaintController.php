@@ -53,7 +53,7 @@ class EmployeeComplaintController extends Controller
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
-            'category' => ['required', 'string', 'in:gaji,absensi,fasilitas,teknis,lainnya'],
+            'category' => ['required', 'string', 'in:gaji,absensi,fasilitas,teknis,sistem,saran,lainnya'],
             'description' => ['required', 'string', 'min:5'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'], // Max 10MB
         ]);
@@ -66,11 +66,12 @@ class EmployeeComplaintController extends Controller
             $photoName = $file->getClientOriginalName();
         }
 
-        // Generate Ticket Number (contoh: KLH-20261012-001)
+        // Generate Ticket Number (FDB untuk User, KLH untuk lainnya)
         $dateStr = date('Ymd');
         $randomSeq = strtoupper(substr(uniqid(), -4));
         $countToday = Complaint::whereDate('created_at', today())->count() + 1;
-        $ticketNumber = sprintf('KLH-%s-%03d-%s', $dateStr, $countToday, $randomSeq);
+        $prefix = ($user->role === 'user' || $user->role === 'viewer') ? 'FDB' : 'KLH';
+        $ticketNumber = sprintf('%s-%s-%03d-%s', $prefix, $dateStr, $countToday, $randomSeq);
 
         $complaint = Complaint::create([
             'ticket_number' => $ticketNumber,
@@ -85,10 +86,14 @@ class EmployeeComplaintController extends Controller
             'status' => 'pending',
         ]);
 
+        $message = ($user->role === 'user' || $user->role === 'viewer')
+            ? 'Feedback berhasil dikirimkan ke Admin & Super Admin. Terima kasih atas masukan Anda.'
+            : 'Keluhan berhasil dikirimkan ke HRD. Kami akan segera meninjau laporan Anda.';
+
         return response()->json([
             'status' => 'success',
-            'message' => 'Keluhan berhasil dikirimkan ke HRD. Kami akan segera meninjau laporan Anda.',
-            'data' => $complaint->load('user:id,name,nik,school_unit'),
+            'message' => $message,
+            'data' => $complaint->load('user:id,name,nik,school_unit,email,role'),
         ], 201);
     }
 

@@ -166,10 +166,10 @@ export const AdminComplaintsPage: React.FC = () => {
         <div>
           <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight flex items-center gap-2.5">
             <MessageSquareWarning className="w-6 h-6 text-primary" />
-            <span>Pusat Keluhan & Aspirasi Karyawan (Point 11)</span>
+            <span>Manajemen Feedback & Keluhan Pengguna</span>
           </h1>
           <p className="font-body-default text-body-default text-text-muted mt-1">
-            Tinjau kendala slip gaji, absensi, sarana sekolah, dan berikan solusi tanggapan resmi dari HRD
+            Tinjau masukan, saran, dan kendala dari pengguna (role User) serta berikan solusi & tanggapan resmi dari Admin / Super Admin
           </p>
         </div>
       </div>
@@ -239,11 +239,13 @@ export const AdminComplaintsPage: React.FC = () => {
             className="h-9 px-3 text-xs bg-surface border border-border-subtle rounded-xl text-text-primary focus:outline-none"
           >
             <option value="all">Semua Kategori</option>
-            <option value="gaji">Gaji & Slip</option>
-            <option value="absensi">Absensi & Lokasi</option>
-            <option value="fasilitas">Fasilitas & Operasional</option>
-            <option value="teknis">Kendala Teknis</option>
-            <option value="lainnya">Lainnya</option>
+            <option value="saran">💡 Saran & Masukan</option>
+            <option value="sistem">⚙️ Kendala Sistem</option>
+            <option value="gaji">💵 Gaji & Slip</option>
+            <option value="absensi">📍 Absensi & Lokasi</option>
+            <option value="fasilitas">🏢 Fasilitas & Operasional</option>
+            <option value="teknis">🔧 Kendala Teknis</option>
+            <option value="lainnya">📝 Lainnya</option>
           </select>
 
           {user?.role === 'super_admin' && (
@@ -270,7 +272,7 @@ export const AdminComplaintsPage: React.FC = () => {
             <thead className="bg-surface-container/40 border-b border-border-subtle text-text-secondary font-semibold">
               <tr>
                 <th className="py-3 px-4">No. Tiket & Tanggal</th>
-                <th className="py-3 px-4">Karyawan</th>
+                <th className="py-3 px-4">Pengirim / Akun</th>
                 <th className="py-3 px-4">Kategori & Judul</th>
                 <th className="py-3 px-4">Foto Bukti</th>
                 <th className="py-3 px-4">Status</th>
@@ -308,11 +310,26 @@ export const AdminComplaintsPage: React.FC = () => {
                     </td>
 
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-text-primary">{item.user?.name || '-'}</div>
-                      <div className="text-[11px] text-text-muted">NIK: {item.user?.nik || '-'}</div>
-                      <div className="text-[10.5px] text-text-secondary font-medium mt-0.5">
-                        {item.school_unit || item.user?.school_unit || '-'}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-text-primary">{item.user?.name || '-'}</span>
+                        {item.user?.role === 'user' || item.user?.role === 'viewer' ? (
+                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase">
+                            User
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            {item.user?.role || 'Karyawan'}
+                          </span>
+                        )}
                       </div>
+                      <div className="text-[11px] text-text-muted mt-0.5">
+                        {item.user?.email || (item.user?.nik ? `NIK: ${item.user.nik}` : '-')}
+                      </div>
+                      {item.school_unit && (
+                        <div className="text-[10.5px] text-text-secondary font-medium mt-0.5">
+                          {item.school_unit}
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3 px-4 max-w-xs">

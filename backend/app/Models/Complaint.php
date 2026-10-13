@@ -62,6 +62,8 @@ class Complaint extends Model
     public function getCategoryLabelAttribute(): string
     {
         return match ($this->category) {
+            'sistem' => 'Kendala Sistem',
+            'saran' => 'Saran & Masukan',
             'gaji' => 'Gaji & Slip',
             'absensi' => 'Absensi & Lokasi',
             'fasilitas' => 'Fasilitas & Operasional',

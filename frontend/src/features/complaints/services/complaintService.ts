@@ -2,7 +2,22 @@ import { api } from '../../../lib/api';
 import { Complaint, ComplaintSummary } from '../types/complaint';
 
 export const complaintService = {
-  // Employee Portal Methods
+  // User Feedback Methods (Role 'user' / 'viewer')
+  async getUserFeedback(status?: string): Promise<{
+    data: Complaint[];
+    meta: any;
+    summary: ComplaintSummary;
+  }> {
+    const res = await api.get('/user/feedback', { params: { status } });
+    return res.data;
+  },
+
+  async submitUserFeedback(formData: FormData): Promise<Complaint> {
+    const res = await api.post('/user/feedback', formData);
+    return res.data.data;
+  },
+
+  // Employee Portal Methods (Legacy / Standby)
   async getEmployeeComplaints(status?: string): Promise<{
     data: Complaint[];
     meta: any;

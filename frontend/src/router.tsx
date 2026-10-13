@@ -22,6 +22,7 @@ import { AdminAttendancePage } from './features/attendance/pages/AdminAttendance
 import { ActivityLogsPage } from './features/activityLogs/pages/ActivityLogsPage';
 import { EmployeeComplaintsPage } from './features/complaints/pages/EmployeeComplaintsPage';
 import { AdminComplaintsPage } from './features/complaints/pages/AdminComplaintsPage';
+import { UserFeedbackPage } from './features/complaints/pages/UserFeedbackPage';
 
 // Guard: Must be authenticated
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -114,7 +115,6 @@ export const AppRouter: React.FC = () => {
         <Route path="payrolls" element={<EmployeePayrollsPage />} />
         <Route path="reports" element={<EmployeeReportsPage />} />
         <Route path="announcements" element={<EmployeeAnnouncementsPage />} />
-        <Route path="complaints" element={<EmployeeComplaintsPage />} />
         <Route path="profile" element={<EmployeeProfilePage />} />
       </Route>
 
@@ -153,8 +153,17 @@ export const AppRouter: React.FC = () => {
           }
         />
         <Route path="/announcements" element={<AnnouncementManagePage />} />
-        {/* Keluhan Karyawan (Point 11) */}
-        <Route path="/complaints" element={<AdminComplaintsPage />} />
+        {/* User Feedback (Role User) */}
+        <Route path="/feedback" element={<UserFeedbackPage />} />
+        {/* Feedback & Keluhan Management (Admin & Super Admin) */}
+        <Route
+          path="/complaints"
+          element={
+            <AdminRoute>
+              <AdminComplaintsPage />
+            </AdminRoute>
+          }
+        />
 
         {/* Admin Restricted Routes */}
         <Route

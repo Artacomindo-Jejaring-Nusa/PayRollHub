@@ -63,6 +63,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/work-reports', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'index']);
     Route::put('/admin/work-reports/{workReport}/status', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'updateStatus']);
 
+    // User Feedback (Masukan & Feedback dari Role User ke Admin & Super Admin)
+    Route::get('/user/feedback', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'index']);
+    Route::post('/user/feedback', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'store']);
+    Route::get('/user/feedback/{complaint}', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'show']);
+
     // Employee Self-Service Portal Routes
     Route::prefix('employee')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Api\EmployeePortalController::class, 'dashboard']);

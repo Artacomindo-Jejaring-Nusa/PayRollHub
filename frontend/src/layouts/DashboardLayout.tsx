@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   CheckCircle2,
   MessageSquareWarning,
+  MessageSquarePlus,
 } from 'lucide-react';
 
 export const DashboardLayout: React.FC = () => {
@@ -75,6 +76,7 @@ export const DashboardLayout: React.FC = () => {
     icon: React.ReactNode;
     adminOnly?: boolean;
     superAdminOnly?: boolean;
+    userOnly?: boolean;
     badge?: string;
     isHold?: boolean;
   }
@@ -117,10 +119,16 @@ export const DashboardLayout: React.FC = () => {
       adminOnly: false,
     },
     {
-      label: 'Keluhan Karyawan',
+      label: 'Feedback',
+      path: '/feedback',
+      icon: <MessageSquarePlus className="w-4 h-4 text-amber-500" />,
+      userOnly: true, // Khusus tampil untuk role 'user' / 'viewer'
+    },
+    {
+      label: 'Feedback & Keluhan',
       path: '/complaints',
       icon: <MessageSquareWarning className="w-4 h-4 text-amber-500" />,
-      adminOnly: true,
+      adminOnly: true, // Untuk Admin & Super Admin melihat rekap feedback dari user
     },
     {
       label: 'Manajemen Pengguna',
@@ -140,10 +148,11 @@ export const DashboardLayout: React.FC = () => {
 
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin = user?.role === 'admin' || isSuperAdmin;
+  const isUserOnly = user?.role === 'user' || user?.role === 'viewer';
 
   const visibleNavItems = navItems.filter((item) => {
     // Sembunyikan item yang statusnya di-hold sementara
-    if ((item as any).isHold) {
+    if (item.isHold) {
       return false;
     }
     if (item.superAdminOnly) {
@@ -151,6 +160,9 @@ export const DashboardLayout: React.FC = () => {
     }
     if (item.adminOnly) {
       return isAdmin;
+    }
+    if (item.userOnly) {
+      return isUserOnly;
     }
     return true;
   });
@@ -306,8 +318,8 @@ export const DashboardLayout: React.FC = () => {
                 <span>Pengumuman</span>
               </Link>
 
-              {/* 5. Keluhan Karyawan (Admin Only) */}
-              {isAdmin && (
+              {/* 5. Feedback / Keluhan */}
+              {isAdmin ? (
                 <Link
                   to="/complaints"
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
@@ -317,7 +329,19 @@ export const DashboardLayout: React.FC = () => {
                   }`}
                 >
                   <MessageSquareWarning className={`w-4 h-4 shrink-0 ${isItemActive('/complaints') ? 'text-white' : 'text-amber-500'}`} />
-                  <span>Keluhan Karyawan</span>
+                  <span>Feedback & Keluhan</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/feedback"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                    isItemActive('/feedback')
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                  }`}
+                >
+                  <MessageSquarePlus className={`w-4 h-4 shrink-0 ${isItemActive('/feedback') ? 'text-white' : 'text-amber-500'}`} />
+                  <span>Feedback</span>
                 </Link>
               )}
 

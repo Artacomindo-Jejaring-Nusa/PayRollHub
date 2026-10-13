@@ -749,5 +749,57 @@ class PayrollHubApiTest extends TestCase
         $responseAdmin->assertStatus(200)
             ->assertJsonPath('status', 'success');
     }
+
+    public function test_role_user_can_submit_feedback_and_admin_can_review_it(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Staf Pengguna',
+            'role' => 'user',
+            'company' => 'rbs',
+        ]);
+
+        // 1. Role User submits feedback
+        $submitRes = $this->actingAs($user, 'sanctum')->postJson('/api/user/feedback', [
+            'title' => 'Saran Tombol Ekspor Cepat',
+            'category' => 'saran',
+            'description' => 'Mohon ditambahkan shortcut tombol untuk ekspor data bulanan.',
+        ]);
+
+        $submitRes->assertStatus(201)
+            ->assertJsonPath('status', 'success');
+
+        $ticket = $submitRes->json('data.ticket_number');
+        $this->assertStringStartsWith('FDB-', $ticket);
+
+        // 2. Admin retrieves complaints/feedback list
+        $admin = User::factory()->admin()->create(['company' => 'rbs']);
+        $adminListRes = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/complaints');
+
+        $adminListRes->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $feedbackData = collect($adminListRes->json('data'))->firstWhere('ticket_number', $ticket);
+        $this->assertNotNull($feedbackData);
+        $this->assertEquals('Staf Pengguna', $feedbackData['user']['name']);
+        $this->assertEquals('user', $feedbackData['user']['role']);
+
+        // 3. Admin responds to feedback
+        $feedbackId = $submitRes->json('data.id');
+        $updateRes = $this->actingAs($admin, 'sanctum')->putJson("/api/admin/complaints/{$feedbackId}", [
+            'status' => 'resolved',
+            'admin_notes' => 'Terima kasih atas sarannya, fitur sudah ditambahkan.',
+        ]);
+
+        $updateRes->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        // 4. User views updated feedback with admin notes
+        $userListRes = $this->actingAs($user, 'sanctum')->getJson('/api/user/feedback');
+        $userListRes->assertStatus(200);
+
+        $userFeedbackItem = collect($userListRes->json('data'))->firstWhere('id', $feedbackId);
+        $this->assertEquals('resolved', $userFeedbackItem['status']);
+        $this->assertEquals('Terima kasih atas sarannya, fitur sudah ditambahkan.', $userFeedbackItem['admin_notes']);
+    }
 }
 

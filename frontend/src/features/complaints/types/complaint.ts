@@ -1,4 +1,4 @@
-export type ComplaintCategory = 'gaji' | 'absensi' | 'fasilitas' | 'teknis' | 'lainnya';
+export type ComplaintCategory = 'sistem' | 'saran' | 'gaji' | 'absensi' | 'fasilitas' | 'teknis' | 'lainnya';
 
 export type ComplaintStatus = 'pending' | 'in_progress' | 'resolved' | 'rejected';
 
@@ -26,6 +26,8 @@ export interface Complaint {
     id: number;
     name: string;
     nik?: string;
+    email?: string;
+    role?: string;
     school_unit?: string;
     company?: string;
   };

@@ -171,9 +171,23 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
     setIsFlashing(true);
     setTimeout(() => setIsFlashing(false), 200);
 
+    // Kompresi sisi klien: Batasi resolusi maksimal 640px (sangat tajam untuk selfie tapi hemat storage ~40-60 KB)
+    let targetWidth = video.videoWidth;
+    let targetHeight = video.videoHeight;
+    const maxDim = 640;
+    if (targetWidth > maxDim || targetHeight > maxDim) {
+      if (targetWidth >= targetHeight) {
+        targetHeight = Math.round((targetHeight / targetWidth) * maxDim);
+        targetWidth = maxDim;
+      } else {
+        targetWidth = Math.round((targetWidth / targetHeight) * maxDim);
+        targetHeight = maxDim;
+      }
+    }
+
     const canvas = canvasRef.current || document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -195,7 +209,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
         video.pause();
       },
       'image/jpeg',
-      0.9
+      0.72 // Kualitas 72% -> menghasilkan file ukuran ~40-60 KB
     );
   };
 

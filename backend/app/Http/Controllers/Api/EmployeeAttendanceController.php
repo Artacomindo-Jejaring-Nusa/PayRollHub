@@ -410,16 +410,23 @@ class EmployeeAttendanceController extends Controller
     }
 
     /**
-     * Helper untuk memproses dan menyimpan file / base64 foto bukti kehadiran.
+     * Helper untuk memproses, mengompres, dan menyimpan file / base64 foto bukti kehadiran.
+     * Menggunakan native GD untuk resize max 640px dan kualitas 70% (~40-70 KB per foto).
      */
     protected function storeAttendancePhoto(Request $request, int $userId): ?string
     {
+        $filename = 'attendance_' . $userId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.jpg';
+        $targetRelativePath = 'attendance_photos/' . $filename;
+
         // 1. Dukungan file upload multipart (photo)
         if ($request->hasFile('photo')) {
             $file = $request->file('photo');
             if ($file->isValid()) {
+                $saved = $this->compressAndSaveImage($file->getRealPath(), $targetRelativePath);
+                if ($saved) {
+                    return $targetRelativePath;
+                }
                 $ext = $file->getClientOriginalExtension() ?: 'jpg';
-                $filename = 'attendance_' . $userId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
                 return $file->storeAs('attendance_photos', $filename, 'public');
             }
         }
@@ -427,24 +434,82 @@ class EmployeeAttendanceController extends Controller
         // 2. Dukungan string base64 (dari kamera canvas / webcam)
         $photoData = $request->input('photo');
         if (is_string($photoData) && !empty($photoData)) {
-            $imageExtension = 'jpg';
-            if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $matches)) {
-                $imageExtension = strtolower($matches[1]);
-                if ($imageExtension === 'jpeg') {
-                    $imageExtension = 'jpg';
-                }
+            if (preg_match('/^data:image\/\w+;base64,/', $photoData)) {
                 $photoData = substr($photoData, strpos($photoData, ',') + 1);
             }
 
             $decoded = base64_decode($photoData, true);
             if ($decoded !== false && strlen($decoded) > 50) {
-                $filename = 'attendance_' . $userId . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $imageExtension;
-                Storage::disk('public')->put('attendance_photos/' . $filename, $decoded);
-                return 'attendance_photos/' . $filename;
+                $saved = $this->compressAndSaveImage($decoded, $targetRelativePath);
+                if ($saved) {
+                    return $targetRelativePath;
+                }
+                Storage::disk('public')->put($targetRelativePath, $decoded);
+                return $targetRelativePath;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Kompres dan resize gambar (Native GD) untuk menghemat storage VPS.
+     * Mengurangi resolusi ke max 640px dan kompresi JPEG 70% (~40-70 KB per file).
+     */
+    protected function compressAndSaveImage(string $sourceDataOrPath, string $targetRelativePath): bool
+    {
+        if (!extension_loaded('gd')) {
+            return false;
+        }
+
+        $image = null;
+        if (file_exists($sourceDataOrPath)) {
+            $imageInfo = @getimagesize($sourceDataOrPath);
+            $mime = $imageInfo['mime'] ?? '';
+            $image = match ($mime) {
+                'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($sourceDataOrPath),
+                'image/png' => @imagecreatefrompng($sourceDataOrPath),
+                'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourceDataOrPath) : null,
+                default => @imagecreatefromstring((string) file_get_contents($sourceDataOrPath)),
+            };
+        } else {
+            $image = @imagecreatefromstring($sourceDataOrPath);
+        }
+
+        if (!$image) {
+            return false;
+        }
+
+        $origWidth = imagesx($image);
+        $origHeight = imagesy($image);
+        $maxDimension = 640;
+
+        if ($origWidth > $maxDimension || $origHeight > $maxDimension) {
+            if ($origWidth >= $origHeight) {
+                $newWidth = $maxDimension;
+                $newHeight = (int) round(($origHeight / $origWidth) * $maxDimension);
+            } else {
+                $newHeight = $maxDimension;
+                $newWidth = (int) round(($origWidth / $origHeight) * $maxDimension);
+            }
+            $resized = imagescale($image, $newWidth, $newHeight, IMG_BILINEAR_FIXED);
+            if ($resized !== false) {
+                imagedestroy($image);
+                $image = $resized;
+            }
+        }
+
+        ob_start();
+        imagejpeg($image, null, 70);
+        $compressedData = ob_get_clean();
+        imagedestroy($image);
+
+        if (!empty($compressedData)) {
+            Storage::disk('public')->put($targetRelativePath, $compressedData);
+            return true;
+        }
+
+        return false;
     }
 
     /**

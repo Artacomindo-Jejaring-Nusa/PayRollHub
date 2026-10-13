@@ -456,12 +456,12 @@ export const PayrollListPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Sub-bar: Filter Rentang Periode (Tutup Absen Bulan ke Tahun) */}
+            {/* Sub-bar: Filter Rentang Surat Pesanan (SP) */}
             <div className="pt-2.5 border-t border-border-subtle flex flex-wrap items-center justify-between gap-2.5 text-[12px]">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-text-primary flex items-center gap-1.5 shrink-0">
                   <Calendar className="w-3.5 h-3.5 text-primary" />
-                  <span>Rentang Periode / Tutup Absen:</span>
+                  <span>Rentang Surat Pesanan (SP):</span>
                 </span>
 
                 <div className="flex items-center gap-1">

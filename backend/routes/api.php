@@ -122,6 +122,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/attendance-locations/{attendanceLocation}/employees', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'getEmployees']);
         Route::post('/admin/attendance-locations/{attendanceLocation}/assign-employees', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'assignEmployees']);
 
+        // Master Shift & Penugasan Shift (Admin & Multi-tenant)
+        Route::get('/admin/shifts', [\App\Http\Controllers\Api\AdminShiftController::class, 'index']);
+        Route::post('/admin/shifts', [\App\Http\Controllers\Api\AdminShiftController::class, 'store']);
+        Route::put('/admin/shifts/{shift}', [\App\Http\Controllers\Api\AdminShiftController::class, 'update']);
+        Route::delete('/admin/shifts/{shift}', [\App\Http\Controllers\Api\AdminShiftController::class, 'destroy']);
+        Route::post('/admin/shifts/assign', [\App\Http\Controllers\Api\AdminShiftController::class, 'assign']);
+        Route::get('/admin/shifts/employees', [\App\Http\Controllers\Api\AdminShiftController::class, 'employees']);
+
         // Payroll Modifications
         Route::delete('/payrolls/clear/all', [PayrollController::class, 'clearAll']);
         Route::post('/payrolls', [PayrollController::class, 'store']);

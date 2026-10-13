@@ -27,6 +27,7 @@ class User extends Authenticatable
         'company',
         'school_unit',
         'attendance_location_id',
+        'shift_id',
         'bank_name',
         'bank_account',
         'address',
@@ -43,6 +44,14 @@ class User extends Authenticatable
     public function attendanceLocation()
     {
         return $this->belongsTo(AttendanceLocation::class, 'attendance_location_id');
+    }
+
+    /**
+     * Jadwal / Pola Shift penugasan untuk karyawan ini.
+     */
+    public function shift()
+    {
+        return $this->belongsTo(Shift::class, 'shift_id');
     }
 
     /**

@@ -6,6 +6,7 @@ import {
   AttendanceSummary,
   AttendanceLocation,
   SchoolUnitOption,
+  Shift,
 } from '../types/attendance';
 
 export const attendanceService = {
@@ -117,6 +118,49 @@ export const attendanceService = {
       user_ids: userIds,
     });
     return response.data;
+  },
+
+  // Master Shift & Penugasan Shift APIs (Point 9 Multi-tenant)
+  getShifts: async (company?: string): Promise<Shift[]> => {
+    const response = await api.get('/admin/shifts', { params: { company } });
+    return response.data.data;
+  },
+
+  createShift: async (data: Partial<Shift>): Promise<Shift> => {
+    const response = await api.post('/admin/shifts', data);
+    return response.data.data;
+  },
+
+  updateShift: async (id: number, data: Partial<Shift>): Promise<Shift> => {
+    const response = await api.put(`/admin/shifts/${id}`, data);
+    return response.data.data;
+  },
+
+  deleteShift: async (id: number): Promise<{ message: string }> => {
+    const response = await api.delete(`/admin/shifts/${id}`);
+    return response.data;
+  },
+
+  assignShift: async (payload: {
+    shift_id: number;
+    user_ids?: number[];
+    school_unit?: string;
+    company?: string;
+  }): Promise<{ message: string; updated_count: number }> => {
+    const response = await api.post('/admin/shifts/assign', payload);
+    return response.data;
+  },
+
+  getShiftEmployees: async (params?: {
+    search?: string;
+    shift_id?: number | string;
+    school_unit?: string;
+    company?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<{ data: any[]; current_page: number; last_page: number; total: number }> => {
+    const response = await api.get('/admin/shifts/employees', { params });
+    return response.data.data;
   },
 
   downloadLocationTemplate: async (): Promise<void> => {

@@ -26,6 +26,7 @@ class Attendance extends Model
         'check_out_lng',
         'check_out_distance_meters',
         'photo_url',
+        'shift_id',
         'status',
         'notes',
     ];
@@ -105,5 +106,10 @@ class Attendance extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(AttendanceLocation::class, 'location_id');
+    }
+
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class, 'shift_id');
     }
 }

@@ -559,6 +559,53 @@ export const EmployeeAttendancePage: React.FC = () => {
               </div>
 
               <div className="py-4 space-y-4">
+                {/* POINT 9: Info Jadwal Shift Aktif Karyawan Hari Ini */}
+                {todayData?.assigned_shift && (
+                  <div className="bg-gradient-to-r from-sky-50 to-indigo-50/70 border border-sky-200/90 rounded-2xl p-4 shadow-2xs">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-sky-600/10 border border-sky-300 flex items-center justify-center shrink-0 mt-0.5">
+                          <Clock className="w-5 h-5 text-sky-700" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-bold text-sky-800 uppercase tracking-wider">
+                              Shift Kerja Anda Hari Ini
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-600 text-white shadow-2xs font-mono">
+                              {todayData.assigned_shift.code}
+                            </span>
+                            {todayData.assigned_shift.cross_day && (
+                              <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                                +1 Hari (Malam)
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm font-bold text-text-primary mt-1">
+                            {todayData.assigned_shift.name}{' '}
+                            <span className="font-mono text-sky-700 font-semibold">
+                              ({todayData.assigned_shift.formatted_time || `${todayData.assigned_shift.start_time.substring(0, 5)} - ${todayData.assigned_shift.end_time.substring(0, 5)}`})
+                            </span>
+                          </div>
+                          <div className="text-xs text-text-muted mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>
+                              Batas Toleransi: <strong className="text-sky-700 font-semibold">{todayData.assigned_shift.late_tolerance_minutes} Menit</strong>
+                            </span>
+                            <span>
+                              Target Kerja: <strong className="text-sky-700 font-semibold">{todayData.assigned_shift.work_hours} Jam</strong>
+                            </span>
+                            {todayData.assigned_shift.description && (
+                              <span className="italic text-text-secondary">
+                                • {todayData.assigned_shift.description}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* POINT 10: Info Khusus Akun Admin (Wajib di Kantor Pusat yang Dibuat Super Admin) */}
                 {(todayData?.is_admin_headquarters_enforced || user?.role === 'admin') ? (
                   <div className="bg-blue-50/90 border border-blue-200/90 rounded-2xl p-4 shadow-2xs space-y-2.5">

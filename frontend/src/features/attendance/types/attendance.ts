@@ -39,6 +39,24 @@ export interface SchoolUnitOption {
   radius_meters?: number | null;
 }
 
+export interface Shift {
+  id: number;
+  company: 'all' | 'rbs' | 'rimamandiri';
+  name: string;
+  code: string;
+  start_time: string;
+  end_time: string;
+  late_tolerance_minutes: number;
+  work_hours: number;
+  cross_day: boolean;
+  description?: string | null;
+  is_active: boolean;
+  formatted_time?: string;
+  users_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface AttendanceRecord {
   id: number;
   user_id: number;
@@ -47,6 +65,8 @@ export interface AttendanceRecord {
   location_id?: number | null;
   location_name?: string | null;
   location?: AttendanceLocation | null;
+  shift_id?: number | null;
+  shift?: Shift | null;
   check_in_time: string | null;
   check_in_lat: number | null;
   check_in_lng: number | null;
@@ -73,6 +93,8 @@ export interface AttendanceRecord {
     position?: string;
     school_unit?: string;
     role: string;
+    shift_id?: number | null;
+    shift?: Shift | null;
   };
 }
 
@@ -82,6 +104,8 @@ export interface TodayAttendanceData {
   attendance: AttendanceRecord | null;
   assigned_location: AttendanceLocation | null;
   is_location_locked?: boolean;
+  assigned_shift?: Shift | null;
+  available_shifts?: Shift[];
   is_admin_user?: boolean;
   is_admin_headquarters_enforced?: boolean;
   headquarters_location?: AttendanceLocation | null;
@@ -123,4 +147,5 @@ export interface EmployeeRecapItem {
   total_work_minutes: number;
   total_work_formatted: string;
 }
+
 

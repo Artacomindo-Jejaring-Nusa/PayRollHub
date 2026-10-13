@@ -57,8 +57,8 @@ class AdminAttendanceController extends Controller
         $status = $request->query('status');
 
         $query = Attendance::with(['user' => function ($q) {
-            $q->select('id', 'name', 'email', 'nik', 'company', 'phone', 'role', 'school_unit');
-        }, 'location']);
+            $q->select('id', 'name', 'email', 'nik', 'company', 'phone', 'role', 'school_unit', 'shift_id')->with('shift');
+        }, 'location', 'shift']);
 
         // Strict company isolation:
         $targetCompany = $currentUser->isSuperAdmin()
@@ -338,6 +338,7 @@ class AdminAttendanceController extends Controller
             'check_in_status' => $checkInStatus,
             'status' => $status,
             'location_name' => $validated['location_name'] ?: ($type === 'dinas_luar' ? 'Perjalanan Dinas' : 'Input Manual Admin'),
+            'shift_id' => $validated['shift_id'] ?? ($targetUser->shift_id ?: null),
             'notes' => $validated['notes'] ? '[Input Admin] ' . $validated['notes'] : '[Input Admin Manual]',
         ]);
 
@@ -352,7 +353,7 @@ class AdminAttendanceController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => "Presensi karyawan {$targetUser->name} berhasil ditambahkan secara manual.",
-            'data' => $attendance->fresh(['user', 'location']),
+            'data' => $attendance->fresh(['user', 'location', 'shift']),
         ]);
     }
 
@@ -392,6 +393,7 @@ class AdminAttendanceController extends Controller
             'check_in_status' => $validated['check_in_status'] ?? $attendance->check_in_status,
             'status' => $validated['status'] ?? $attendance->status,
             'location_name' => $validated['location_name'] ?? $attendance->location_name,
+            'shift_id' => array_key_exists('shift_id', $validated) ? $validated['shift_id'] : $attendance->shift_id,
             'notes' => $validated['notes'],
         ]);
 
@@ -409,7 +411,7 @@ class AdminAttendanceController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data presensi karyawan berhasil diperbarui.',
-            'data' => $attendance->fresh(['user', 'location']),
+            'data' => $attendance->fresh(['user', 'location', 'shift']),
         ]);
     }
 

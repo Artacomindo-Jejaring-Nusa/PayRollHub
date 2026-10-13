@@ -48,13 +48,14 @@ import {
   AttendanceLocation,
   SchoolUnitOption,
   EmployeeRecapItem,
+  Shift,
 } from '../types/attendance';
 
 export const AdminAttendancePage: React.FC = () => {
   const { user: currentUser } = useAuthStore();
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
-  const [activeTab, setActiveTab] = useState<'recap' | 'locations' | 'settings'>('recap');
+  const [activeTab, setActiveTab] = useState<'recap' | 'locations' | 'shifts' | 'settings'>('recap');
 
   // Recap & Filter State
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
@@ -238,6 +239,79 @@ export const AdminAttendancePage: React.FC = () => {
   const [templateDownloading, setTemplateDownloading] = useState<boolean>(false);
   const [exportLoading, setExportLoading] = useState<boolean>(false);
   const [exportingAttendanceType, setExportingAttendanceType] = useState<'xlsx' | 'csv' | null>(null);
+
+  // Point 9: Shift Management State (Multi-tenant Riama & Rimbun)
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState<boolean>(false);
+  const [shiftFilterCompany, setShiftFilterCompany] = useState<string>('all');
+
+  // Daftar Karyawan & Filter Shift
+  const [shiftEmployees, setShiftEmployees] = useState<any[]>([]);
+  const [shiftEmployeesLoading, setShiftEmployeesLoading] = useState<boolean>(false);
+  const [shiftEmployeeSearch, setShiftEmployeeSearch] = useState<string>('');
+  const [selectedShiftFilter, setSelectedShiftFilter] = useState<string>('all');
+  const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>('all');
+  const [shiftEmployeePage, setShiftEmployeePage] = useState<number>(1);
+  const [shiftEmployeePerPage, setShiftEmployeePerPage] = useState<number>(25);
+  const [shiftEmployeeMeta, setShiftEmployeeMeta] = useState<{
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+  }>({
+    current_page: 1,
+    last_page: 1,
+    per_page: 25,
+    total: 0,
+    from: 0,
+    to: 0,
+  });
+
+  // Checklist Karyawan untuk Penugasan Shift Massal
+  const [selectedShiftUserIds, setSelectedShiftUserIds] = useState<number[]>([]);
+
+  // Modal Master Shift (Tambah / Edit)
+  const [shiftModalOpen, setShiftModalOpen] = useState<boolean>(false);
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  const [shiftModalSaving, setShiftModalSaving] = useState<boolean>(false);
+  const [shiftForm, setShiftForm] = useState<{
+    company: 'all' | 'rbs' | 'rimamandiri';
+    name: string;
+    code: string;
+    start_time: string;
+    end_time: string;
+    late_tolerance_minutes: number;
+    work_hours: number;
+    cross_day: boolean;
+    description: string;
+    is_active: boolean;
+  }>({
+    company: 'all',
+    name: '',
+    code: '',
+    start_time: '08:00',
+    end_time: '17:00',
+    late_tolerance_minutes: 15,
+    work_hours: 8,
+    cross_day: false,
+    description: '',
+    is_active: true,
+  });
+
+  // Modal Penugasan Shift
+  const [assignShiftModalOpen, setAssignShiftModalOpen] = useState<boolean>(false);
+  const [assignTargetShiftId, setAssignTargetShiftId] = useState<number | ''>('');
+  const [assignShiftMode, setAssignShiftMode] = useState<'selected' | 'school_unit' | 'company'>('selected');
+  const [assignTargetSchoolUnit, setAssignTargetSchoolUnit] = useState<string>('');
+  const [assignTargetCompany, setAssignTargetCompany] = useState<string>('all');
+  const [assignShiftSaving, setAssignShiftSaving] = useState<boolean>(false);
+
+  // Modal Hapus Shift
+  const [deleteShiftModalOpen, setDeleteShiftModalOpen] = useState<boolean>(false);
+  const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
+  const [deleteShiftSaving, setDeleteShiftSaving] = useState<boolean>(false);
 
   // Settings State
   const [settings, setSettings] = useState<OfficeSetting | null>(null);
@@ -518,16 +592,257 @@ export const AdminAttendancePage: React.FC = () => {
     }
   }, []);
 
+  // ==========================================
+  // SHIFT MANAGEMENT HANDLERS (POINT 9)
+  // ==========================================
+  const fetchShifts = useCallback(async () => {
+    try {
+      setShiftsLoading(true);
+      const data = await attendanceService.getShifts(
+        isSuperAdmin ? (shiftFilterCompany === 'all' ? undefined : shiftFilterCompany) : undefined
+      );
+      setShifts(data || []);
+    } catch (err: any) {
+      console.error('Error fetching shifts:', err);
+    } finally {
+      setShiftsLoading(false);
+    }
+  }, [isSuperAdmin, shiftFilterCompany]);
+
+  const fetchShiftEmployees = useCallback(async () => {
+    try {
+      setShiftEmployeesLoading(true);
+      const res = await attendanceService.getShiftEmployees({
+        search: shiftEmployeeSearch || undefined,
+        shift_id: selectedShiftFilter === 'all' ? undefined : selectedShiftFilter,
+        school_unit: selectedUnitFilter === 'all' ? undefined : selectedUnitFilter,
+        company: isSuperAdmin ? (shiftFilterCompany === 'all' ? undefined : shiftFilterCompany) : undefined,
+        page: shiftEmployeePage,
+        per_page: shiftEmployeePerPage,
+      });
+      setShiftEmployees(res.data || []);
+      setShiftEmployeeMeta({
+        current_page: res.current_page || 1,
+        last_page: res.last_page || 1,
+        per_page: shiftEmployeePerPage,
+        total: res.total || 0,
+        from: (res as any).from ?? 0,
+        to: (res as any).to ?? 0,
+      });
+    } catch (err: any) {
+      console.error('Error fetching shift employees:', err);
+    } finally {
+      setShiftEmployeesLoading(false);
+    }
+  }, [
+    shiftEmployeeSearch,
+    selectedShiftFilter,
+    selectedUnitFilter,
+    isSuperAdmin,
+    shiftFilterCompany,
+    shiftEmployeePage,
+    shiftEmployeePerPage,
+  ]);
+
+  // Reset shift employee page on filter changes
+  useEffect(() => {
+    setShiftEmployeePage(1);
+  }, [shiftEmployeeSearch, selectedShiftFilter, selectedUnitFilter, shiftFilterCompany]);
+
+  // Handlers untuk Master Shift
+  const handleOpenCreateShift = () => {
+    setEditingShift(null);
+    setShiftForm({
+      company: isSuperAdmin ? (shiftFilterCompany === 'all' ? 'all' : (shiftFilterCompany as any)) : (currentUser?.company as any || 'rbs'),
+      name: '',
+      code: '',
+      start_time: '08:00',
+      end_time: '17:00',
+      late_tolerance_minutes: 15,
+      work_hours: 8,
+      cross_day: false,
+      description: '',
+      is_active: true,
+    });
+    setShiftModalOpen(true);
+  };
+
+  const handleOpenEditShift = (shift: Shift) => {
+    setEditingShift(shift);
+    setShiftForm({
+      company: shift.company,
+      name: shift.name,
+      code: shift.code,
+      start_time: shift.start_time.substring(0, 5),
+      end_time: shift.end_time.substring(0, 5),
+      late_tolerance_minutes: shift.late_tolerance_minutes,
+      work_hours: shift.work_hours,
+      cross_day: shift.cross_day,
+      description: shift.description || '',
+      is_active: shift.is_active,
+    });
+    setShiftModalOpen(true);
+  };
+
+  const handleSaveShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setShiftModalSaving(true);
+      if (editingShift) {
+        await attendanceService.updateShift(editingShift.id, shiftForm);
+        setNotification({
+          text: `Shift '${shiftForm.name}' berhasil diperbarui.`,
+          type: 'success',
+        });
+      } else {
+        await attendanceService.createShift(shiftForm);
+        setNotification({
+          text: `Master shift baru '${shiftForm.name}' (${shiftForm.code}) berhasil ditambahkan.`,
+          type: 'success',
+        });
+      }
+      setShiftModalOpen(false);
+      fetchShifts();
+      fetchShiftEmployees();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Gagal menyimpan shift.');
+    } finally {
+      setShiftModalSaving(false);
+    }
+  };
+
+  const handleOpenDeleteShift = (shift: Shift) => {
+    setDeletingShift(shift);
+    setDeleteShiftModalOpen(true);
+  };
+
+  const handleConfirmDeleteShift = async () => {
+    if (!deletingShift) return;
+    try {
+      setDeleteShiftSaving(true);
+      const res = await attendanceService.deleteShift(deletingShift.id);
+      setNotification({
+        text: res.message || `Shift '${deletingShift.name}' berhasil diproses.`,
+        type: 'success',
+      });
+      setDeleteShiftModalOpen(false);
+      setDeletingShift(null);
+      fetchShifts();
+      fetchShiftEmployees();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Gagal menghapus shift.');
+    } finally {
+      setDeleteShiftSaving(false);
+    }
+  };
+
+  // Handlers Penugasan Shift
+  const handleOpenAssignShiftModal = (userIds?: number[]) => {
+    if (userIds && userIds.length > 0) {
+      setSelectedShiftUserIds(userIds);
+      setAssignShiftMode('selected');
+    } else if (selectedShiftUserIds.length > 0) {
+      setAssignShiftMode('selected');
+    } else {
+      setAssignShiftMode('school_unit');
+    }
+    setAssignTargetShiftId(shifts[0]?.id || '');
+    setAssignShiftModalOpen(true);
+  };
+
+  const handleSaveAssignShift = async () => {
+    if (!assignTargetShiftId) {
+      alert('Silakan pilih Shift tujuan.');
+      return;
+    }
+    try {
+      setAssignShiftSaving(true);
+      const payload: any = {
+        shift_id: Number(assignTargetShiftId),
+      };
+
+      if (assignShiftMode === 'selected') {
+        if (selectedShiftUserIds.length === 0) {
+          alert('Pilih minimal satu karyawan untuk ditugaskan shift.');
+          return;
+        }
+        payload.user_ids = selectedShiftUserIds;
+      } else if (assignShiftMode === 'school_unit') {
+        if (!assignTargetSchoolUnit) {
+          alert('Pilih unit sekolah tujuan.');
+          return;
+        }
+        payload.school_unit = assignTargetSchoolUnit;
+        if (isSuperAdmin && assignTargetCompany !== 'all') {
+          payload.company = assignTargetCompany;
+        }
+      } else if (assignShiftMode === 'company') {
+        payload.company = assignTargetCompany;
+      }
+
+      const res = await attendanceService.assignShift(payload);
+      setNotification({
+        text: res.message || 'Penugasan shift berhasil diperbarui.',
+        type: 'success',
+      });
+      setAssignShiftModalOpen(false);
+      setSelectedShiftUserIds([]);
+      fetchShifts();
+      fetchShiftEmployees();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Gagal menerapkan penugasan shift.');
+    } finally {
+      setAssignShiftSaving(false);
+    }
+  };
+
+  const handleQuickAssignSingle = async (userId: number, shiftId: number) => {
+    try {
+      await attendanceService.assignShift({
+        shift_id: shiftId,
+        user_ids: [userId],
+      });
+      setNotification({
+        text: 'Shift karyawan berhasil diperbarui.',
+        type: 'success',
+      });
+      fetchShifts();
+      fetchShiftEmployees();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Gagal memperbarui shift karyawan.');
+    }
+  };
+
+  const handleToggleSelectShiftEmployee = (userId: number) => {
+    setSelectedShiftUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleToggleSelectAllShiftEmployees = () => {
+    const pageUserIds = shiftEmployees.map((e) => e.id);
+    const isAllSelected = pageUserIds.length > 0 && pageUserIds.every((id) => selectedShiftUserIds.includes(id));
+    if (isAllSelected) {
+      setSelectedShiftUserIds((prev) => prev.filter((id) => !pageUserIds.includes(id)));
+    } else {
+      setSelectedShiftUserIds((prev) => Array.from(new Set([...prev, ...pageUserIds])));
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'recap') {
       fetchRecap();
     } else if (activeTab === 'locations') {
       fetchLocations();
       fetchSchoolUnits();
+    } else if (activeTab === 'shifts') {
+      fetchShifts();
+      fetchShiftEmployees();
+      fetchSchoolUnits();
     } else {
       fetchSettings();
     }
-  }, [activeTab, fetchRecap, fetchLocations, fetchSchoolUnits, fetchSettings]);
+  }, [activeTab, fetchRecap, fetchLocations, fetchSchoolUnits, fetchShifts, fetchShiftEmployees, fetchSettings]);
 
   // Handle Save Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -891,6 +1206,19 @@ export const AdminAttendancePage: React.FC = () => {
 
           <button
             type="button"
+            onClick={() => setActiveTab('shifts')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'shifts'
+                ? 'bg-surface-panel text-primary shadow-2xs'
+                : 'text-text-muted hover:text-text-primary'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Pengaturan Shift ({shifts.length})</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'settings'
@@ -1233,6 +1561,7 @@ export const AdminAttendancePage: React.FC = () => {
                       <th className="py-3 px-3">Tanggal</th>
                       <th className="py-3 px-3">Foto Bukti</th>
                       <th className="py-3 px-3">Jenis Absen</th>
+                      <th className="py-3 px-3">Shift</th>
                       <th className="py-3 px-3">Titik Lokasi / Unit</th>
                       <th className="py-3 px-3">Jam Masuk</th>
                       <th className="py-3 px-3">Jarak</th>
@@ -1248,13 +1577,13 @@ export const AdminAttendancePage: React.FC = () => {
                   <tbody className="divide-y divide-border-subtle">
                     {loading ? (
                       <tr>
-                        <td colSpan={15} className="py-10 text-center text-text-muted">
+                        <td colSpan={16} className="py-10 text-center text-text-muted">
                           Memuat data absensi karyawan...
                         </td>
                       </tr>
                     ) : attendances.length === 0 ? (
                       <tr>
-                        <td colSpan={15} className="py-10 text-center text-text-muted">
+                        <td colSpan={16} className="py-10 text-center text-text-muted">
                           Tidak ada data absensi untuk filter {filterType === 'sp' ? selectedSp : selectedDate}.
                         </td>
                       </tr>
@@ -1329,6 +1658,21 @@ export const AdminAttendancePage: React.FC = () => {
                                   </>
                                 )}
                               </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              {row.shift ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-800" title={row.shift.formatted_time || `${row.shift.start_time} - ${row.shift.end_time}`}>
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>{row.shift.code || row.shift.name}</span>
+                                </span>
+                              ) : row.user?.shift ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700" title={row.user.shift.formatted_time}>
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>{row.user.shift.code || row.user.shift.name}</span>
+                                </span>
+                              ) : (
+                                <span className="text-text-muted text-[11px]">-</span>
+                              )}
                             </td>
                             <td className="py-3 px-3 text-text-secondary font-medium">
                               {row.location_name || (row.location?.name ?? '-')}
@@ -2728,6 +3072,833 @@ export const AdminAttendancePage: React.FC = () => {
                   {assignSaving ? 'Menyimpan...' : 'Simpan Penugasan'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: PENGATURAN SHIFT KERJA KARYAWAN (POINT 9 MULTI-TENANT RIAMA & RIMBUN) */}
+      {activeTab === 'shifts' && (
+        <div className="space-y-6">
+          {/* Header Controls & Multi-tenant Filter */}
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-text-primary">Master Shift & Jam Kerja Operasional</h2>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Konfigurasi jam masuk, toleransi keterlambatan, dan penugasan shift per individu atau unit sekolah.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {isSuperAdmin && (
+                <div className="flex items-center gap-1.5 bg-surface-container px-3 py-1.5 rounded-xl border border-border-subtle text-xs">
+                  <Building className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                  <span className="text-text-muted font-medium">Entitas:</span>
+                  <select
+                    value={shiftFilterCompany}
+                    onChange={(e) => setShiftFilterCompany(e.target.value)}
+                    className="bg-transparent font-semibold text-text-primary focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">Semua Entitas</option>
+                    <option value="rbs">PT RBS (Rimbun)</option>
+                    <option value="rimamandiri">PT Riama Mandiri</option>
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  fetchShifts();
+                  fetchShiftEmployees();
+                }}
+                disabled={shiftsLoading || shiftEmployeesLoading}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-text-secondary bg-surface-container hover:bg-surface-container/80 rounded-xl border border-border-subtle transition-all cursor-pointer disabled:opacity-50"
+                title="Segarkan data shift"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${shiftsLoading ? 'animate-spin' : ''}`} />
+                <span>Segarkan</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenAssignShiftModal()}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-text-primary bg-surface-container hover:bg-surface-container/80 border border-border-subtle rounded-xl shadow-2xs transition-all cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5 text-primary" />
+                <span>Penugasan Massal / Unit</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenCreateShift}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-primary hover:bg-primary/90 rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah Shift Baru</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Grid Master Shift Cards */}
+          <div>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                <span>Daftar Master Shift Aktif</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-bold">
+                  {shifts.length} Shift
+                </span>
+              </h3>
+            </div>
+
+            {shiftsLoading ? (
+              <div className="p-8 text-center text-xs text-text-muted bg-surface-panel rounded-2xl border border-border-subtle">
+                <RefreshCw className="w-5 h-5 text-primary animate-spin mx-auto mb-2" />
+                <span>Memuat master shift...</span>
+              </div>
+            ) : shifts.length === 0 ? (
+              <div className="p-8 text-center text-xs text-text-muted bg-surface-panel rounded-2xl border border-border-subtle">
+                Belum ada master shift untuk entitas ini. Klik &quot;Tambah Shift Baru&quot; di atas untuk membuat jadwal.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {shifts.map((shift) => {
+                  const companyLabel =
+                    shift.company === 'all'
+                      ? 'Semua Entitas'
+                      : shift.company === 'rimamandiri'
+                      ? 'PT Riama Mandiri'
+                      : 'PT Rimbun Buana';
+
+                  const companyColor =
+                    shift.company === 'all'
+                      ? 'bg-blue-100 text-blue-800 border-blue-200'
+                      : shift.company === 'rimamandiri'
+                      ? 'bg-purple-100 text-purple-800 border-purple-200'
+                      : 'bg-emerald-100 text-emerald-800 border-emerald-200';
+
+                  return (
+                    <div
+                      key={shift.id}
+                      className="bg-surface-panel border border-border-subtle hover:border-primary/40 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between group"
+                    >
+                      <div>
+                        {/* Header Badges */}
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold bg-primary/10 text-primary border border-primary/20">
+                              {shift.code}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${companyColor}`}>
+                              {companyLabel}
+                            </span>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              shift.is_active
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {shift.is_active ? 'Aktif' : 'Nonaktif'}
+                          </span>
+                        </div>
+
+                        {/* Title & Cross-day */}
+                        <h4 className="text-sm font-bold text-text-primary group-hover:text-primary transition-colors">
+                          {shift.name}
+                        </h4>
+
+                        {/* Hours Banner */}
+                        <div className="mt-3 p-3 bg-surface-container rounded-xl border border-border-subtle flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary" />
+                            <div className="font-mono text-xs font-bold text-text-primary">
+                              {shift.formatted_time || `${shift.start_time.substring(0, 5)} - ${shift.end_time.substring(0, 5)}`}
+                            </div>
+                          </div>
+                          {shift.cross_day && (
+                            <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                              +1 Hari (Malam)
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Metrics */}
+                        <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+                          <div className="p-2 bg-surface-container/60 rounded-lg">
+                            <div className="text-[10px] text-text-muted">Toleransi</div>
+                            <div className="text-xs font-bold text-text-primary font-mono mt-0.5">
+                              {shift.late_tolerance_minutes}m
+                            </div>
+                          </div>
+                          <div className="p-2 bg-surface-container/60 rounded-lg">
+                            <div className="text-[10px] text-text-muted">Target Jam</div>
+                            <div className="text-xs font-bold text-text-primary font-mono mt-0.5">
+                              {shift.work_hours}j
+                            </div>
+                          </div>
+                          <div className="p-2 bg-surface-container/60 rounded-lg">
+                            <div className="text-[10px] text-text-muted">Terpasang</div>
+                            <div className="text-xs font-bold text-primary font-mono mt-0.5">
+                              {shift.users_count || 0} org
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        {shift.description && (
+                          <p className="text-[11px] text-text-muted mt-2.5 line-clamp-2 italic">
+                            {shift.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="pt-4 mt-4 border-t border-border-subtle flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAssignTargetShiftId(shift.id);
+                            setAssignShiftMode('school_unit');
+                            setAssignShiftModalOpen(true);
+                          }}
+                          className="text-[11px] font-semibold text-primary hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <Users className="w-3 h-3" />
+                          <span>Tugaskan Karyawan</span>
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditShift(shift)}
+                            className="p-1.5 text-text-muted hover:text-primary hover:bg-surface-container rounded-lg transition-colors cursor-pointer"
+                            title="Edit Master Shift"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDeleteShift(shift)}
+                            className="p-1.5 text-text-muted hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Hapus / Nonaktifkan Shift"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Panel Penugasan Shift Karyawan (Tabel Karyawan) */}
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl overflow-hidden shadow-xs space-y-4 p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3 border-b border-border-subtle">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  <span>Daftar Shift Karyawan ({shiftEmployeeMeta.total || shiftEmployees.length})</span>
+                </h3>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Tetapkan jadwal shift kerja per karyawan, atau pilih massal untuk diterapkan bersamaan.
+                </p>
+              </div>
+
+              {selectedShiftUserIds.length > 0 && (
+                <div className="flex items-center gap-2 animate-in fade-in">
+                  <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
+                    {selectedShiftUserIds.length} Karyawan Terpilih
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAssignShiftModal(selectedShiftUserIds)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary/90 rounded-lg shadow-2xs transition-all cursor-pointer"
+                  >
+                    <Clock className="w-3 h-3" />
+                    <span>Ubah Shift Terpilih</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedShiftUserIds([])}
+                    className="p-1.5 text-text-muted hover:text-text-primary rounded-lg cursor-pointer"
+                    title="Batalkan Pilihan"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={shiftEmployeeSearch}
+                  onChange={(e) => setShiftEmployeeSearch(e.target.value)}
+                  placeholder="Cari nama, NIK, atau unit..."
+                  className="w-full pl-8 pr-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <select
+                  value={selectedShiftFilter}
+                  onChange={(e) => setSelectedShiftFilter(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value="all">Semua Status Shift</option>
+                  <option value="none">Belum Ditugaskan Shift</option>
+                  {shifts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Shift: {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={selectedUnitFilter}
+                  onChange={(e) => setSelectedUnitFilter(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value="all">Semua Unit Sekolah</option>
+                  {schoolUnitOptions.map((unit) => (
+                    <option key={unit.name} value={unit.name}>
+                      {unit.name} ({unit.employee_count} org)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full min-w-[800px] text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-border-subtle bg-surface-container/40 text-text-muted font-semibold whitespace-nowrap">
+                    <th className="py-3 px-3 text-center w-10">
+                      <input
+                        type="checkbox"
+                        checked={
+                          shiftEmployees.length > 0 &&
+                          shiftEmployees.every((e) => selectedShiftUserIds.includes(e.id))
+                        }
+                        onChange={handleToggleSelectAllShiftEmployees}
+                        className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                        title="Pilih Semua di Halaman Ini"
+                      />
+                    </th>
+                    <th className="py-3 px-4">Karyawan</th>
+                    <th className="py-3 px-3">Perusahaan</th>
+                    <th className="py-3 px-3">Unit Sekolah</th>
+                    <th className="py-3 px-3">Shift Aktif</th>
+                    <th className="py-3 px-3">Ubah Shift Langsung</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {shiftEmployeesLoading ? (
+                    <tr>
+                      <td colSpan={6} className="py-10 text-center text-text-muted">
+                        Memuat data karyawan shift...
+                      </td>
+                    </tr>
+                  ) : shiftEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-10 text-center text-text-muted">
+                        Tidak ada karyawan yang cocok dengan kriteria pencarian.
+                      </td>
+                    </tr>
+                  ) : (
+                    shiftEmployees.map((emp) => {
+                      const isSelected = selectedShiftUserIds.includes(emp.id);
+                      return (
+                        <tr
+                          key={emp.id}
+                          className={`hover:bg-surface-container/20 transition-colors ${
+                            isSelected ? 'bg-primary/5' : ''
+                          }`}
+                        >
+                          <td className="py-3 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectShiftEmployee(emp.id)}
+                              className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                            />
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-text-primary">{emp.name}</div>
+                            <div className="text-[11px] text-text-muted font-mono">
+                              NIK: {emp.nik || '-'} • {emp.email}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-md text-[10.5px] font-semibold border ${
+                                emp.company === 'rimamandiri'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
+                              {emp.company === 'rimamandiri' ? 'Riama Mandiri' : 'PT RBS'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-text-secondary font-medium">
+                            {emp.school_unit || '-'}
+                          </td>
+                          <td className="py-3 px-3">
+                            {emp.shift ? (
+                              <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-100 text-sky-800"
+                                title={emp.shift.formatted_time || `${emp.shift.start_time} - ${emp.shift.end_time}`}
+                              >
+                                <Clock className="w-3 h-3" />
+                                <span>{emp.shift.name} ({emp.shift.code})</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-100 text-amber-800">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>Default (Reguler)</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            <select
+                              value={emp.shift_id || ''}
+                              onChange={(e) => {
+                                const newShiftId = Number(e.target.value);
+                                if (newShiftId) {
+                                  handleQuickAssignSingle(emp.id, newShiftId);
+                                }
+                              }}
+                              className="px-2.5 py-1 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                            >
+                              <option value="">Pilih Shift...</option>
+                              {shifts.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.code} - {s.name} ({s.formatted_time || `${s.start_time.substring(0, 5)}-${s.end_time.substring(0, 5)}`})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {shiftEmployeeMeta.total > shiftEmployeePerPage && (
+              <div className="pt-2">
+                <Pagination
+                  meta={{
+                    current_page: shiftEmployeePage,
+                    last_page: shiftEmployeeMeta.last_page,
+                    per_page: shiftEmployeePerPage,
+                    total: shiftEmployeeMeta.total,
+                    from: shiftEmployeeMeta.from ?? undefined,
+                    to: shiftEmployeeMeta.to ?? undefined,
+                  } as any}
+                  onPageChange={(page) => setShiftEmployeePage(page)}
+                  perPage={shiftEmployeePerPage}
+                  onPerPageChange={(newPerPage) => {
+                    setShiftEmployeePerPage(newPerPage);
+                    setShiftEmployeePage(1);
+                  }}
+                  isLoading={shiftEmployeesLoading}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: TAMBAH / EDIT MASTER SHIFT */}
+      {shiftModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-surface-panel rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-border-subtle space-y-5 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary" />
+                <h3 className="text-base font-bold text-text-primary">
+                  {editingShift ? 'Edit Master Shift' : 'Tambah Master Shift Baru'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShiftModalOpen(false)}
+                className="p-1 text-text-muted hover:text-text-primary rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveShift} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Nama Shift <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={shiftForm.name}
+                    onChange={(e) => setShiftForm({ ...shiftForm, name: e.target.value })}
+                    placeholder="Misal: Shift 1 / Pagi (Sekolah)"
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Kode Shift (Unik) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={shiftForm.code}
+                    onChange={(e) => setShiftForm({ ...shiftForm, code: e.target.value.toUpperCase() })}
+                    placeholder="Misal: PAGI-1"
+                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Entitas / Perusahaan <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={shiftForm.company}
+                    disabled={!isSuperAdmin}
+                    onChange={(e) => setShiftForm({ ...shiftForm, company: e.target.value as any })}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer disabled:opacity-70"
+                  >
+                    <option value="all">Semua Entitas (Bersama)</option>
+                    <option value="rbs">PT RBS (Rimbun)</option>
+                    <option value="rimamandiri">PT Riama Mandiri</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Jam Mulai Masuk <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={shiftForm.start_time}
+                    onChange={(e) => setShiftForm({ ...shiftForm, start_time: e.target.value })}
+                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Jam Selesai Pulang <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={shiftForm.end_time}
+                    onChange={(e) => setShiftForm({ ...shiftForm, end_time: e.target.value })}
+                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Toleransi Terlambat (Menit)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={shiftForm.late_tolerance_minutes}
+                    onChange={(e) => setShiftForm({ ...shiftForm, late_tolerance_minutes: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Target Jam Kerja (Jam)
+                  </label>
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={1}
+                    max={24}
+                    value={shiftForm.work_hours}
+                    onChange={(e) => setShiftForm({ ...shiftForm, work_hours: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 p-3 bg-surface-container/60 rounded-xl border border-border-subtle cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={shiftForm.cross_day}
+                      onChange={(e) => setShiftForm({ ...shiftForm, cross_day: e.target.checked })}
+                      className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                    />
+                    <div>
+                      <div className="text-xs font-semibold text-text-primary">
+                        Shift Melewati Tengah Malam (+1 Hari)
+                      </div>
+                      <div className="text-[11px] text-text-muted">
+                        Aktifkan untuk shift malam/satpam (misal 23:00 s.d 07:00 pagi keesokan harinya).
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Deskripsi / Catatan Tambahan
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={shiftForm.description}
+                    onChange={(e) => setShiftForm({ ...shiftForm, description: e.target.value })}
+                    placeholder="Catatan peruntukan shift ini..."
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-border-subtle flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShiftModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-text-muted hover:text-text-primary rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={shiftModalSaving}
+                  className="px-5 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {shiftModalSaving ? 'Menyimpan...' : editingShift ? 'Simpan Perubahan' : 'Tambahkan Shift'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: PENUGASAN SHIFT MASSAL / PER UNIT SEKOLAH */}
+      {assignShiftModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-surface-panel rounded-2xl max-w-md w-full p-6 shadow-2xl border border-border-subtle space-y-5 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary" />
+                <h3 className="text-base font-bold text-text-primary">Penugasan Shift Kerja</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssignShiftModalOpen(false)}
+                className="p-1 text-text-muted hover:text-text-primary rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Pilih Shift Tujuan <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={assignTargetShiftId}
+                  onChange={(e) => setAssignTargetShiftId(Number(e.target.value))}
+                  className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value="">Pilih Shift...</option>
+                  {shifts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code}) - {s.formatted_time || `${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-primary mb-1.5">
+                  Metode Penugasan <span className="text-rose-500">*</span>
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2.5 p-2.5 bg-surface-container/60 rounded-xl border border-border-subtle cursor-pointer">
+                    <input
+                      type="radio"
+                      name="assignMode"
+                      value="selected"
+                      checked={assignShiftMode === 'selected'}
+                      onChange={() => setAssignShiftMode('selected')}
+                      className="text-primary accent-primary cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-semibold text-text-primary">
+                        Karyawan Terpilih ({selectedShiftUserIds.length} Orang)
+                      </span>
+                      <p className="text-[11px] text-text-muted">
+                        Terapkan ke baris karyawan yang Anda centang pada tabel.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-2.5 bg-surface-container/60 rounded-xl border border-border-subtle cursor-pointer">
+                    <input
+                      type="radio"
+                      name="assignMode"
+                      value="school_unit"
+                      checked={assignShiftMode === 'school_unit'}
+                      onChange={() => setAssignShiftMode('school_unit')}
+                      className="text-primary accent-primary cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-semibold text-text-primary">
+                        Berdasarkan Unit Sekolah
+                      </span>
+                      <p className="text-[11px] text-text-muted">
+                        Seluruh karyawan yang ditugaskan di unit sekolah tersebut akan mendapatkan shift ini.
+                      </p>
+                    </div>
+                  </label>
+
+                  {isSuperAdmin && (
+                    <label className="flex items-center gap-2.5 p-2.5 bg-surface-container/60 rounded-xl border border-border-subtle cursor-pointer">
+                      <input
+                        type="radio"
+                        name="assignMode"
+                        value="company"
+                        checked={assignShiftMode === 'company'}
+                        onChange={() => setAssignShiftMode('company')}
+                        className="text-primary accent-primary cursor-pointer"
+                      />
+                      <div className="text-xs">
+                        <span className="font-semibold text-text-primary">
+                          Seluruh Karyawan Entitas Perusahaan
+                        </span>
+                        <p className="text-[11px] text-text-muted">
+                          Terapkan ke semua karyawan di RBS atau Riama Mandiri.
+                        </p>
+                      </div>
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {assignShiftMode === 'school_unit' && (
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Pilih Unit Sekolah Tujuan <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={assignTargetSchoolUnit}
+                    onChange={(e) => setAssignTargetSchoolUnit(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="">Pilih Unit Sekolah...</option>
+                    {schoolUnitOptions.map((unit) => (
+                      <option key={unit.name} value={unit.name}>
+                        {unit.name} ({unit.employee_count} Karyawan)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {assignShiftMode === 'company' && isSuperAdmin && (
+                <div>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">
+                    Pilih Entitas Perusahaan <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={assignTargetCompany}
+                    onChange={(e) => setAssignTargetCompany(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="rbs">PT Rimbun Buana Sejahtera (RBS)</option>
+                    <option value="rimamandiri">PT Riama Mandiri Pratama</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-border-subtle flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAssignShiftModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-text-muted hover:text-text-primary rounded-xl cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAssignShift}
+                disabled={assignShiftSaving}
+                className="px-5 py-2 text-xs font-semibold bg-primary hover:bg-primary/90 text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                {assignShiftSaving ? 'Menerapkan...' : 'Terapkan Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: KONFIRMASI HAPUS SHIFT */}
+      {deleteShiftModalOpen && deletingShift && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-surface-panel rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-border-subtle space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-text-primary">Hapus / Nonaktifkan Shift</h4>
+                <p className="text-xs text-text-muted">Konfirmasi tindakan penghapusan</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-text-secondary leading-relaxed">
+              Apakah Anda yakin ingin menghapus master shift <strong>{deletingShift.name} ({deletingShift.code})</strong>?
+              Jika shift ini sudah pernah dipakai oleh riwayat presensi, sistem akan secara aman menonaktifkan shift ini agar integritas data presensi historis tetap terjaga.
+            </p>
+
+            <div className="pt-2 border-t border-border-subtle flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteShiftModalOpen(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-text-muted hover:text-text-primary rounded-xl cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteShift}
+                disabled={deleteShiftSaving}
+                className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                {deleteShiftSaving ? 'Memproses...' : 'Ya, Hapus Shift'}
+              </button>
             </div>
           </div>
         </div>

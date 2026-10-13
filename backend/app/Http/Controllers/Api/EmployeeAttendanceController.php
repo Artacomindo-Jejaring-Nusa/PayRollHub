@@ -70,6 +70,8 @@ class EmployeeAttendanceController extends Controller
             $isLocationLocked = $assignedLocation !== null;
         }
 
+        $assignedShift = $user->shift ?: \App\Models\Shift::where('code', 'REGULER')->first();
+
         return response()->json([
             'status' => 'success',
             'data' => [
@@ -78,6 +80,8 @@ class EmployeeAttendanceController extends Controller
                 'attendance' => $attendance,
                 'assigned_location' => $assignedLocation,
                 'is_location_locked' => $isLocationLocked,
+                'assigned_shift' => $assignedShift,
+                'available_shifts' => \App\Models\Shift::getAvailableForCompany($targetCompany),
                 'is_admin_user' => $isAdmin,
                 'is_admin_headquarters_enforced' => $isAdmin,
                 'headquarters_location' => $hqLocation,
@@ -164,6 +168,7 @@ class EmployeeAttendanceController extends Controller
             }
 
             // Simpan foto bukti dinas luar jika diunggah
+            $userShift = $user->shift ?: \App\Models\Shift::where('code', 'REGULER')->first();
             $photoPath = $this->storeAttendancePhoto($request, $user->id);
 
             $attendance = Attendance::updateOrCreate(
@@ -175,6 +180,7 @@ class EmployeeAttendanceController extends Controller
                     'check_in_lng' => $request->input('longitude') ? (float) $request->input('longitude') : null,
                     'location_name' => 'Perjalanan Dinas',
                     'location_id' => null,
+                    'shift_id' => $userShift?->id,
                     'check_in_distance_meters' => null,
                     'check_in_status' => 'on_time',
                     'status' => 'present',
@@ -325,10 +331,16 @@ class EmployeeAttendanceController extends Controller
             ], 422);
         }
 
-        // Tentukan status keterlambatan
+        // Tentukan status keterlambatan berdasarkan Shift aktif karyawan
         $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
-        $workStart = Carbon::createFromTimeString($setting->work_start_time);
-        $lateThreshold = (clone $workStart)->addMinutes($setting->late_tolerance_minutes);
+        $userShift = $user->shift ?: \App\Models\Shift::where('code', 'REGULER')->first();
+
+        $shiftStartTime = $userShift ? $userShift->start_time : $setting->work_start_time;
+        $shiftTolerance = $userShift ? (int) $userShift->late_tolerance_minutes : (int) $setting->late_tolerance_minutes;
+        $shiftName = $userShift ? $userShift->name : 'Reguler';
+
+        $workStart = Carbon::createFromTimeString($shiftStartTime);
+        $lateThreshold = (clone $workStart)->addMinutes($shiftTolerance);
 
         $currentCheckInTime = Carbon::createFromTimeString($currentTime);
         $isLate = $currentCheckInTime->greaterThan($lateThreshold);
@@ -343,6 +355,7 @@ class EmployeeAttendanceController extends Controller
                 'check_in_lat' => $lat,
                 'check_in_lng' => $lng,
                 'location_id' => $locationId,
+                'shift_id' => $userShift?->id,
                 'location_name' => $locationName,
                 'check_in_distance_meters' => $distance,
                 'check_in_status' => $checkInStatus,
@@ -352,7 +365,9 @@ class EmployeeAttendanceController extends Controller
             ]
         );
 
-        $statusMsg = $isLate ? "Terlambat (melewati toleransi {$setting->late_tolerance_minutes} menit)" : "Tepat Waktu";
+        $statusMsg = $isLate
+            ? "Terlambat (melewati batas toleransi {$shiftTolerance} menit dari jadwal {$shiftName})"
+            : "Tepat Waktu ({$shiftName})";
 
         return response()->json([
             'status' => 'success',

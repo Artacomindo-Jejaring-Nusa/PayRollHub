@@ -305,18 +305,20 @@ export const DashboardLayout: React.FC = () => {
                 </Link>
               )}
 
-              {/* 4. Pengumuman */}
-              <Link
-                to="/announcements"
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
-                  isItemActive('/announcements')
-                    ? 'bg-primary text-white shadow-xs font-semibold'
-                    : 'text-text-primary hover:bg-surface-container hover:text-primary'
-                }`}
-              >
-                <Bell className={`w-4 h-4 shrink-0 ${isItemActive('/announcements') ? 'text-white' : 'text-text-muted'}`} />
-                <span>Pengumuman</span>
-              </Link>
+              {/* 4. Pengumuman (Hanya jika non-admin; untuk Admin dimasukkan ke dropdown Kelola Sistem) */}
+              {!isAdmin && (
+                <Link
+                  to="/announcements"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                    isItemActive('/announcements')
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                  }`}
+                >
+                  <Bell className={`w-4 h-4 shrink-0 ${isItemActive('/announcements') ? 'text-white' : 'text-text-muted'}`} />
+                  <span>Pengumuman</span>
+                </Link>
+              )}
 
               {/* 5. Feedback / Keluhan */}
               {isAdmin ? (
@@ -345,7 +347,7 @@ export const DashboardLayout: React.FC = () => {
                 </Link>
               )}
 
-              {/* 6. Kelola Sistem (Dropdown untuk Manajemen Pengguna & Log Aktivitas) */}
+              {/* 6. Kelola Sistem (Dropdown untuk Manajemen Pengguna, Pengumuman, & Log Aktivitas) */}
               {isAdmin && (
                 <div className="relative shrink-0" ref={systemRef}>
                   <button
@@ -355,12 +357,12 @@ export const DashboardLayout: React.FC = () => {
                       setAbsensiDropdownOpen(false);
                     }}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all cursor-pointer whitespace-nowrap ${
-                      isItemActive('/users') || isItemActive('/activity-logs')
+                      isItemActive('/users') || isItemActive('/activity-logs') || isItemActive('/announcements')
                         ? 'bg-primary text-white shadow-xs font-semibold'
                         : 'text-text-primary hover:bg-surface-container hover:text-primary'
                     }`}
                   >
-                    <Users className={`w-4 h-4 shrink-0 ${isItemActive('/users') || isItemActive('/activity-logs') ? 'text-white' : 'text-text-muted'}`} />
+                    <Users className={`w-4 h-4 shrink-0 ${isItemActive('/users') || isItemActive('/activity-logs') || isItemActive('/announcements') ? 'text-white' : 'text-text-muted'}`} />
                     <span>Kelola Sistem</span>
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${systemDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -381,6 +383,21 @@ export const DashboardLayout: React.FC = () => {
                           <div>
                             <div className="leading-tight">Manajemen Pengguna</div>
                             <div className="text-[10.5px] text-text-muted mt-0.5">Kelola akun admin & staf</div>
+                          </div>
+                        </Link>
+                        <Link
+                          to="/announcements"
+                          onClick={() => setSystemDropdownOpen(false)}
+                          className={`flex items-start gap-2.5 px-3 py-2 text-[12.5px] transition-colors ${
+                            isItemActive('/announcements')
+                              ? 'bg-primary/10 text-primary font-semibold'
+                              : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                          }`}
+                        >
+                          <Bell className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                          <div>
+                            <div className="leading-tight">Pengumuman</div>
+                            <div className="text-[10.5px] text-text-muted mt-0.5">Kelola informasi & edaran</div>
                           </div>
                         </Link>
                         {isSuperAdmin && (

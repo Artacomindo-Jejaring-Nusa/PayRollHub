@@ -403,16 +403,16 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                   type="button"
                   variant="outline"
                   onClick={handleRetake}
-                  className="w-1/2 sm:w-auto text-xs"
+                  className="flex-1 sm:flex-initial px-4 py-2 text-xs h-auto min-h-10 whitespace-nowrap cursor-pointer"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Ambil Ulang
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5 shrink-0" /> Ambil Ulang
                 </Button>
                 <Button
                   type="button"
                   onClick={handleConfirm}
-                  className="w-1/2 sm:w-auto text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="flex-1 sm:flex-initial px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white h-auto min-h-10 whitespace-nowrap cursor-pointer"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Gunakan Foto Ini
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" /> Gunakan Foto Ini
                 </Button>
               </>
             ) : (
@@ -421,7 +421,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                   type="button"
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="w-1/3 sm:w-auto text-xs"
+                  className="px-4 py-2 text-xs h-auto min-h-10 whitespace-nowrap cursor-pointer"
                 >
                   Batal
                 </Button>
@@ -429,10 +429,9 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                   type="button"
                   onClick={handleSnap}
                   disabled={isInitializing || !!cameraError}
-                  className="w-2/3 sm:w-auto text-xs bg-primary hover:bg-primary-hover text-white shadow-md flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2.5 text-xs font-semibold bg-primary hover:bg-primary-hover text-white shadow-md inline-flex items-center justify-center gap-2 whitespace-nowrap h-auto min-h-10 cursor-pointer"
                 >
-                  <div className="w-2 h-2 rounded-full bg-white animate-ping"></div>
-                  <Camera className="w-4 h-4" />
+                  <Camera className="w-4 h-4 shrink-0" />
                   <span>Ambil Foto Sekarang (Jepret)</span>
                 </Button>
               </>

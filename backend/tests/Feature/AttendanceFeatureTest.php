@@ -455,4 +455,39 @@ class AttendanceFeatureTest extends TestCase
             ->assertJsonPath('status', 'error')
             ->assertJsonPath('nearest_location', 'Sekolah Ditugaskan');
     }
+
+    public function test_admin_can_update_work_hours_and_tolerance_and_sync_shift(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'company' => 'rbs',
+        ]);
+
+        $response = $this->actingAs($admin, 'sanctum')->putJson('/api/admin/attendance-settings', [
+            'work_start_time' => '07:30',
+            'work_end_time' => '16:30',
+            'late_tolerance_minutes' => 20,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.work_start_time', '07:30')
+            ->assertJsonPath('data.work_end_time', '16:30')
+            ->assertJsonPath('data.late_tolerance_minutes', 20);
+
+        $this->assertDatabaseHas('attendance_settings', [
+            'tenant_id' => 'rbs',
+            'work_start_time' => '07:30',
+            'work_end_time' => '16:30',
+            'late_tolerance_minutes' => 20,
+        ]);
+
+        // Shift table should also be synced
+        $this->assertDatabaseHas('shifts', [
+            'code' => 'REGULER',
+            'start_time' => '07:30',
+            'end_time' => '16:30',
+            'late_tolerance_minutes' => 20,
+        ]);
+    }
 }

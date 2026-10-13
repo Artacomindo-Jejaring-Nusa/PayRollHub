@@ -463,43 +463,82 @@ class AdminAttendanceController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => array_merge($setting->toArray(), [
-                'can_edit' => $currentUser->isSuperAdmin(),
+                'can_edit' => true,
+                'can_edit_location' => $currentUser->isSuperAdmin(),
                 'headquarters_location_id' => $hqLocation->id,
             ]),
         ]);
     }
 
     /**
-     * Update konfigurasi lokasi kantor & radius.
-     * POINT 10: Hanya Super Admin yang berwenang membuat atau mengubah pengaturan Kantor Pusat.
+     * Update konfigurasi lokasi kantor, jam kerja baku, & toleransi keterlambatan.
+     * Jam kerja baku & toleransi keterlambatan dapat diatur oleh Admin dan Super Admin.
+     * Koordinat & radius kantor pusat diatur khusus oleh Super Admin.
      */
     public function updateSettings(Request $request): JsonResponse
     {
         $currentUser = $request->user();
+        $isSuperAdmin = $currentUser->isSuperAdmin();
 
-        if (!$currentUser->isSuperAdmin()) {
+        if (!$isSuperAdmin && $currentUser->role !== 'admin') {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Akses ditolak: Hanya Super Admin yang berwenang membuat atau memperbarui konfigurasi titik lokasi & radius Kantor Pusat.',
+                'message' => 'Akses ditolak: Hanya Admin / Super Admin yang berwenang memperbarui konfigurasi jam kerja baku.',
             ], 403);
         }
 
-        $validated = $request->validate([
-            'office_name' => 'required|string|max:150',
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
-            'radius_meters' => 'required|integer|min:10|max:10000',
+        $rules = [
             'work_start_time' => 'required|string|max:10',
             'work_end_time' => 'required|string|max:10',
             'late_tolerance_minutes' => 'required|integer|min:0|max:120',
-        ]);
+        ];
+
+        if ($isSuperAdmin) {
+            $rules['office_name'] = 'required|string|max:150';
+            $rules['latitude'] = 'required|numeric|between:-90,90';
+            $rules['longitude'] = 'required|numeric|between:-180,180';
+            $rules['radius_meters'] = 'required|integer|min:10|max:10000';
+        }
+
+        $validated = $request->validate($rules);
 
         $targetCompany = $request->query('company') && $request->query('company') !== 'all'
             ? $request->query('company')
             : ($currentUser->company ?: 'rbs');
 
         $setting = AttendanceSetting::getActiveSetting($targetCompany);
-        $setting->update(array_merge($validated, ['tenant_id' => $targetCompany]));
+
+        $updateData = [
+            'work_start_time' => $validated['work_start_time'],
+            'work_end_time' => $validated['work_end_time'],
+            'late_tolerance_minutes' => $validated['late_tolerance_minutes'],
+            'tenant_id' => $targetCompany,
+        ];
+
+        if ($isSuperAdmin) {
+            $updateData['office_name'] = $validated['office_name'];
+            $updateData['latitude'] = $validated['latitude'];
+            $updateData['longitude'] = $validated['longitude'];
+            $updateData['radius_meters'] = $validated['radius_meters'];
+        }
+
+        $setting->update($updateData);
+
+        // Sinkronisasikan juga ke Master Shift REGULER agar jam masuk & toleransi karyawan otomatis terupdate
+        $regulerShifts = \App\Models\Shift::where(function ($q) use ($targetCompany) {
+            $q->where('company', $targetCompany)
+              ->orWhere('company', 'all');
+        })
+            ->where('code', 'REGULER')
+            ->get();
+
+        foreach ($regulerShifts as $regulerShift) {
+            $regulerShift->update([
+                'start_time' => $validated['work_start_time'],
+                'end_time' => $validated['work_end_time'],
+                'late_tolerance_minutes' => $validated['late_tolerance_minutes'],
+            ]);
+        }
 
         // POINT 10: Sinkronisasikan langsung ke master lokasi sebagai 'headquarters'
         $hqLocation = AttendanceSetting::syncHeadquartersLocation($setting);
@@ -507,7 +546,7 @@ class AdminAttendanceController extends Controller
         ActivityLog::record(
             action: 'UPDATE_HEADQUARTERS_SETTING',
             module: 'attendance',
-            description: "Super Admin memperbarui konfigurasi lokasi Kantor Pusat '{$setting->office_name}' ({$targetCompany}) (Radius: {$setting->radius_meters}m, Jam Kerja: {$setting->work_start_time} - {$setting->work_end_time})",
+            description: "Admin memperbarui jam kerja baku ({$setting->work_start_time} - {$setting->work_end_time}, toleransi {$setting->late_tolerance_minutes}m) untuk {$targetCompany}",
             details: array_merge($validated, [
                 'headquarters_location_id' => $hqLocation->id,
             ]),
@@ -516,9 +555,10 @@ class AdminAttendanceController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Pengaturan lokasi Kantor Pusat & radius absensi berhasil disimpan oleh Super Admin.',
+            'message' => 'Pengaturan jam kerja baku & toleransi keterlambatan berhasil disimpan.',
             'data' => array_merge($setting->fresh()->toArray(), [
                 'can_edit' => true,
+                'can_edit_location' => $isSuperAdmin,
                 'headquarters_location_id' => $hqLocation->id,
             ]),
         ]);

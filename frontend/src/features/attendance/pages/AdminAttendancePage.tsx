@@ -3904,45 +3904,51 @@ export const AdminAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: PENGATURAN RADIUS KANTOR PUSAT & JAM KERJA (POINT 10: SUPER ADMIN ONLY) */}
+      {/* TAB 3: PENGATURAN RADIUS KANTOR PUSAT & JAM KERJA BAKU */}
       {activeTab === 'settings' && (
         <div className="bg-surface-panel border border-border-subtle rounded-2xl p-6 shadow-xs max-w-4xl mx-auto space-y-6">
           <div className="pb-4 border-b border-border-subtle">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
                 <Compass className="w-5 h-5 text-primary" />
-                <span>Konfigurasi Kantor Pusat & Jam Kerja Baku</span>
+                <span>Konfigurasi Jam Kerja Baku & Kebijakan Presensi</span>
               </h2>
               <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase tracking-wider ${
                 isSuperAdmin
                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                  : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  : 'bg-blue-100 text-blue-800 border border-blue-200'
               }`}>
-                {isSuperAdmin ? 'Akses Super Admin (Full Edit)' : 'Mode Hanya-Baca (Admin)'}
+                {isSuperAdmin ? 'Akses Super Admin (Full Edit)' : 'Akses Admin (Edit Jam Kerja Baku)'}
               </span>
             </div>
             <p className="text-xs text-text-muted mt-1">
-              Titik patokan Kantor Pusat ini dibuat/ditetapkan oleh Super Admin sebagai lokasi wajib presensi seluruh Admin (Point 10).
+              Pengaturan jam masuk awal, jam pulang, toleransi keterlambatan untuk seluruh karyawan/admin, serta patokan Kantor Pusat.
             </p>
           </div>
 
-          {/* Warning Banner jika bukan Super Admin */}
-          {!isSuperAdmin && (
-            <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/90 flex items-start gap-3 text-amber-900 text-xs">
-              <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-bold text-[13px] text-amber-800 flex items-center gap-2">
-                  <span>Pengaturan Kantor Pusat Dikelola Eksklusif oleh Super Admin</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-200/80 text-amber-900 font-bold uppercase">
-                    Read-Only
-                  </span>
-                </div>
-                <p className="mt-1 leading-relaxed text-amber-800/90">
-                  Sesuai kebijakan sistem (Point 10), seluruh akun Admin diwajibkan melakukan presensi di Kantor Pusat ini. Pengaturan koordinat GPS dan batas radius Kantor Pusat hanya dapat diubah oleh akun <strong>Super Admin</strong> untuk menjamin kepatuhan lokasi kerja.
-                </p>
+          {/* Panduan Jelas Pengaturan Jam Masuk & Toleransi Karyawan */}
+          <div className="p-4 rounded-xl border border-blue-200/80 bg-blue-50/90 flex items-start gap-3 text-blue-900 text-xs">
+            <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div className="space-y-1.5 flex-1">
+              <div className="font-bold text-[13px] text-blue-950 flex items-center justify-between flex-wrap gap-2">
+                <span>Panduan Letak Pengaturan Jam Masuk & Toleransi Karyawan / User</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('shifts')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] shadow-2xs transition-all cursor-pointer"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Buka Tab Pengaturan Shift ({shifts.length})</span>
+                </button>
               </div>
+              <p className="leading-relaxed text-blue-900/90">
+                <strong>1. Jam Kerja Baku (Form Bagian 1 di bawah):</strong> Mengatur jam masuk standar perusahaan ({settings?.work_start_time || '08:00'} - {settings?.work_end_time || '17:00'}) dan batas toleransi keterlambatan ({settings?.late_tolerance_minutes || 15} Menit). Pengaturan ini otomatis menjadi patokan standar bagi seluruh Karyawan, User, dan Admin yang menggunakan jadwal reguler.
+              </p>
+              <p className="leading-relaxed text-blue-900/90">
+                <strong>2. Jam Kerja Fleksibel / Khusus Unit Sekolah:</strong> Jika karyawan di unit sekolah atau divisi tertentu memiliki jam masuk/shift yang berbeda-beda, silakan gunakan tab <strong>Pengaturan Shift</strong> untuk membuat shift baru (Shift Pagi, Shift Siang, Shift Malam, dll.) dan menugaskannya ke karyawan atau unit sekolah secara massal.
+              </p>
             </div>
-          )}
+          </div>
 
           {settingsLoading || !settings ? (
             <div className="py-12 text-center text-text-muted text-xs">
@@ -3950,170 +3956,242 @@ export const AdminAttendancePage: React.FC = () => {
             </div>
           ) : (
             <form onSubmit={handleSaveSettings} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Nama Kantor */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Nama Kantor Pusat / Default
-                  </label>
-                  <div className="relative">
-                    <Building className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      disabled={!isSuperAdmin}
-                      value={settings.office_name}
-                      onChange={(e) => setSettings({ ...settings, office_name: e.target.value })}
-                      placeholder="Contoh: Kantor Pusat RBS / Riama Mandiri"
-                      className="w-full pl-9 pr-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
-                    />
+              {/* SECTION 1: JAM KERJA BAKU & TOLERANSI KARYAWAN (BISA DIEDIT ADMIN & SUPER ADMIN) */}
+              <div className="bg-surface-container/60 border border-border-subtle rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2 pb-3 border-b border-border-subtle">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-text-primary">
+                      1. Jam Awal Masuk Baku & Toleransi Keterlambatan Karyawan / User
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Berlaku untuk seluruh karyawan dan admin yang menggunakan jadwal standar perusahaan.
+                    </p>
                   </div>
                 </div>
 
-                {/* Latitude */}
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Latitude Kantor Pusat
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    disabled={!isSuperAdmin}
-                    value={settings.latitude}
-                    onChange={(e) => setSettings({ ...settings, latitude: parseFloat(e.target.value) || 0 })}
-                    placeholder="-6.2088000"
-                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
-                  />
-                </div>
-
-                {/* Longitude */}
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Longitude Kantor Pusat
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    disabled={!isSuperAdmin}
-                    value={settings.longitude}
-                    onChange={(e) => setSettings({ ...settings, longitude: parseFloat(e.target.value) || 0 })}
-                    placeholder="106.8456000"
-                    className="w-full px-3 py-2 text-xs font-mono bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
-                  />
-                </div>
-
-                {/* Tombol Ambil Lokasi Super Admin Saat Ini */}
-                {isSuperAdmin && (
-                  <div className="md:col-span-2">
-                    <button
-                      type="button"
-                      onClick={handleUseCurrentLocation}
-                      disabled={gpsDetecting}
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all cursor-pointer"
-                    >
-                      <Crosshair className={`w-3.5 h-3.5 ${gpsDetecting ? 'animate-spin' : ''}`} />
-                      <span>{gpsDetecting ? 'Mengambil GPS...' : 'Gunakan Koordinat GPS Super Admin Saat Ini'}</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Radius Meter */}
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Batas Radius Presensi Admin (Meter)
-                  </label>
-                  <div className="relative">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Jam Masuk Baku */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-primary mb-1.5 flex items-center gap-1.5">
+                      <span>Jam Masuk Baku</span>
+                      <span className="text-[10px] text-primary font-bold">(Awal Masuk)</span>
+                    </label>
                     <input
-                      type="number"
-                      min={10}
-                      max={10000}
+                      type="time"
                       required
-                      disabled={!isSuperAdmin}
-                      value={settings.radius_meters}
-                      onChange={(e) => setSettings({ ...settings, radius_meters: parseInt(e.target.value) || 50 })}
-                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
+                      value={settings.work_start_time}
+                      onChange={(e) => setSettings({ ...settings, work_start_time: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text-muted font-medium">
-                      Meter
+                    <span className="text-[10.5px] text-text-muted mt-1 block">
+                      Waktu karyawan mulai jam kerja operasional.
                     </span>
                   </div>
-                  <span className="text-[11px] text-text-muted mt-1 block">
-                    Batas toleransi radius presensi wajib bagi seluruh akun Admin di Kantor Pusat.
+
+                  {/* Jam Pulang Baku */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-primary mb-1.5">
+                      Jam Pulang Baku
+                    </label>
+                    <input
+                      type="time"
+                      required
+                      value={settings.work_end_time}
+                      onChange={(e) => setSettings({ ...settings, work_end_time: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <span className="text-[10.5px] text-text-muted mt-1 block">
+                      Batas akhir jam operasional harian.
+                    </span>
+                  </div>
+
+                  {/* Toleransi Menit Terlambat */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-primary mb-1.5 flex items-center gap-1.5">
+                      <span>Toleransi Keterlambatan</span>
+                      <span className="text-[10px] text-amber-600 font-bold">*Toleransi</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        max={120}
+                        required
+                        value={settings.late_tolerance_minutes}
+                        onChange={(e) => setSettings({ ...settings, late_tolerance_minutes: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text-muted font-medium">
+                        Menit
+                      </span>
+                    </div>
+                    <span className="text-[10.5px] text-text-muted mt-1 block">
+                      Batas menit lewat dari jam masuk sebelum status dicatat Terlambat.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[11.5px] text-emerald-800 bg-emerald-50/80 rounded-xl px-3.5 py-2.5 border border-emerald-200 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    Jika karyawan masuk pada jam <strong>{settings.work_start_time}</strong> dengan toleransi <strong>{settings.late_tolerance_minutes} menit</strong>, karyawan yang absen lewat dari pukul <strong>{(() => {
+                      try {
+                        const [h, m] = (settings.work_start_time || '08:00').split(':').map(Number);
+                        const total = h * 60 + m + (settings.late_tolerance_minutes || 0);
+                        const endH = Math.floor(total / 60) % 24;
+                        const endM = total % 60;
+                        return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+                      } catch {
+                        return '08:15';
+                      }
+                    })()}</strong> akan otomatis berstatus <strong>Terlambat</strong>.
                   </span>
-                </div>
-
-                {/* Toleransi Menit Terlambat */}
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Toleransi Keterlambatan (Menit)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min={0}
-                      max={120}
-                      required
-                      disabled={!isSuperAdmin}
-                      value={settings.late_tolerance_minutes}
-                      onChange={(e) => setSettings({ ...settings, late_tolerance_minutes: parseInt(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text-muted font-medium">
-                      Menit
-                    </span>
-                  </div>
-                </div>
-
-                {/* Jam Masuk Kerja */}
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Jam Masuk Baku
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    disabled={!isSuperAdmin}
-                    value={settings.work_start_time}
-                    onChange={(e) => setSettings({ ...settings, work_start_time: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
-                  />
-                </div>
-
-                {/* Jam Pulang Kerja */}
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1.5">
-                    Jam Pulang Baku
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    disabled={!isSuperAdmin}
-                    value={settings.work_end_time}
-                    onChange={(e) => setSettings({ ...settings, work_end_time: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
-                  />
                 </div>
               </div>
 
-              {/* Submit Button */}
-              <div className="pt-4 flex justify-end">
-                {isSuperAdmin ? (
-                  <button
-                    type="submit"
-                    disabled={settingsSaving}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>{settingsSaving ? 'Menyimpan...' : 'Simpan Pengaturan Kantor Pusat'}</span>
-                  </button>
-                ) : (
-                  <div className="text-xs font-medium text-text-muted italic flex items-center gap-1.5 bg-surface-container px-3 py-2 rounded-xl border border-border-subtle">
-                    <ShieldAlert className="w-4 h-4 text-amber-600" />
-                    <span>Hanya akun Super Admin yang berwenang menyimpan konfigurasi Kantor Pusat.</span>
+              {/* SECTION 2: TITIK KOORDINAT GPS & RADIUS KANTOR PUSAT (POINT 10: SUPER ADMIN ONLY) */}
+              <div className="bg-surface-container/60 border border-border-subtle rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-border-subtle">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600/10 flex items-center justify-center">
+                      <Building className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-text-primary">
+                        2. Titik Patokan GPS Kantor Pusat (Wajib Presensi Admin - Point 10)
+                      </h3>
+                      <p className="text-[11px] text-text-muted">
+                        Titik lokasi Kantor Pusat ini digunakan khusus untuk mengunci kehadiran akun Admin.
+                      </p>
+                    </div>
                   </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    isSuperAdmin
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  }`}>
+                    {isSuperAdmin ? 'Super Admin Edit' : 'Dikelola Super Admin (Read-Only)'}
+                  </span>
+                </div>
+
+                {!isSuperAdmin && (
+                  <p className="text-[11.5px] text-amber-800 bg-amber-50/80 rounded-xl px-3 py-2 border border-amber-200 flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      Sesuai Point 10, titik koordinat GPS dan batas radius Kantor Pusat dikunci oleh <strong>Super Admin</strong> agar presensi akun Admin terjaga kepatuhannya.
+                    </span>
+                  </p>
                 )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Nama Kantor */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-text-primary mb-1.5">
+                      Nama Kantor Pusat / Default
+                    </label>
+                    <div className="relative">
+                      <Building className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        disabled={!isSuperAdmin}
+                        value={settings.office_name}
+                        onChange={(e) => setSettings({ ...settings, office_name: e.target.value })}
+                        placeholder="Contoh: Kantor Pusat RBS / Riama Mandiri"
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Latitude */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-primary mb-1.5">
+                      Latitude Kantor Pusat
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      disabled={!isSuperAdmin}
+                      value={settings.latitude}
+                      onChange={(e) => setSettings({ ...settings, latitude: parseFloat(e.target.value) || 0 })}
+                      placeholder="-6.2088000"
+                      className="w-full px-3 py-2 text-xs font-mono bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
+                    />
+                  </div>
+
+                  {/* Longitude */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-primary mb-1.5">
+                      Longitude Kantor Pusat
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      disabled={!isSuperAdmin}
+                      value={settings.longitude}
+                      onChange={(e) => setSettings({ ...settings, longitude: parseFloat(e.target.value) || 0 })}
+                      placeholder="106.8456000"
+                      className="w-full px-3 py-2 text-xs font-mono bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
+                    />
+                  </div>
+
+                  {/* Tombol Ambil Lokasi Super Admin Saat Ini */}
+                  {isSuperAdmin && (
+                    <div className="md:col-span-2">
+                      <button
+                        type="button"
+                        onClick={handleUseCurrentLocation}
+                        disabled={gpsDetecting}
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all cursor-pointer"
+                      >
+                        <Crosshair className={`w-3.5 h-3.5 ${gpsDetecting ? 'animate-spin' : ''}`} />
+                        <span>{gpsDetecting ? 'Mengambil GPS...' : 'Gunakan Koordinat GPS Super Admin Saat Ini'}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Radius Meter */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-text-primary mb-1.5">
+                      Batas Radius Presensi Admin di Kantor Pusat (Meter)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={10}
+                        max={10000}
+                        required
+                        disabled={!isSuperAdmin}
+                        value={settings.radius_meters}
+                        onChange={(e) => setSettings({ ...settings, radius_meters: parseInt(e.target.value) || 50 })}
+                        className="w-full px-3 py-2 text-xs bg-surface-panel border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-75 disabled:cursor-not-allowed"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-text-muted font-medium">
+                        Meter
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button (Aktif untuk Admin dan Super Admin) */}
+              <div className="pt-2 flex items-center justify-between flex-wrap gap-3">
+                <span className="text-[11.5px] text-text-muted">
+                  Perubahan jam masuk dan toleransi akan otomatis tersinkronisasi ke seluruh karyawan dan shift Reguler.
+                </span>
+                <button
+                  type="submit"
+                  disabled={settingsSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{settingsSaving ? 'Menyimpan...' : 'Simpan Pengaturan Jam Kerja & Kebijakan'}</span>
+                </button>
               </div>
             </form>
           )}

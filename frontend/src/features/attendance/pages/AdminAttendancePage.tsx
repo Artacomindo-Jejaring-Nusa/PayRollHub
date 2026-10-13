@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Clock,
   MapPin,
@@ -69,10 +69,31 @@ export const AdminAttendancePage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
+  // Pagination State Presensi Detail (Log Detail)
+  const [attendancePage, setAttendancePage] = useState<number>(1);
+  const [attendancePerPage, setAttendancePerPage] = useState<number>(25);
+  const [attendanceMeta, setAttendanceMeta] = useState<{
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+  }>({
+    current_page: 1,
+    last_page: 1,
+    per_page: 25,
+    total: 0,
+    from: 0,
+    to: 0,
+  });
+
   // Point 6: Rekapitulasi per Karyawan (SP 1-9)
   const [recapViewMode, setRecapViewMode] = useState<'detail' | 'employee_recap'>('detail');
   const [employeeRecapData, setEmployeeRecapData] = useState<EmployeeRecapItem[]>([]);
   const [employeeRecapLoading, setEmployeeRecapLoading] = useState<boolean>(false);
+  const [employeeRecapPage, setEmployeeRecapPage] = useState<number>(1);
+  const [employeeRecapPerPage, setEmployeeRecapPerPage] = useState<number>(25);
 
   // Point 13: Pemilihan Karyawan untuk Laporan Absensi Berdasarkan SP
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
@@ -232,6 +253,8 @@ export const AdminAttendancePage: React.FC = () => {
       const params: any = {
         status: statusFilter,
         search: searchQuery || undefined,
+        page: attendancePage,
+        per_page: attendancePerPage,
       };
       if (filterType === 'sp') {
         params.sp_period = selectedSp;
@@ -247,7 +270,28 @@ export const AdminAttendancePage: React.FC = () => {
         ),
       ]);
       if (listRes.status === 'fulfilled') {
-        setAttendances(listRes.value?.data || []);
+        const val = listRes.value;
+        const items = Array.isArray(val) ? val : (val?.data || []);
+        setAttendances(items);
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+          setAttendanceMeta({
+            current_page: val.current_page || attendancePage,
+            last_page: val.last_page || 1,
+            per_page: val.per_page || attendancePerPage,
+            total: val.total ?? items.length,
+            from: val.from ?? (items.length > 0 ? (attendancePage - 1) * attendancePerPage + 1 : 0),
+            to: val.to ?? (items.length > 0 ? (attendancePage - 1) * attendancePerPage + items.length : 0),
+          });
+        } else {
+          setAttendanceMeta({
+            current_page: 1,
+            last_page: 1,
+            per_page: items.length || attendancePerPage,
+            total: items.length,
+            from: items.length > 0 ? 1 : 0,
+            to: items.length,
+          });
+        }
       }
       if (sumRes.status === 'fulfilled') {
         setSummary(sumRes.value);
@@ -257,7 +301,16 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  }, [filterType, selectedSp, selectedDate, statusFilter, searchQuery, attendancePage, attendancePerPage]);
+
+  // Reset page to 1 on filter changes
+  useEffect(() => {
+    setAttendancePage(1);
   }, [filterType, selectedSp, selectedDate, statusFilter, searchQuery]);
+
+  useEffect(() => {
+    setEmployeeRecapPage(1);
+  }, [selectedSp, searchQuery]);
 
   // Point 6: Rekapitulasi Presensi per Karyawan
   const fetchEmployeeRecap = useCallback(async () => {
@@ -274,6 +327,11 @@ export const AdminAttendancePage: React.FC = () => {
       setEmployeeRecapLoading(false);
     }
   }, [selectedSp, searchQuery]);
+
+  const paginatedEmployeeRecap = useMemo(() => {
+    const start = (employeeRecapPage - 1) * employeeRecapPerPage;
+    return employeeRecapData.slice(start, start + employeeRecapPerPage);
+  }, [employeeRecapData, employeeRecapPage, employeeRecapPerPage]);
 
   useEffect(() => {
     if (activeTab === 'recap') {
@@ -1368,6 +1426,18 @@ export const AdminAttendancePage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination Controls Log Detail */}
+              <Pagination
+                meta={attendanceMeta as any}
+                onPageChange={(page) => setAttendancePage(page)}
+                perPage={attendancePerPage}
+                onPerPageChange={(newPerPage) => {
+                  setAttendancePerPage(newPerPage);
+                  setAttendancePage(1);
+                }}
+                isLoading={loading}
+              />
             </div>
           )}
 
@@ -1433,8 +1503,9 @@ export const AdminAttendancePage: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      employeeRecapData.map((emp, idx) => {
+                      paginatedEmployeeRecap.map((emp, idx) => {
                         const isRowSelected = selectedEmployeeIds.includes(emp.user_id);
+                        const rowNumber = (employeeRecapPage - 1) * employeeRecapPerPage + idx + 1;
                         return (
                           <tr key={emp.user_id} className={`hover:bg-surface-container/20 transition-colors ${isRowSelected ? 'bg-primary/5' : ''}`}>
                             <td className="py-3 px-3 text-center">
@@ -1446,7 +1517,7 @@ export const AdminAttendancePage: React.FC = () => {
                                 title={`Pilih ${emp.name} untuk laporan SP`}
                               />
                             </td>
-                            <td className="py-3 px-3 text-center text-text-muted font-mono">{idx + 1}</td>
+                            <td className="py-3 px-3 text-center text-text-muted font-mono">{rowNumber}</td>
                           <td className="py-3 px-4">
                             <div className="font-semibold text-text-primary">{emp.name}</div>
                             <div className="text-[11px] text-text-muted font-mono">
@@ -1510,6 +1581,25 @@ export const AdminAttendancePage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination Controls Rekap per Karyawan */}
+              <Pagination
+                meta={{
+                  current_page: employeeRecapPage,
+                  last_page: Math.ceil(employeeRecapData.length / employeeRecapPerPage) || 1,
+                  per_page: employeeRecapPerPage,
+                  total: employeeRecapData.length,
+                  from: employeeRecapData.length > 0 ? (employeeRecapPage - 1) * employeeRecapPerPage + 1 : 0,
+                  to: Math.min(employeeRecapPage * employeeRecapPerPage, employeeRecapData.length),
+                } as any}
+                onPageChange={(page) => setEmployeeRecapPage(page)}
+                perPage={employeeRecapPerPage}
+                onPerPageChange={(newPerPage) => {
+                  setEmployeeRecapPerPage(newPerPage);
+                  setEmployeeRecapPage(1);
+                }}
+                isLoading={employeeRecapLoading}
+              />
             </div>
           )}
         </div>

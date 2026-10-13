@@ -23,17 +23,23 @@ export function formatPeriod(period: string | undefined): string {
     return '-';
   }
   const clean = period.trim();
-  if (/^SP\s*\d+/i.test(clean)) {
-    return clean;
+  const monthNames = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  ];
+
+  const spMatch = clean.match(/^SP\s*(\d+)$/i);
+  if (spMatch) {
+    const monthNum = parseInt(spMatch[1], 10);
+    const mName = monthNames[monthNum - 1];
+    return mName ? `${mName} 2026 (SP ${monthNum})` : clean;
   }
-  if (/^\d{4}-\d{2}$/.test(clean)) {
+
+  if (/^(\d{4})-(\d{2})$/.test(clean)) {
     const [year, month] = clean.split('-');
-    const monthNames = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-    ];
     const mIndex = parseInt(month, 10) - 1;
-    return `${monthNames[mIndex] || month} ${year}`;
+    const mName = monthNames[mIndex] || month;
+    return `${mName} ${year} (SP ${parseInt(month, 10)})`;
   }
   return clean;
 }

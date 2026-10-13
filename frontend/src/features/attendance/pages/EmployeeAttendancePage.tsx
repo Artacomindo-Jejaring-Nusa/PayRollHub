@@ -526,7 +526,7 @@ export const EmployeeAttendancePage: React.FC = () => {
             }}
             className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
               attendanceMode === 'masuk'
-                ? 'bg-primary text-primary-foreground shadow-xs'
+                ? 'bg-primary text-white shadow-xs'
                 : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
             }`}
           >

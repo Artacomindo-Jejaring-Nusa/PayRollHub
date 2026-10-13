@@ -277,11 +277,14 @@ class PayrollService
                 $user = User::where('nik', $nik)->where('company', $company)->first();
             }
 
-            // 2. Jika belum ada NIK, coba cari berdasarkan email default di perusahaan yang sama
+            // 2. Jika belum ada NIK, buat email unik dengan prefix slug + company
             $defaultDomain = $company === 'rimamandiri' ? 'riamamandiripratama.com' : 'rimbunbuanasejahtera.com';
-            $defaultEmail = !empty($nik)
-                ? "{$nik}@{$defaultDomain}"
-                : Str::slug($name) . '@karyawan.local';
+            if (!empty($nik)) {
+                $defaultEmail = "{$nik}@{$defaultDomain}";
+            } else {
+                $baseSlug = Str::slug($name) ?: 'karyawan';
+                $defaultEmail = "{$baseSlug}-{$company}@karyawan.local";
+            }
 
             if (!$user) {
                 $user = User::where('email', $defaultEmail)->where('company', $company)->first();
@@ -317,13 +320,20 @@ class PayrollService
                 return $user;
             }
 
-            // 3. Jika belum ada akun sama sekali: Buatkan akun login baru otomatis!
+            // 3. Jika belum ada akun sama sekali: pastikan email 100% unik di tabel users (bebas collision)
+            $finalEmail = $defaultEmail;
+            $counter = 1;
+            while (User::where('email', $finalEmail)->exists()) {
+                $counter++;
+                $finalEmail = str_replace('@', "-{$counter}@", $defaultEmail);
+            }
+
             // Default password: NIK (atau 'password123' jika NIK kosong)
             $defaultPassword = !empty($nik) ? $nik : 'password123';
 
             return User::create([
                 'name' => $name,
-                'email' => $defaultEmail,
+                'email' => $finalEmail,
                 'nik' => !empty($nik) ? $nik : null,
                 'school_unit' => !empty($schoolUnit) ? $schoolUnit : null,
                 'company' => $company,
@@ -336,7 +346,11 @@ class PayrollService
                 'password' => Hash::make($defaultPassword),
             ]);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning("Gagal auto-provision user untuk karyawan {$payroll->employee_name}: " . $e->getMessage());
+            try {
+                \Illuminate\Support\Facades\Log::warning("Gagal auto-provision user untuk karyawan {$payroll->employee_name}: " . $e->getMessage());
+            } catch (\Throwable $logEx) {
+                // Ignore log write failure
+            }
             return null;
         }
     }

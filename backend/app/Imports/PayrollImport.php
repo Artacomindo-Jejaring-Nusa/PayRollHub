@@ -668,11 +668,15 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
                     }
                 } catch (\Throwable $e) {
                     $this->errors[] = "Baris {$rowIndex} ({$name}): Gagal menyimpan ke database - " . $e->getMessage();
-                    \Illuminate\Support\Facades\Log::error("Import payroll error baris {$rowIndex} ({$name}): " . $e->getMessage(), [
-                        'row' => $rowIndex,
-                        'name' => $name,
-                        'payrollData' => $payrollData,
-                    ]);
+                    try {
+                        \Illuminate\Support\Facades\Log::error("Import payroll error baris {$rowIndex} ({$name}): " . $e->getMessage(), [
+                            'row' => $rowIndex,
+                            'name' => $name,
+                            'payrollData' => $payrollData,
+                        ]);
+                    } catch (\Throwable $logEx) {
+                        // Suppress log file write error
+                    }
                 }
             }
         }

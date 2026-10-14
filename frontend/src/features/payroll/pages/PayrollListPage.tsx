@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../../store/authStore';
 import { useTenantTheme } from '../../../lib/theme';
 import { payrollService } from '../services/payrollService';
@@ -43,6 +43,7 @@ import {
 
 export const PayrollListPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
   const { tenant } = useTenantTheme();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -63,16 +64,35 @@ export const PayrollListPage: React.FC = () => {
 
   // Filter, Search & Pagination states
   const [search, setSearch] = useState('');
-  const [selectedProvince, setSelectedProvince] = useState('');
-  const [selectedPosition, setSelectedPosition] = useState('');
-  const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [selectedProvince, setSelectedProvince] = useState(searchParams.get('province') || '');
+  const [selectedPosition, setSelectedPosition] = useState(searchParams.get('position') || '');
+  const [selectedPeriod, setSelectedPeriod] = useState(searchParams.get('period') || '');
   const [startPeriod, setStartPeriod] = useState('');
   const [endPeriod, setEndPeriod] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState(searchParams.get('status') || '');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+
+  // Sync state when URL params change (e.g. clicking dashboard cards)
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    if (statusParam !== null && statusParam !== selectedStatus) {
+      setSelectedStatus(statusParam);
+      setPage(1);
+    }
+    const provParam = searchParams.get('province');
+    if (provParam !== null && provParam !== selectedProvince) {
+      setSelectedProvince(provParam);
+      setPage(1);
+    }
+    const periodParam = searchParams.get('period');
+    if (periodParam !== null && periodParam !== selectedPeriod) {
+      setSelectedPeriod(periodParam);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   // New features: Province Settings, Replacements, Duplicate Account Detection, Target SP Periods
   const [isProvinceModalOpen, setIsProvinceModalOpen] = useState(false);

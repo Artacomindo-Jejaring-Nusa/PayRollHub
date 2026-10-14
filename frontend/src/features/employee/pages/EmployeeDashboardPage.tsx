@@ -4,7 +4,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { useTenantTheme } from '../../../lib/theme';
 import { employeeService, EmployeeDashboardData } from '../services/employeeService';
 import { formatCurrency } from '../../../lib/utils';
-import { formatPeriodDisplay } from '../../../lib/period';
+import { formatEmployeePeriod } from '../../../lib/period';
 import { Card } from '../../../components/ui/Card';
 import {
   Wallet,
@@ -148,82 +148,126 @@ export const EmployeeDashboardPage: React.FC = () => {
       {/* ============================================================== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* KPI 1: Take Home Pay */}
-        <Card className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-slate-300 transition-all">
+        <Card
+          onClick={() => navigate('/employee/payrolls')}
+          role="button"
+          tabIndex={0}
+          title="Klik untuk membuka riwayat slip gaji lengkap"
+          className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] font-medium text-text-muted">
+            <span className="text-[12.5px] font-medium text-text-muted group-hover:text-text-primary transition-colors">
               Gaji Bersih Diterima (THP)
             </span>
-            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <Wallet className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none">
+            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none group-hover:text-primary transition-colors">
               {latest ? formatCurrency(latest.take_home_pay) : 'Rp 0'}
             </div>
-            <p className="text-[12px] text-text-muted mt-2.5 truncate">
-              {latest ? `Periode ${formatPeriodDisplay(latest.period)}` : 'Belum ada data'}
-            </p>
+            <div className="flex items-center justify-between gap-1 mt-2.5">
+              <p className="text-[12px] text-text-muted truncate">
+                {latest ? `Periode ${formatEmployeePeriod(latest.period)}` : 'Belum ada data'}
+              </p>
+              <span className="text-[11px] font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                Buka Slip →
+              </span>
+            </div>
           </div>
         </Card>
 
         {/* KPI 2: Gaji Pokok & Tunjangan */}
-        <Card className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-slate-300 transition-all">
+        <Card
+          onClick={() => navigate('/employee/payrolls')}
+          role="button"
+          tabIndex={0}
+          title="Klik untuk melihat rincian komponen gaji di slip"
+          className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] font-medium text-text-muted">
+            <span className="text-[12.5px] font-medium text-text-muted group-hover:text-text-primary transition-colors">
               Gaji Pokok Terdaftar
             </span>
-            <div className="w-9 h-9 rounded-xl bg-surface-container text-text-primary flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-surface-container text-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <FileText className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none">
+            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none group-hover:text-primary transition-colors">
               {latest ? formatCurrency(latest.basic_salary) : 'Rp 0'}
             </div>
-            <p className="text-[12px] text-text-muted mt-2.5 truncate">
-              Tunjangan: +{latest ? formatCurrency(latest.allowance) : 'Rp 0'}
-            </p>
+            <div className="flex items-center justify-between gap-1 mt-2.5">
+              <p className="text-[12px] text-text-muted truncate">
+                Tunjangan: +{latest ? formatCurrency(latest.allowance) : 'Rp 0'}
+              </p>
+              <span className="text-[11px] font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                Rincian →
+              </span>
+            </div>
           </div>
         </Card>
 
         {/* KPI 3: Total Potongan */}
-        <Card className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-slate-300 transition-all">
+        <Card
+          onClick={() => navigate('/employee/payrolls')}
+          role="button"
+          tabIndex={0}
+          title="Klik untuk melihat rincian potongan di slip"
+          className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] font-medium text-text-muted">
+            <span className="text-[12.5px] font-medium text-text-muted group-hover:text-text-primary transition-colors">
               Total Potongan
             </span>
-            <div className="w-9 h-9 rounded-xl bg-surface-container text-text-primary flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-surface-container text-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <Clock className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none">
+            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none group-hover:text-rose-600 transition-colors">
               {latest ? formatCurrency(latest.deduction) : 'Rp 0'}
             </div>
-            <p className="text-[12px] text-text-muted mt-2.5 truncate">
-              BPJS & Potongan Kehadiran
-            </p>
+            <div className="flex items-center justify-between gap-1 mt-2.5">
+              <p className="text-[12px] text-text-muted truncate">
+                BPJS & Potongan Kehadiran
+              </p>
+              <span className="text-[11px] font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                Lihat →
+              </span>
+            </div>
           </div>
         </Card>
 
         {/* KPI 4: Laporan Kerja */}
-        <Card className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-slate-300 transition-all">
+        <Card
+          onClick={() => navigate('/work-reports')}
+          role="button"
+          tabIndex={0}
+          title="Klik untuk mengelola laporan kerja"
+          className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] font-medium text-text-muted">
+            <span className="text-[12.5px] font-medium text-text-muted group-hover:text-text-primary transition-colors">
               Laporan Kerja Anda
             </span>
-            <div className="w-9 h-9 rounded-xl bg-surface-container text-text-primary flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-surface-container text-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <ClipboardList className="w-4.5 h-4.5" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none">
+            <div className="text-[26px] sm:text-[28px] font-bold text-text-primary tracking-tight leading-none group-hover:text-primary transition-colors">
               {reportsSummary.total} Laporan
             </div>
-            <p className="text-[12px] text-text-muted mt-2.5 truncate">
-              {reportsSummary.approved} Disetujui • {reportsSummary.pending} Menunggu
-            </p>
+            <div className="flex items-center justify-between gap-1 mt-2.5">
+              <p className="text-[12px] text-text-muted truncate">
+                {reportsSummary.approved} Disetujui • {reportsSummary.pending} Menunggu
+              </p>
+              <span className="text-[11px] font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                Kelola →
+              </span>
+            </div>
           </div>
         </Card>
       </div>
@@ -242,7 +286,7 @@ export const EmployeeDashboardPage: React.FC = () => {
                 </h2>
                 <p className="text-[12.5px] text-text-muted mt-1">
                   {latest
-                    ? `Periode: ${formatPeriodDisplay(latest.period)}`
+                    ? `Periode: ${formatEmployeePeriod(latest.period)}`
                     : 'Belum ada rekapitulasi gaji'}
                 </p>
               </div>

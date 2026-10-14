@@ -248,6 +248,7 @@ export const attendanceService = {
     month?: string;
     search?: string;
     status?: string;
+    role?: string;
     page?: number;
     per_page?: number;
   }): Promise<any> => {
@@ -255,9 +256,9 @@ export const attendanceService = {
     return response.data.data;
   },
 
-  getAdminSummary: async (date?: string, sp_period?: string): Promise<AttendanceSummary> => {
+  getAdminSummary: async (date?: string, sp_period?: string, role?: string): Promise<AttendanceSummary> => {
     const response = await api.get('/admin/attendances/summary', {
-      params: { date, sp_period },
+      params: { date, sp_period, role },
     });
     return response.data.data;
   },
@@ -266,6 +267,7 @@ export const attendanceService = {
     sp_period?: string;
     search?: string;
     company?: string;
+    role?: string;
   }): Promise<{ sp_period: string; date_range: string[]; items: any[]; total_employees: number }> => {
     const response = await api.get('/admin/attendances/recap-by-employee', { params });
     return response.data.data;
@@ -317,13 +319,14 @@ export const attendanceService = {
     return response.data.data;
   },
 
-  exportCsvUrl: (date?: string, month?: string, sp_period?: string, mode?: 'detail' | 'employee_recap'): string => {
+  exportCsvUrl: (date?: string, month?: string, sp_period?: string, mode?: 'detail' | 'employee_recap', role?: string): string => {
     const baseUrl = api.defaults.baseURL || '/api';
     const params = new URLSearchParams();
     if (date) params.append('date', date);
     if (month) params.append('month', month);
     if (sp_period) params.append('sp_period', sp_period);
     if (mode) params.append('mode', mode);
+    if (role) params.append('role', role);
     return `${baseUrl}/admin/attendances/export?${params.toString()}`;
   },
 
@@ -336,6 +339,7 @@ export const attendanceService = {
     status?: string;
     search?: string;
     company?: string;
+    role?: string;
     user_ids?: number[] | string;
   }): Promise<void> => {
     const queryParams: any = { ...params };

@@ -64,6 +64,7 @@ class AdminAttendanceController extends Controller
         $month = $request->query('month');
         $search = $request->query('search');
         $status = $request->query('status');
+        $role = $request->query('role');
 
         $query = Attendance::with(['user' => function ($q) {
             $q->select('id', 'name', 'email', 'nik', 'company', 'phone', 'role', 'school_unit', 'shift_id')->with('shift');
@@ -76,6 +77,13 @@ class AdminAttendanceController extends Controller
 
         if ($targetCompany) {
             $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+        }
+
+        // Filter berdasarkan tipe akun / role (admin vs user lapangan)
+        if ($role === 'admin') {
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
+        } elseif ($role === 'user' || $role === 'karyawan') {
+            $query->whereHas('user', fn ($u) => $u->where('role', 'user'));
         }
 
         // Filter rentang: SP Periode > Spesifik Tanggal > Bulan
@@ -132,13 +140,23 @@ class AdminAttendanceController extends Controller
         $currentUser = $request->user();
         $date = $request->query('date', Carbon::today('Asia/Jakarta')->toDateString());
         $spPeriod = $request->query('sp_period') ?: $request->query('sp');
+        $role = $request->query('role');
 
         $targetCompany = $currentUser->isSuperAdmin()
             ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
             : ($currentUser->company ?: 'rbs');
 
-        $usersQuery = User::whereNotIn('role', ['admin', 'super_admin']);
+        $usersQuery = User::query();
         $attendanceQuery = Attendance::query();
+
+        // Dukungan filter role untuk Admin vs Karyawan
+        if ($role === 'admin') {
+            $usersQuery->whereIn('role', ['admin', 'super_admin']);
+            $attendanceQuery->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
+        } elseif ($role === 'user' || $role === 'karyawan') {
+            $usersQuery->where('role', 'user');
+            $attendanceQuery->whereHas('user', fn ($u) => $u->where('role', 'user'));
+        }
 
         if ($targetCompany) {
             $usersQuery->where('company', $targetCompany);
@@ -212,6 +230,7 @@ class AdminAttendanceController extends Controller
         ];
 
         $search = $request->query('search');
+        $role = $request->query('role');
         $rawUserIds = $request->query('user_ids') ?: $request->input('user_ids');
         $selectedUserIds = [];
         if ($rawUserIds) {
@@ -219,7 +238,13 @@ class AdminAttendanceController extends Controller
             $selectedUserIds = array_filter(array_map('intval', $selectedUserIds));
         }
 
-        $usersQuery = User::whereNotIn('role', ['admin', 'super_admin']);
+        $usersQuery = User::query();
+        if ($role === 'admin') {
+            $usersQuery->whereIn('role', ['admin', 'super_admin']);
+        } elseif ($role === 'user' || $role === 'karyawan') {
+            $usersQuery->where('role', 'user');
+        }
+
         if ($targetCompany) {
             $usersQuery->where('company', $targetCompany);
         }
@@ -273,6 +298,7 @@ class AdminAttendanceController extends Controller
                 'name' => $user->name,
                 'nik' => $user->nik,
                 'email' => $user->email,
+                'role' => $user->role,
                 'company' => $user->company,
                 'position' => $user->position,
                 'school_unit' => $user->school_unit,
@@ -585,6 +611,7 @@ class AdminAttendanceController extends Controller
         $spPeriod = $request->query('sp_period') ?: $request->query('sp');
         $month = $request->query('month');
         $status = $request->query('status');
+        $role = $request->query('role');
         $search = $request->query('search');
         $rawUserIds = $request->query('user_ids') ?: $request->input('user_ids');
         $selectedUserIds = [];
@@ -612,7 +639,12 @@ class AdminAttendanceController extends Controller
                 Carbon::today('Asia/Jakarta')->endOfMonth()->toDateString(),
             ]));
 
-            $usersQuery = User::whereNotIn('role', ['admin', 'super_admin']);
+            $usersQuery = User::query();
+            if ($role === 'admin') {
+                $usersQuery->whereIn('role', ['admin', 'super_admin']);
+            } elseif ($role === 'user' || $role === 'karyawan') {
+                $usersQuery->where('role', 'user');
+            }
             if ($targetCompany) {
                 $usersQuery->where('company', $targetCompany);
             }
@@ -870,6 +902,12 @@ class AdminAttendanceController extends Controller
 
         if ($targetCompany) {
             $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+        }
+
+        if ($role === 'admin') {
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
+        } elseif ($role === 'user' || $role === 'karyawan') {
+            $query->whereHas('user', fn ($u) => $u->where('role', 'user'));
         }
 
         if (!empty($selectedUserIds)) {

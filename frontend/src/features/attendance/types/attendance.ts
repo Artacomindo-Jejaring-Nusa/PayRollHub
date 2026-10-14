@@ -134,6 +134,7 @@ export interface EmployeeRecapItem {
   name: string;
   nik?: string | null;
   email: string;
+  role?: string | null;
   company?: string | null;
   position?: string | null;
   school_unit?: string | null;

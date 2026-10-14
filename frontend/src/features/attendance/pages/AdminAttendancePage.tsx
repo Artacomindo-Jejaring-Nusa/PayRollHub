@@ -67,6 +67,7 @@ export const AdminAttendancePage: React.FC = () => {
     return new Date().toISOString().split('T')[0];
   });
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
@@ -327,6 +328,7 @@ export const AdminAttendancePage: React.FC = () => {
       setLoading(true);
       const params: any = {
         status: statusFilter,
+        role: roleFilter !== 'all' ? roleFilter : undefined,
         search: searchQuery || undefined,
         page: attendancePage,
         per_page: attendancePerPage,
@@ -341,7 +343,8 @@ export const AdminAttendancePage: React.FC = () => {
         attendanceService.getAdminAttendances(params),
         attendanceService.getAdminSummary(
           filterType === 'daily' ? selectedDate : undefined,
-          filterType === 'sp' ? selectedSp : undefined
+          filterType === 'sp' ? selectedSp : undefined,
+          roleFilter !== 'all' ? roleFilter : undefined
         ),
       ]);
       if (listRes.status === 'fulfilled') {
@@ -376,16 +379,16 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, selectedSp, selectedDate, statusFilter, searchQuery, attendancePage, attendancePerPage]);
+  }, [filterType, selectedSp, selectedDate, statusFilter, roleFilter, searchQuery, attendancePage, attendancePerPage]);
 
   // Reset page to 1 on filter changes
   useEffect(() => {
     setAttendancePage(1);
-  }, [filterType, selectedSp, selectedDate, statusFilter, searchQuery]);
+  }, [filterType, selectedSp, selectedDate, statusFilter, roleFilter, searchQuery]);
 
   useEffect(() => {
     setEmployeeRecapPage(1);
-  }, [selectedSp, searchQuery]);
+  }, [selectedSp, roleFilter, searchQuery]);
 
   // Point 6: Rekapitulasi Presensi per Karyawan
   const fetchEmployeeRecap = useCallback(async () => {
@@ -394,6 +397,7 @@ export const AdminAttendancePage: React.FC = () => {
       const res = await attendanceService.getRecapByEmployee({
         sp_period: selectedSp,
         search: searchQuery || undefined,
+        role: roleFilter !== 'all' ? roleFilter : undefined,
       });
       setEmployeeRecapData(res.items || []);
     } catch (err: any) {
@@ -401,7 +405,7 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setEmployeeRecapLoading(false);
     }
-  }, [selectedSp, searchQuery]);
+  }, [selectedSp, roleFilter, searchQuery]);
 
   const paginatedEmployeeRecap = useMemo(() => {
     const start = (employeeRecapPage - 1) * employeeRecapPerPage;
@@ -1015,6 +1019,7 @@ export const AdminAttendancePage: React.FC = () => {
         sp_period: filterType === 'sp' ? selectedSp : undefined,
         date: filterType === 'daily' ? selectedDate : undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
+        role: roleFilter !== 'all' ? roleFilter : undefined,
         search: searchQuery.trim() || undefined,
         user_ids: selectedEmployeeIds.length > 0 ? selectedEmployeeIds : undefined,
       });
@@ -1441,6 +1446,20 @@ export const AdminAttendancePage: React.FC = () => {
                   </select>
                 </div>
 
+                {/* Role / Tipe Staf Filter */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-text-muted font-medium">Tipe Staf:</span>
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                    className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  >
+                    <option value="all">Semua (Karyawan & Admin)</option>
+                    <option value="admin">👤 Khusus Admin (Kantor Pusat)</option>
+                    <option value="user">👥 Karyawan Lapangan (User)</option>
+                  </select>
+                </div>
+
                 {/* Search Bar */}
                 <div className="relative min-w-[200px]">
                   <Search className="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1607,7 +1626,14 @@ export const AdminAttendancePage: React.FC = () => {
                               />
                             </td>
                             <td className="py-3 px-4">
-                              <div className="font-semibold text-text-primary">{row.user?.name || '-'}</div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-text-primary">{row.user?.name || '-'}</span>
+                                {(row.user?.role === 'admin' || row.user?.role === 'super_admin') && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                    Admin Pusat
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-[11px] text-text-muted font-mono">
                                 NIK: {row.user?.nik || '-'} {row.user?.school_unit ? `• Unit: ${row.user.school_unit}` : ''}
                               </div>
@@ -1873,7 +1899,14 @@ export const AdminAttendancePage: React.FC = () => {
                             </td>
                             <td className="py-3 px-3 text-center text-text-muted font-mono">{rowNumber}</td>
                           <td className="py-3 px-4">
-                            <div className="font-semibold text-text-primary">{emp.name}</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-text-primary">{emp.name}</span>
+                              {(emp.role === 'admin' || emp.role === 'super_admin') && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                  Admin Pusat
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[11px] text-text-muted font-mono">
                               NIK: {emp.nik || '-'} {emp.position ? `• ${emp.position}` : ''}
                             </div>

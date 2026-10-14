@@ -660,11 +660,11 @@ export const PayrollFormPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Surat Pesanan (SP) / Periode & Visibilitas (Poin 17) */}
+              {/* Periode Gaji & Visibilitas */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-semibold text-text">
-                    Surat Pesanan (SP) / Periode Target *
+                    Periode Gaji (Bulan) Target *
                   </label>
                   <button
                     type="button"
@@ -672,7 +672,7 @@ export const PayrollFormPage: React.FC = () => {
                     className="text-[11.5px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Layers className="w-3.5 h-3.5" />
-                    <span>+ Kelola / Tambah Target SP (Poin 17)</span>
+                    <span>+ Kelola / Tambah Periode Target</span>
                   </button>
                 </div>
 

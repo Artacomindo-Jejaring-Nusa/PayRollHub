@@ -262,12 +262,12 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title="Kelola Target Surat Pesanan (SP) & Rentang Periode Gaji"
+        title="Kelola Target & Rentang Periode Gaji"
         description="Admin dapat mengelola periode gaji, mengatur rentang tanggal cut-off absensi, serta menentukan visibilitas di portal karyawan."
         maxWidth="4xl"
       >
         <div className="space-y-6">
-          {/* Form Tambah Target SP / Periode */}
+          {/* Form Tambah Target Periode Kustom */}
           <form
             onSubmit={handleCreate}
             className="p-4 rounded-xl border border-border-subtle bg-surface-container-low space-y-4"
@@ -275,10 +275,10 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-text flex items-center gap-2">
                 <Plus className="w-4 h-4 text-primary" />
-                <span>Tambah Target SP / Periode Kustom</span>
+                <span>Tambah Target Periode Gaji Kustom</span>
               </h4>
               <span className="text-[11px] text-text-muted">
-                Cocok untuk karyawan luar SP (Ambon, Cikarang, dll)
+                Cocok untuk karyawan wilayah kustom (Ambon, Cikarang, dll)
               </span>
             </div>
 
@@ -388,7 +388,7 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
                         : 'bg-white border-border-subtle text-text-muted hover:bg-slate-50'
                     }`}
                   >
-                    📜 Surat Pesanan (SP)
+                    📜 Periode Bulanan
                   </button>
                   <button
                     type="button"
@@ -402,7 +402,7 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
                         : 'bg-white border-border-subtle text-text-muted hover:bg-slate-50'
                     }`}
                   >
-                    📍 Di Luar SP (Kustom)
+                    📍 Periode Kustom
                   </button>
                 </div>
               </div>
@@ -528,11 +528,11 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
                           <td className="py-2.5 px-3">
                             {item.is_sp ? (
                               <span className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                                Surat Pesanan (SP)
+                                Periode Bulanan
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                                Luar SP (Kustom)
+                                Periode Kustom
                               </span>
                             )}
                           </td>

@@ -32,14 +32,21 @@ export function formatPeriod(period: string | undefined): string {
   if (spMatch) {
     const monthNum = parseInt(spMatch[1], 10);
     const mName = monthNames[monthNum - 1];
-    return mName ? `${mName} 2026 (SP ${monthNum})` : clean;
+    return mName ? `${mName} 2026` : clean;
+  }
+
+  const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
+  if (suratPesananMatch) {
+    const monthNum = parseInt(suratPesananMatch[1], 10);
+    const mName = monthNames[monthNum - 1];
+    return mName ? `${mName} 2026` : clean;
   }
 
   if (/^(\d{4})-(\d{2})$/.test(clean)) {
     const [year, month] = clean.split('-');
     const mIndex = parseInt(month, 10) - 1;
     const mName = monthNames[mIndex] || month;
-    return `${mName} ${year} (SP ${parseInt(month, 10)})`;
+    return `${mName} ${year}`;
   }
   return clean;
 }

@@ -157,7 +157,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                       : 'text-text-muted hover:text-text-primary'
                   }`}
                 >
-                  Pilih SP Tertentu
+                  Pilih Bulan
                 </button>
                 <button
                   type="button"
@@ -168,7 +168,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                       : 'text-text-muted hover:text-text-primary'
                   }`}
                 >
-                  Rentang SP
+                  Rentang Bulan
                 </button>
               </div>
             </div>
@@ -188,7 +188,7 @@ export const EmployeePayrollsPage: React.FC = () => {
           {filterMode === 'single' && (
             <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-1">
               <label className="text-[12px] text-text-muted font-medium shrink-0">
-                Pilih Periode Surat Pesanan (SP):
+                Pilih Periode Gaji:
               </label>
               <select
                 value={selectedMonth}

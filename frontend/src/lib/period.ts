@@ -21,33 +21,33 @@ export const MONTH_NAMES: { [key: number]: string } = {
 };
 
 export const SP_PERIOD_LIST: SPPeriodItem[] = [
-  { code: 'SP 1', name: 'Surat Pesanan 1', fullLabel: 'Januari 2026 (SP 1)' },
-  { code: 'SP 2', name: 'Surat Pesanan 2', fullLabel: 'Februari 2026 (SP 2)' },
-  { code: 'SP 3', name: 'Surat Pesanan 3', fullLabel: 'Maret 2026 (SP 3)' },
-  { code: 'SP 4', name: 'Surat Pesanan 4', fullLabel: 'April 2026 (SP 4)' },
-  { code: 'SP 5', name: 'Surat Pesanan 5', fullLabel: 'Mei 2026 (SP 5)' },
-  { code: 'SP 6', name: 'Surat Pesanan 6', fullLabel: 'Juni 2026 (SP 6)' },
-  { code: 'SP 7', name: 'Surat Pesanan 7', fullLabel: 'Juli 2026 (SP 7)' },
-  { code: 'SP 8', name: 'Surat Pesanan 8', fullLabel: 'Agustus 2026 (SP 8)' },
-  { code: 'SP 9', name: 'Surat Pesanan 9', fullLabel: 'September 2026 (SP 9)' },
-  { code: 'SP 10', name: 'Surat Pesanan 10', fullLabel: 'Oktober 2026 (SP 10)' },
-  { code: 'SP 11', name: 'Surat Pesanan 11', fullLabel: 'November 2026 (SP 11)' },
-  { code: 'SP 12', name: 'Surat Pesanan 12', fullLabel: 'Desember 2026 (SP 12)' },
+  { code: 'SP 1', name: 'Januari 2026', fullLabel: 'Januari 2026' },
+  { code: 'SP 2', name: 'Februari 2026', fullLabel: 'Februari 2026' },
+  { code: 'SP 3', name: 'Maret 2026', fullLabel: 'Maret 2026' },
+  { code: 'SP 4', name: 'April 2026', fullLabel: 'April 2026' },
+  { code: 'SP 5', name: 'Mei 2026', fullLabel: 'Mei 2026' },
+  { code: 'SP 6', name: 'Juni 2026', fullLabel: 'Juni 2026' },
+  { code: 'SP 7', name: 'Juli 2026', fullLabel: 'Juli 2026' },
+  { code: 'SP 8', name: 'Agustus 2026', fullLabel: 'Agustus 2026' },
+  { code: 'SP 9', name: 'September 2026', fullLabel: 'September 2026' },
+  { code: 'SP 10', name: 'Oktober 2026', fullLabel: 'Oktober 2026' },
+  { code: 'SP 11', name: 'November 2026', fullLabel: 'November 2026' },
+  { code: 'SP 12', name: 'Desember 2026', fullLabel: 'Desember 2026' },
 ];
 
 export const MONTH_PERIOD_OPTIONS = [
-  { code: 'SP 1', label: 'Januari 2026 (SP 1)' },
-  { code: 'SP 2', label: 'Februari 2026 (SP 2)' },
-  { code: 'SP 3', label: 'Maret 2026 (SP 3)' },
-  { code: 'SP 4', label: 'April 2026 (SP 4)' },
-  { code: 'SP 5', label: 'Mei 2026 (SP 5)' },
-  { code: 'SP 6', label: 'Juni 2026 (SP 6)' },
-  { code: 'SP 7', label: 'Juli 2026 (SP 7)' },
-  { code: 'SP 8', label: 'Agustus 2026 (SP 8)' },
-  { code: 'SP 9', label: 'September 2026 (SP 9)' },
-  { code: 'SP 10', label: 'Oktober 2026 (SP 10)' },
-  { code: 'SP 11', label: 'November 2026 (SP 11)' },
-  { code: 'SP 12', label: 'Desember 2026 (SP 12)' },
+  { code: 'SP 1', label: 'Januari 2026' },
+  { code: 'SP 2', label: 'Februari 2026' },
+  { code: 'SP 3', label: 'Maret 2026' },
+  { code: 'SP 4', label: 'April 2026' },
+  { code: 'SP 5', label: 'Mei 2026' },
+  { code: 'SP 6', label: 'Juni 2026' },
+  { code: 'SP 7', label: 'Juli 2026' },
+  { code: 'SP 8', label: 'Agustus 2026' },
+  { code: 'SP 9', label: 'September 2026' },
+  { code: 'SP 10', label: 'Oktober 2026' },
+  { code: 'SP 11', label: 'November 2026' },
+  { code: 'SP 12', label: 'Desember 2026' },
 ];
 
 export const normalizePeriodToSP = (period?: string | null): string => {
@@ -93,7 +93,7 @@ export const formatPeriodDisplay = (period?: string | null): string => {
   if (spMatch) {
     const num = parseInt(spMatch[1], 10);
     const month = MONTH_NAMES[num];
-    return month ? `${month} 2026 (SP ${num})` : `SP ${num}`;
+    return month ? `${month} 2026` : clean;
   }
 
   // Jika formatnya "Surat Pesanan X"
@@ -101,7 +101,7 @@ export const formatPeriodDisplay = (period?: string | null): string => {
   if (suratPesananMatch) {
     const num = parseInt(suratPesananMatch[1], 10);
     const month = MONTH_NAMES[num];
-    return month ? `${month} 2026 (SP ${num})` : `SP ${num}`;
+    return month ? `${month} 2026` : clean;
   }
 
   // Format tanggal YYYY-MM e.g. "2026-08", "2026-09"
@@ -110,7 +110,7 @@ export const formatPeriodDisplay = (period?: string | null): string => {
     const year = ymMatch[1];
     const monthNum = parseInt(ymMatch[2], 10);
     const month = MONTH_NAMES[monthNum];
-    return month ? `${month} ${year} (SP ${monthNum})` : clean;
+    return month ? `${month} ${year}` : clean;
   }
 
   const match = SP_PERIOD_LIST.find((item) => item.code.toLowerCase() === clean.toLowerCase());

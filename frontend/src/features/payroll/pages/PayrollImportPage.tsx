@@ -409,7 +409,7 @@ export const PayrollImportPage: React.FC = () => {
               <label className="font-semibold text-[13px] text-text-primary flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-primary" />
-                  Target Surat Pesanan (SP) / Periode
+                  Target Periode Gaji (Bulan)
                 </span>
                 <span className="text-[11px] font-normal text-text-muted">Kontrak Kemensos</span>
               </label>
@@ -425,7 +425,7 @@ export const PayrollImportPage: React.FC = () => {
                 ))}
               </select>
               <p className="text-[11.5px] text-text-muted">
-                Baris data tanpa kolom periode otomatis diset ke Surat Pesanan (SP) ini.
+                Baris data tanpa kolom periode otomatis diset ke periode bulan ini.
               </p>
             </div>
 

@@ -229,7 +229,7 @@ export const DashboardOverviewPage: React.FC = () => {
               onChange={(e) => setSelectedPeriod(e.target.value)}
               className="h-9 pl-3 pr-8 bg-surface-panel rounded-lg text-[13px] font-medium text-text-primary border border-border-subtle outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
-              <option value="">Semua Periode</option>
+              <option value="">Semua Periode / SP</option>
               {SP_PERIOD_LIST.map((sp) => (
                 <option key={sp.code} value={sp.code}>
                   {sp.fullLabel}

@@ -292,7 +292,7 @@ export const PayrollListPage: React.FC = () => {
                 leftIcon={<Layers className="w-4 h-4 text-purple-600" />}
                 onClick={() => setIsPeriodModalOpen(true)}
               >
-                Target Periode Gaji
+                Target SP & Periode
               </Button>
               <Button
                 variant="outline"
@@ -419,7 +419,7 @@ export const PayrollListPage: React.FC = () => {
               }}
               className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
             >
-              <option value="">Semua Periode</option>
+              <option value="">Semua SP / Periode</option>
               {Array.from(new Set([
                 ...SP_PERIOD_LIST.map((sp) => sp.code),
                 ...periodOptions,
@@ -456,12 +456,12 @@ export const PayrollListPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Sub-bar: Filter Rentang Periode Gaji */}
+            {/* Sub-bar: Filter Rentang Surat Pesanan (SP) */}
             <div className="pt-2.5 border-t border-border-subtle flex flex-wrap items-center justify-between gap-2.5 text-[12px]">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-text-primary flex items-center gap-1.5 shrink-0">
                   <Calendar className="w-3.5 h-3.5 text-primary" />
-                  <span>Rentang Periode Gaji:</span>
+                  <span>Rentang Surat Pesanan (SP):</span>
                 </span>
 
                 <div className="flex items-center gap-1">

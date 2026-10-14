@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { employeeService } from '../services/employeeService';
 import { PayrollItem } from '../../../types/payroll';
 import { formatCurrency } from '../../../lib/utils';
-import { formatPeriodDisplay, MONTH_PERIOD_OPTIONS, normalizePeriodToSP } from '../../../lib/period';
+import { formatEmployeePeriod, EMPLOYEE_MONTH_OPTIONS, normalizePeriodToSP } from '../../../lib/period';
 import { Card } from '../../../components/ui/Card';
 import {
   FileText,
@@ -196,7 +196,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                 className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer max-w-xs"
               >
                 <option value="">Semua Periode</option>
-                {MONTH_PERIOD_OPTIONS.map((opt) => (
+                {EMPLOYEE_MONTH_OPTIONS.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.label}
                   </option>
@@ -213,7 +213,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                 onChange={(e) => setStartPeriod(e.target.value)}
                 className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer"
               >
-                {MONTH_PERIOD_OPTIONS.map((opt) => (
+                {EMPLOYEE_MONTH_OPTIONS.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.label}
                   </option>
@@ -227,7 +227,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                 onChange={(e) => setEndPeriod(e.target.value)}
                 className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer"
               >
-                {MONTH_PERIOD_OPTIONS.map((opt) => (
+                {EMPLOYEE_MONTH_OPTIONS.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.label}
                   </option>
@@ -284,7 +284,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-[15px] text-text-primary">
-                          Periode: {formatPeriodDisplay(item.period)}
+                          Periode: {formatEmployeePeriod(item.period)}
                         </span>
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${

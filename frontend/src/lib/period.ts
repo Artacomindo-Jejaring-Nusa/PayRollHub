@@ -20,22 +20,30 @@ export const MONTH_NAMES: { [key: number]: string } = {
   12: 'Desember',
 };
 
+// Khusus Admin Dashboard: Menampilkan Surat Pesanan (SP)
 export const SP_PERIOD_LIST: SPPeriodItem[] = [
-  { code: 'SP 1', name: 'Januari 2026', fullLabel: 'Januari 2026' },
-  { code: 'SP 2', name: 'Februari 2026', fullLabel: 'Februari 2026' },
-  { code: 'SP 3', name: 'Maret 2026', fullLabel: 'Maret 2026' },
-  { code: 'SP 4', name: 'April 2026', fullLabel: 'April 2026' },
-  { code: 'SP 5', name: 'Mei 2026', fullLabel: 'Mei 2026' },
-  { code: 'SP 6', name: 'Juni 2026', fullLabel: 'Juni 2026' },
-  { code: 'SP 7', name: 'Juli 2026', fullLabel: 'Juli 2026' },
-  { code: 'SP 8', name: 'Agustus 2026', fullLabel: 'Agustus 2026' },
-  { code: 'SP 9', name: 'September 2026', fullLabel: 'September 2026' },
-  { code: 'SP 10', name: 'Oktober 2026', fullLabel: 'Oktober 2026' },
-  { code: 'SP 11', name: 'November 2026', fullLabel: 'November 2026' },
-  { code: 'SP 12', name: 'Desember 2026', fullLabel: 'Desember 2026' },
+  { code: 'SP 1', name: 'Surat Pesanan 1', fullLabel: 'SP 1 (Surat Pesanan 1)' },
+  { code: 'SP 2', name: 'Surat Pesanan 2', fullLabel: 'SP 2 (Surat Pesanan 2)' },
+  { code: 'SP 3', name: 'Surat Pesanan 3', fullLabel: 'SP 3 (Surat Pesanan 3)' },
+  { code: 'SP 4', name: 'Surat Pesanan 4', fullLabel: 'SP 4 (Surat Pesanan 4)' },
+  { code: 'SP 5', name: 'Surat Pesanan 5', fullLabel: 'SP 5 (Surat Pesanan 5)' },
+  { code: 'SP 6', name: 'Surat Pesanan 6', fullLabel: 'SP 6 (Surat Pesanan 6)' },
+  { code: 'SP 7', name: 'Surat Pesanan 7', fullLabel: 'SP 7 (Surat Pesanan 7)' },
+  { code: 'SP 8', name: 'Surat Pesanan 8', fullLabel: 'SP 8 (Surat Pesanan 8)' },
+  { code: 'SP 9', name: 'Surat Pesanan 9', fullLabel: 'SP 9 (Surat Pesanan 9)' },
+  { code: 'SP 10', name: 'Surat Pesanan 10', fullLabel: 'SP 10 (Surat Pesanan 10)' },
+  { code: 'SP 11', name: 'Surat Pesanan 11', fullLabel: 'SP 11 (Surat Pesanan 11)' },
+  { code: 'SP 12', name: 'Surat Pesanan 12', fullLabel: 'SP 12 (Surat Pesanan 12)' },
 ];
 
-export const MONTH_PERIOD_OPTIONS = [
+// Opsi untuk filter admin
+export const MONTH_PERIOD_OPTIONS = SP_PERIOD_LIST.map((sp) => ({
+  code: sp.code,
+  label: sp.fullLabel,
+}));
+
+// Khusus Tampilan Karyawan / Gaji: Murni nama bulan tanpa kata SP
+export const EMPLOYEE_MONTH_OPTIONS = [
   { code: 'SP 1', label: 'Januari 2026' },
   { code: 'SP 2', label: 'Februari 2026' },
   { code: 'SP 3', label: 'Maret 2026' },
@@ -66,7 +74,7 @@ export const normalizePeriodToSP = (period?: string | null): string => {
   }
 
   // Format tanggal bulan lainnya: "2026-02" -> "SP 2", dst.
-  const ymMatch = clean.match(/^\d{4}-(\d{2})$/);
+  const ymMatch = clean.match(/^(\d{4})-(\d{2})$/);
   if (ymMatch) {
     const monthNum = parseInt(ymMatch[1], 10);
     return `SP ${monthNum}`;
@@ -84,6 +92,43 @@ export const normalizePeriodToSP = (period?: string | null): string => {
   return clean;
 };
 
+/**
+ * Format untuk Portal Karyawan & Slip Gaji:
+ * Murni hanya bulan & tahun (contoh: "September 2026") tanpa kata SP.
+ */
+export const formatEmployeePeriod = (period?: string | null): string => {
+  if (!period) return '-';
+  const clean = period.trim();
+
+  const spMatch = clean.match(/^SP\s*(\d+)$/i);
+  if (spMatch) {
+    const num = parseInt(spMatch[1], 10);
+    const month = MONTH_NAMES[num];
+    return month ? `${month} 2026` : clean;
+  }
+
+  const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
+  if (suratPesananMatch) {
+    const num = parseInt(suratPesananMatch[1], 10);
+    const month = MONTH_NAMES[num];
+    return month ? `${month} 2026` : clean;
+  }
+
+  const ymMatch = clean.match(/^(\d{4})-(\d{2})$/);
+  if (ymMatch) {
+    const year = ymMatch[1];
+    const monthNum = parseInt(ymMatch[2], 10);
+    const month = MONTH_NAMES[monthNum];
+    return month ? `${month} ${year}` : clean;
+  }
+
+  return clean;
+};
+
+/**
+ * Format untuk Admin Dashboard:
+ * Menampilkan Surat Pesanan (SP)
+ */
 export const formatPeriodDisplay = (period?: string | null): string => {
   if (!period) return '-';
   const clean = period.trim();
@@ -92,25 +137,21 @@ export const formatPeriodDisplay = (period?: string | null): string => {
   const spMatch = clean.match(/^SP\s*(\d+)$/i);
   if (spMatch) {
     const num = parseInt(spMatch[1], 10);
-    const month = MONTH_NAMES[num];
-    return month ? `${month} 2026` : clean;
+    return `SP ${num} (Surat Pesanan ${num})`;
   }
 
   // Jika formatnya "Surat Pesanan X"
   const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
   if (suratPesananMatch) {
     const num = parseInt(suratPesananMatch[1], 10);
-    const month = MONTH_NAMES[num];
-    return month ? `${month} 2026` : clean;
+    return `SP ${num} (Surat Pesanan ${num})`;
   }
 
   // Format tanggal YYYY-MM e.g. "2026-08", "2026-09"
   const ymMatch = clean.match(/^(\d{4})-(\d{2})$/);
   if (ymMatch) {
-    const year = ymMatch[1];
     const monthNum = parseInt(ymMatch[2], 10);
-    const month = MONTH_NAMES[monthNum];
-    return month ? `${month} ${year}` : clean;
+    return `SP ${monthNum} (Surat Pesanan ${monthNum})`;
   }
 
   const match = SP_PERIOD_LIST.find((item) => item.code.toLowerCase() === clean.toLowerCase());

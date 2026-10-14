@@ -1400,7 +1400,7 @@ export const AdminAttendancePage: React.FC = () => {
                 {/* Dropdown SP 1 - 9 jika mode SP */}
                 {filterType === 'sp' ? (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-text-muted font-medium">Periode Bulan:</span>
+                    <span className="text-xs text-text-muted font-medium">Surat Pesanan:</span>
                     <select
                       value={selectedSp}
                       onChange={(e) => setSelectedSp(e.target.value)}

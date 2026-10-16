@@ -56,11 +56,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final nik = _nikController.text.trim();
     final password = _passwordController.text;
 
-    final success = await ref.read(authProvider.notifier).login(
-      identifier: nik,
-      password: password,
-      rememberMe: _rememberMe,
-    );
+    final success = await ref
+        .read(authProvider.notifier)
+        .login(identifier: nik, password: password, rememberMe: _rememberMe);
 
     if (!mounted) return;
 
@@ -73,7 +71,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         SnackBar(
           backgroundColor: isRiama ? AppColors.riamaEmerald : AppColors.rbsNavy,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           content: Row(
             children: [
               const Icon(Icons.check_circle_rounded, color: Colors.white),
@@ -95,14 +95,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Multi-tenant routing:
       // Tampilan layout sama persis, warna aksen & identitas otomatis disesuaikan tenant (RBS vs Riama)
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => DashboardScreen(user: user!),
-        ),
+        MaterialPageRoute(builder: (_) => DashboardScreen(user: user!)),
         (route) => false,
       );
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +143,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   child: Form(
                     key: _formKey,
                     child: Column(
@@ -205,12 +205,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFFEF2F2),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFFECACA)),
+                              border: Border.all(
+                                color: const Color(0xFFFECACA),
+                              ),
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  color: AppColors.error,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
@@ -245,7 +251,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             hintText: 'Masukkan NIK (cth: HC-20220814)',
                             prefixIcon: const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 14),
-                              child: Icon(Icons.badge_outlined, color: AppColors.slate400, size: 22),
+                              child: Icon(
+                                Icons.badge_outlined,
+                                color: AppColors.slate400,
+                                size: 22,
+                              ),
                             ),
                           ),
                           validator: (val) {
@@ -277,11 +287,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             hintText: 'Masukkan kata sandi',
                             prefixIcon: const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 14),
-                              child: Icon(Icons.lock_outline_rounded, color: AppColors.slate400, size: 22),
+                              child: Icon(
+                                Icons.lock_outline_rounded,
+                                color: AppColors.slate400,
+                                size: 22,
+                              ),
                             ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
                                 color: AppColors.slate400,
                                 size: 20,
                               ),
@@ -314,7 +330,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               },
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                  horizontal: 2,
+                                ),
                                 child: Row(
                                   children: [
                                     SizedBox(
@@ -323,7 +342,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       child: Checkbox(
                                         value: _rememberMe,
                                         activeColor: AppColors.navy,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            5,
+                                          ),
+                                        ),
                                         onChanged: (val) {
                                           setState(() {
                                             _rememberMe = val ?? false;
@@ -368,7 +391,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   width: 20,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2.5,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                   ),
                                 )
                               : Row(
@@ -383,7 +408,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    const Icon(Icons.arrow_forward_rounded, size: 18),
+                                    const Icon(
+                                      Icons.arrow_forward_rounded,
+                                      size: 18,
+                                    ),
                                   ],
                                 ),
                         ),
@@ -393,7 +421,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         // Footer Information
                         Center(
                           child: Text(
-                            'HC Attendance v${AppConstants.appVersion} • Artacomindo',
+                            'HC Attendance v${AppConstants.appVersion}',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 11,
                               color: AppColors.slate400,

@@ -12,7 +12,9 @@ import {
   Bell,
   User,
   LogOut,
+  MessageSquareWarning,
 } from 'lucide-react';
+import { LiveChatWidget } from '../features/chat/components/LiveChatWidget';
 
 export const EmployeeLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -47,6 +49,11 @@ export const EmployeeLayout: React.FC = () => {
       icon: ClipboardList,
     },
     { label: 'Pengumuman', path: '/employee/announcements', icon: Bell },
+    {
+      label: 'Keluhan',
+      path: '/employee/complaints',
+      icon: MessageSquareWarning,
+    },
     { label: 'Profil Saya', path: '/employee/profile', icon: User },
   ];
 
@@ -153,7 +160,7 @@ export const EmployeeLayout: React.FC = () => {
       {/* ============================================================== */}
       {/* 2. MAIN PAGE CONTENT (Generous Padding & Standard Container)  */}
       {/* ============================================================== */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 pb-24">
         <Outlet />
       </main>
 
@@ -195,6 +202,9 @@ export const EmployeeLayout: React.FC = () => {
           <span>Keluar</span>
         </button>
       </nav>
+
+      {/* Floating Live Chat & AI Bot Widget */}
+      <LiveChatWidget />
     </div>
   );
 };

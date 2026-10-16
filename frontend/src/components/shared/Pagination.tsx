@@ -52,7 +52,7 @@ export const Pagination: React.FC<PaginationProps> = ({
       </div>
 
       {/* Navigation Controls */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 sm:pr-20">
         <Button
           variant="outline"
           size="sm"

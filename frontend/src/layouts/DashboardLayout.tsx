@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../features/auth/services/authService';
-import { useTenantTheme } from '../lib/theme';
+import { useTenantTheme, isValidationSubdomain } from '../lib/theme';
 import { TenantSwitcher } from '../components/shared/TenantSwitcher';
 import { Badge } from '../components/ui/Badge';
 import {
@@ -22,7 +22,10 @@ import {
   CheckCircle2,
   MessageSquareWarning,
   MessageSquarePlus,
+  Sparkles,
+  Headphones,
 } from 'lucide-react';
+import { LiveChatWidget } from '../features/chat/components/LiveChatWidget';
 
 export const DashboardLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -79,6 +82,7 @@ export const DashboardLayout: React.FC = () => {
     userOnly?: boolean;
     badge?: string;
     isHold?: boolean;
+    validationSubdomainOnly?: boolean;
   }
 
   const navItems: NavItem[] = [
@@ -107,6 +111,14 @@ export const DashboardLayout: React.FC = () => {
       adminOnly: false,
     },
     {
+      label: 'Validasi Data',
+      path: '/validasi-data',
+      icon: <Sparkles className="w-4 h-4 text-indigo-500" />,
+      badge: 'AI Hub',
+      adminOnly: true,
+      validationSubdomainOnly: true,
+    },
+    {
       label: 'Laporan Kerja',
       path: '/work-reports',
       icon: <ClipboardList className="w-4 h-4" />,
@@ -131,6 +143,13 @@ export const DashboardLayout: React.FC = () => {
       adminOnly: true, // Untuk Admin & Super Admin melihat rekap feedback dari user
     },
     {
+      label: 'Live Chat CS',
+      path: '/live-chat',
+      icon: <Headphones className="w-4 h-4 text-emerald-500" />,
+      adminOnly: true,
+      badge: 'Live',
+    },
+    {
       label: 'Manajemen Pengguna',
       path: '/users',
       icon: <Users className="w-4 h-4" />,
@@ -153,6 +172,10 @@ export const DashboardLayout: React.FC = () => {
   const visibleNavItems = navItems.filter((item) => {
     // Sembunyikan item yang statusnya di-hold sementara
     if (item.isHold) {
+      return false;
+    }
+    // HANYA tampil jika sedang diakses via subdomain (valid.* / validasi.*)
+    if (item.validationSubdomainOnly && !isValidationSubdomain()) {
       return false;
     }
     if (item.superAdminOnly) {
@@ -233,6 +256,30 @@ export const DashboardLayout: React.FC = () => {
                 <FileSpreadsheet className={`w-4 h-4 shrink-0 ${isItemActive('/payrolls') ? 'text-white' : 'text-text-muted'}`} />
                 <span>Data Penggajian</span>
               </Link>
+
+              {/* 2b. Validasi Data (AI Hub) - Hanya muncul di subdomain */}
+              {isAdmin && isValidationSubdomain() && (
+                <Link
+                  to="/validasi-data"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                    isItemActive('/validasi-data')
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                  }`}
+                >
+                  <Sparkles className={`w-4 h-4 shrink-0 ${isItemActive('/validasi-data') ? 'text-white' : 'text-indigo-500'}`} />
+                  <span>Validasi Data</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                      isItemActive('/validasi-data')
+                        ? 'bg-white/20 text-white'
+                        : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    }`}
+                  >
+                    AI Hub
+                  </span>
+                </Link>
+              )}
 
               {/* 3. Absensi (Dropdown untuk Admin, Link untuk Staf) */}
               {isAdmin ? (
@@ -344,6 +391,30 @@ export const DashboardLayout: React.FC = () => {
                 >
                   <MessageSquarePlus className={`w-4 h-4 shrink-0 ${isItemActive('/feedback') ? 'text-white' : 'text-amber-500'}`} />
                   <span>Feedback</span>
+                </Link>
+              )}
+
+              {/* 5b. Live Chat CS */}
+              {isAdmin && (
+                <Link
+                  to="/live-chat"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                    isItemActive('/live-chat')
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                  }`}
+                >
+                  <Headphones className={`w-4 h-4 shrink-0 ${isItemActive('/live-chat') ? 'text-white' : 'text-emerald-500'}`} />
+                  <span>Live Chat</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                      isItemActive('/live-chat')
+                        ? 'bg-white/20 text-white'
+                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    CS Desk
+                  </span>
                 </Link>
               )}
 
@@ -559,9 +630,12 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 px-3 sm:px-4 lg:px-6 py-4 sm:py-6 w-full max-w-[1780px] 2xl:max-w-[1920px] mx-auto overflow-x-hidden">
+        <main className="flex-1 px-3 sm:px-4 lg:px-6 py-4 sm:py-6 pb-20 w-full max-w-[1780px] 2xl:max-w-[1920px] mx-auto overflow-x-hidden">
           <Outlet />
         </main>
+
+        {/* Floating Live Chat & AI Bot Widget */}
+        <LiveChatWidget />
       </div>
     );
   }
@@ -777,10 +851,13 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 px-3 sm:px-4 lg:px-6 py-4 sm:py-6 w-full max-w-[1780px] 2xl:max-w-[1920px] mx-auto overflow-x-hidden">
+        <main className="flex-1 px-3 sm:px-4 lg:px-6 py-4 sm:py-6 pb-20 w-full max-w-[1780px] 2xl:max-w-[1920px] mx-auto overflow-x-hidden">
           <Outlet />
         </main>
       </div>
+
+      {/* Floating Live Chat & AI Bot Widget */}
+      <LiveChatWidget />
     </div>
   );
 };

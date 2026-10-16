@@ -23,6 +23,9 @@ import { ActivityLogsPage } from './features/activityLogs/pages/ActivityLogsPage
 import { EmployeeComplaintsPage } from './features/complaints/pages/EmployeeComplaintsPage';
 import { AdminComplaintsPage } from './features/complaints/pages/AdminComplaintsPage';
 import { UserFeedbackPage } from './features/complaints/pages/UserFeedbackPage';
+import { DataValidationPage } from './features/validation/pages/DataValidationPage';
+import { AdminLiveChatPage } from './features/chat/pages/AdminLiveChatPage';
+import { isValidationSubdomain } from './lib/theme';
 
 // Guard: Must be authenticated
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -115,8 +118,19 @@ export const AppRouter: React.FC = () => {
         <Route path="payrolls" element={<EmployeePayrollsPage />} />
         <Route path="reports" element={<EmployeeReportsPage />} />
         <Route path="announcements" element={<EmployeeAnnouncementsPage />} />
+        <Route path="complaints" element={<EmployeeComplaintsPage />} />
         <Route path="profile" element={<EmployeeProfilePage />} />
       </Route>
+
+      {/* Aliases for Employee Complaints */}
+      <Route
+        path="/my-complaints"
+        element={<Navigate to={user?.role === 'karyawan' ? '/employee/complaints' : '/feedback'} replace />}
+      />
+      <Route
+        path="/keluhan"
+        element={<Navigate to={user?.role === 'karyawan' ? '/employee/complaints' : '/feedback'} replace />}
+      />
 
       {/* ======================================================== */}
       {/* ADMIN & HR STAFF ROUTES (DashboardLayout)               */}
@@ -164,6 +178,15 @@ export const AppRouter: React.FC = () => {
             </AdminRoute>
           }
         />
+        {/* Live Chat & Omnichannel CS Desk (Admin & Super Admin) */}
+        <Route
+          path="/live-chat"
+          element={
+            <AdminRoute>
+              <AdminLiveChatPage />
+            </AdminRoute>
+          }
+        />
 
         {/* Admin Restricted Routes */}
         <Route
@@ -191,6 +214,18 @@ export const AppRouter: React.FC = () => {
           }
         />
         <Route
+          path="/validasi-data"
+          element={
+            <AdminRoute>
+              {isValidationSubdomain() ? (
+                <DataValidationPage />
+              ) : (
+                <Navigate to="/dashboard" replace />
+              )}
+            </AdminRoute>
+          }
+        />
+        <Route
           path="/users"
           element={
             <AdminRoute>
@@ -213,7 +248,13 @@ export const AppRouter: React.FC = () => {
         path="*"
         element={
           <Navigate
-            to={user?.role === 'karyawan' ? '/employee/dashboard' : '/dashboard'}
+            to={
+              user?.role === 'karyawan'
+                ? '/employee/dashboard'
+                : isValidationSubdomain()
+                ? '/validasi-data'
+                : '/dashboard'
+            }
             replace
           />
         }

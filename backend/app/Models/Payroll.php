@@ -175,6 +175,7 @@ class Payroll extends Model
         return $query->where(function (Builder $q) use ($term) {
             $q->where('employee_name', 'like', "%{$term}%")
               ->orWhere('nik', 'like', "%{$term}%")
+              ->orWhere('province', 'like', "%{$term}%")
               ->orWhere('school_unit', 'like', "%{$term}%")
               ->orWhere('position', 'like', "%{$term}%")
               ->orWhere('bank_account', 'like', "%{$term}%")

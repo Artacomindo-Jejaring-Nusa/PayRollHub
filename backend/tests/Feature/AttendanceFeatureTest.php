@@ -490,4 +490,50 @@ class AttendanceFeatureTest extends TestCase
             'late_tolerance_minutes' => 20,
         ]);
     }
+
+    public function test_attendance_summary_matches_active_employees_and_excludes_off_employees(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'company' => 'rbs',
+        ]);
+
+        // 1. Create 3 active employees and 1 off employee
+        $empActive1 = User::factory()->create(['name' => 'Budi Active', 'role' => 'karyawan', 'company' => 'rbs', 'status' => 'active']);
+        $empActive2 = User::factory()->create(['name' => 'Siti Active', 'role' => 'karyawan', 'company' => 'rbs', 'status' => 'active']);
+        $empOff = User::factory()->create(['name' => 'Doni Off', 'role' => 'karyawan', 'company' => 'rbs', 'status' => 'off']);
+
+        // 2. Query summary daily with role=karyawan
+        $resDaily = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/attendances/summary?date=2026-10-16&role=karyawan');
+        $resDaily->assertStatus(200)
+            ->assertJsonPath('data.total_employees', 2) // Only 2 active employees, empOff excluded
+            ->assertJsonPath('data.total_not_checked_in', 2);
+
+        // Daily with all roles includes active admin + 2 active employees = 3
+        $resDailyAll = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/attendances/summary?date=2026-10-16');
+        $resDailyAll->assertStatus(200)
+            ->assertJsonPath('data.total_employees', 3);
+
+        // 3. Test SP period filtering
+        \App\Models\Payroll::create([
+            'employee_name' => 'Budi Active',
+            'company' => 'rbs',
+            'province' => 'DKI Jakarta',
+            'period' => 'SP 8',
+            'status' => 'active',
+            'take_home_pay' => 3000000,
+        ]);
+        \App\Models\Payroll::create([
+            'employee_name' => 'Doni Off',
+            'company' => 'rbs',
+            'province' => 'DKI Jakarta',
+            'period' => 'SP 8',
+            'status' => 'off',
+            'take_home_pay' => 3000000,
+        ]);
+
+        $resSp = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/attendances/summary?sp_period=SP 8');
+        $resSp->assertStatus(200)
+            ->assertJsonPath('data.total_employees', 1); // Only Budi Active in SP 8
+    }
 }

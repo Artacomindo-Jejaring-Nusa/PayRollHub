@@ -68,6 +68,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/user/feedback', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'store']);
     Route::get('/user/feedback/{complaint}', [\App\Http\Controllers\Api\EmployeeComplaintController::class, 'show']);
 
+    // Live Chat & Bantuan AI Realtime (Karyawan & User Biasa)
+    Route::get('/chat/active-session', [\App\Http\Controllers\Api\UserChatController::class, 'getActiveSession']);
+    Route::post('/chat/messages', [\App\Http\Controllers\Api\UserChatController::class, 'sendMessage']);
+    Route::post('/chat/request-agent', [\App\Http\Controllers\Api\UserChatController::class, 'requestAgent']);
+    Route::get('/chat/poll/{sessionId}', [\App\Http\Controllers\Api\UserChatController::class, 'pollMessages']);
+    Route::post('/chat/close', [\App\Http\Controllers\Api\UserChatController::class, 'closeSession']);
+
     // Employee Self-Service Portal Routes
     Route::prefix('employee')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Api\EmployeePortalController::class, 'dashboard']);
@@ -100,6 +107,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/complaints/{complaint}', [\App\Http\Controllers\Api\AdminComplaintController::class, 'show']);
         Route::match(['put', 'post'], '/admin/complaints/{complaint}', [\App\Http\Controllers\Api\AdminComplaintController::class, 'update']);
         Route::delete('/admin/complaints/{complaint}', [\App\Http\Controllers\Api\AdminComplaintController::class, 'destroy']);
+
+        // Omnichannel Live Chat CS Desk (Admin & Super Admin)
+        Route::get('/admin/chat/sessions', [\App\Http\Controllers\Api\AdminChatController::class, 'getSessions']);
+        Route::get('/admin/chat/sessions/{id}', [\App\Http\Controllers\Api\AdminChatController::class, 'getSessionDetail']);
+        Route::post('/admin/chat/sessions/{id}/claim', [\App\Http\Controllers\Api\AdminChatController::class, 'claimSession']);
+        Route::post('/admin/chat/sessions/{id}/reply', [\App\Http\Controllers\Api\AdminChatController::class, 'replySession']);
+        Route::post('/admin/chat/sessions/{id}/close', [\App\Http\Controllers\Api\AdminChatController::class, 'closeSession']);
+        Route::delete('/admin/chat/sessions/{id}', [\App\Http\Controllers\Api\AdminChatController::class, 'destroy']);
+        Route::get('/admin/chat/stats', [\App\Http\Controllers\Api\AdminChatController::class, 'getStats']);
+        Route::get('/admin/chat/quick-replies', [\App\Http\Controllers\Api\AdminChatController::class, 'getQuickReplies']);
         // Attendance Management & Settings (Admin)
         Route::get('/admin/attendances', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'index']);
         Route::get('/admin/attendances/summary', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'summary']);
@@ -144,6 +161,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/payrolls/import/preview', [PayrollController::class, 'previewImport']);
         Route::post('/payrolls/import', [PayrollController::class, 'import']);
 
+        // Data Validation & AI Cross-Check Hub (Pemeriksaan & Validasi Silang Data Baru vs Data Lama)
+        Route::post('/admin/validation/upload', [\App\Http\Controllers\Api\DataValidationController::class, 'uploadAndValidate']);
+        Route::post('/admin/validation/quick-check', [\App\Http\Controllers\Api\DataValidationController::class, 'quickCheck']);
+        Route::post('/admin/validation/export', [\App\Http\Controllers\Api\DataValidationController::class, 'exportReport']);
+        Route::post('/admin/validation/commit', [\App\Http\Controllers\Api\DataValidationController::class, 'commitToPayroll']);
+
         // Province Payroll Settings (Pengaturan Nilai & Formula Perhitungan per Provinsi)
         Route::get('/province-settings', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'index']);
         Route::get('/admin/province-settings', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'index']);
@@ -151,6 +174,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::match(['put', 'post'], '/admin/province-settings/{province}', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'update']);
         Route::post('/province-settings/{province}/apply', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'applyToEmployees']);
         Route::post('/admin/province-settings/{province}/apply', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'applyToEmployees']);
+        Route::delete('/province-settings/{province}', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'destroy']);
+        Route::delete('/admin/province-settings/{province}', [\App\Http\Controllers\Api\ProvincePayrollSettingController::class, 'destroy']);
 
         // Employee Replacements Tracking (Rekam Jejak Pergantian Karyawan Off)
         Route::get('/employee-replacements', [\App\Http\Controllers\Api\EmployeeReplacementController::class, 'index']);

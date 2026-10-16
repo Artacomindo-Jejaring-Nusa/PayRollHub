@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Save,
   ArrowRight,
+  Trash2,
 } from 'lucide-react';
 
 interface ProvinceSettingsModalProps {
@@ -86,6 +87,8 @@ export const ProvinceSettingsModal: React.FC<ProvinceSettingsModalProps> = ({
     setEditingSetting(null);
   };
 
+  const [isDeletingId, setIsDeletingId] = useState<number | string | null>(null);
+
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSetting) return;
@@ -93,7 +96,7 @@ export const ProvinceSettingsModal: React.FC<ProvinceSettingsModalProps> = ({
     setIsSaving(true);
     setErrorMessage(null);
     try {
-      const res = await payrollService.updateProvinceSetting(editingSetting.province, {
+      const res = await payrollService.updateProvinceSetting(editingSetting.id || editingSetting.province, {
         ump: Number(editUmp) || 0,
         bpjs_kes: Number(editBpjsKes) || 0,
         bpjs_tk_jht: Number(editBpjsTkJht) || 0,
@@ -116,11 +119,11 @@ export const ProvinceSettingsModal: React.FC<ProvinceSettingsModalProps> = ({
     }
   };
 
-  const handleApplyNow = async (province: string) => {
-    setIsApplyingProvince(province);
+  const handleApplyNow = async (item: ProvincePayrollSetting) => {
+    setIsApplyingProvince(item.province);
     setErrorMessage(null);
     try {
-      const res = await payrollService.applyProvinceSettingToEmployees(province, company);
+      const res = await payrollService.applyProvinceSettingToEmployees(item.id || item.province, company);
       setSuccessMessage(res.message);
       if (onSettingsUpdated) {
         onSettingsUpdated();
@@ -129,6 +132,26 @@ export const ProvinceSettingsModal: React.FC<ProvinceSettingsModalProps> = ({
       setErrorMessage(err.response?.data?.message || 'Gagal menerapkan perhitungan ke karyawan.');
     } finally {
       setIsApplyingProvince(null);
+    }
+  };
+
+  const handleDeleteSetting = async (item: ProvincePayrollSetting) => {
+    if (!window.confirm(`Yakin ingin menghapus pengaturan provinsi ${item.province}? Data karyawan tidak akan terhapus.`)) {
+      return;
+    }
+    setIsDeletingId(item.id);
+    setErrorMessage(null);
+    try {
+      const res = await payrollService.deleteProvinceSetting(item.id || item.province);
+      setSuccessMessage(res.message);
+      await fetchSettings();
+      if (onSettingsUpdated) {
+        onSettingsUpdated();
+      }
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || 'Gagal menghapus aturan provinsi.');
+    } finally {
+      setIsDeletingId(null);
     }
   };
 
@@ -307,9 +330,9 @@ export const ProvinceSettingsModal: React.FC<ProvinceSettingsModalProps> = ({
                 className="mt-1 w-4 h-4 rounded text-primary focus:ring-primary border-slate-300 cursor-pointer"
               />
               <label htmlFor="applyToEmployeesCheck" className="text-[12px] text-amber-900 cursor-pointer">
-                <strong>Terapkan otomatis ke seluruh karyawan aktif di {editingSetting.province}:</strong>
+                <strong>Terapkan otomatis ke seluruh karyawan di {editingSetting.province}:</strong>
                 <span className="block text-amber-800 text-[11.5px] mt-0.5">
-                  Sistem akan memperbarui data BPJS Kesehatan, BPJS TK (JHT & JP), dan menghitung ulang Take Home Pay seluruh data karyawan pada wilayah ini.
+                  Sistem akan memperbarui data Gaji Pokok (sesuai UMP), BPJS Kesehatan, BPJS TK (JHT & JP), dan menghitung ulang Take Home Pay seluruh data karyawan pada wilayah ini.
                 </span>
               </label>
             </div>
@@ -423,10 +446,10 @@ export const ProvinceSettingsModal: React.FC<ProvinceSettingsModalProps> = ({
                               <span>Edit</span>
                             </button>
                             <button
-                              onClick={() => handleApplyNow(item.province)}
+                              onClick={() => handleApplyNow(item)}
                               disabled={isApplyingProvince === item.province}
                               className="px-2 py-1 rounded-md text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                              title="Terapkan ke seluruh karyawan provinsi ini"
+                              title="Terapkan UMP & BPJS ke seluruh karyawan provinsi ini"
                             >
                               {isApplyingProvince === item.province ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -434,6 +457,18 @@ export const ProvinceSettingsModal: React.FC<ProvinceSettingsModalProps> = ({
                                 <RefreshCw className="w-3 h-3" />
                               )}
                               <span>Sinkron</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSetting(item)}
+                              disabled={isDeletingId === item.id}
+                              className="px-1.5 py-1 rounded-md text-[11px] font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer disabled:opacity-50 flex items-center"
+                              title="Hapus Pengaturan Provinsi Ini"
+                            >
+                              {isDeletingId === item.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
                             </button>
                           </div>
                         </td>

@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'websocket' => [
+        'url' => env('WEBSOCKET_BROADCAST_URL', 'http://127.0.0.1:6001/broadcast'),
+        'secret' => env('WEBSOCKET_SECRET', 'payrollhub_ws_secure_token_2026'),
+    ],
+
 ];

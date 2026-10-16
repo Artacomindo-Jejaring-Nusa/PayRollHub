@@ -71,6 +71,50 @@ export const isLockedDomain = (): TenantId | null => {
   return null;
 };
 
+export const isSubdomain = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname.toLowerCase();
+  const search = window.location.search.toLowerCase();
+
+  // Allow query param for local development or manual test overrides
+  if (
+    search.includes('validation=1') ||
+    search.includes('subdomain=') ||
+    search.includes('validasi=1')
+  ) {
+    return true;
+  }
+
+  // Pure IP address (e.g. 202.10.48.102) has no subdomain
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+    return false;
+  }
+
+  // Localhost without prefix has no subdomain
+  if (host === 'localhost') {
+    return false;
+  }
+
+  // Explicit validation subdomain prefixes
+  if (
+    host.startsWith('validasi.') ||
+    host.startsWith('valid.') ||
+    host.includes('validation')
+  ) {
+    return true;
+  }
+
+  // General subdomain check (e.g. sub.domain.com where sub !== 'www')
+  const parts = host.split('.');
+  if (parts.length > 2 && parts[0] !== 'www') {
+    return true;
+  }
+
+  return false;
+};
+
+export const isValidationSubdomain = isSubdomain;
+
 export const detectInitialTenant = (): TenantId => {
   if (typeof window !== 'undefined') {
     // 1. PRIORITAS #1: Domain Hostname!

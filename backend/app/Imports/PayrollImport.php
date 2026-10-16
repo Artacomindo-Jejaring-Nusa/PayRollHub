@@ -220,6 +220,14 @@ class PayrollImport implements ToCollection, WithHeadingRow, WithMultipleSheets,
 
             // Clean strings
             $name = trim((string) $name);
+
+            // Filter out Excel formulas, totals, and placeholder rows
+            if (
+                str_starts_with($name, '=') ||
+                preg_match('/^(total|jumlah|kuota|subtotal|grand\s*total)/i', $name)
+            ) {
+                continue;
+            }
             $nik = !empty($nik) ? trim((string) $nik) : null;
             if ($nik !== null) {
                 $nik = ltrim($nik, "'");

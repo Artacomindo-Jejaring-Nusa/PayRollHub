@@ -20,6 +20,7 @@ import {
   CreditCard,
   Image as ImageIcon,
   Paperclip,
+  MessageSquareWarning,
 } from 'lucide-react';
 
 export const EmployeeDashboardPage: React.FC = () => {
@@ -122,8 +123,17 @@ export const EmployeeDashboardPage: React.FC = () => {
         <div className="flex items-center gap-3 flex-shrink-0 pt-2 md:pt-0">
           <button
             type="button"
+            onClick={() => navigate('/employee/complaints')}
+            className="px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[13px] font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+          >
+            <MessageSquareWarning className="w-4 h-4 text-amber-600" />
+            <span>Keluhan Saya</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => navigate('/employee/reports')}
-            className="px-4 py-2.5 rounded-xl bg-surface-panel hover:bg-surface-container text-text-primary border border-border-subtle text-[13px] font-semibold flex items-center gap-2 transition-all shadow-xs"
+            className="px-4 py-2.5 rounded-xl bg-surface-panel hover:bg-surface-container text-text-primary border border-border-subtle text-[13px] font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4 text-primary" />
             <span>Kirim Laporan</span>
@@ -530,6 +540,34 @@ export const EmployeeDashboardPage: React.FC = () => {
                 ))}
               </div>
             )}
+          </Card>
+
+          {/* Quick Help & Complaint Card */}
+          <Card className="p-6 border-amber-200 bg-gradient-to-br from-amber-50/60 to-orange-50/40 shadow-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                <MessageSquareWarning className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-[14px] text-amber-950">
+                  Pusat Keluhan & Bantuan HRD
+                </h4>
+                <p className="text-[11px] text-amber-800/80">
+                  Ada kendala gaji, absensi, atau fasilitas?
+                </p>
+              </div>
+            </div>
+            <p className="text-[12px] text-amber-900/90 leading-relaxed">
+              Sampaikan keluhan atau kendala Anda langsung ke tim HRD secara resmi dan pantau status penyelesaiannya secara transparan.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/employee/complaints')}
+              className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-semibold flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
+            >
+              <span>Buka Menu Keluhan</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </Card>
         </div>
       </div>

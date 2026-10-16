@@ -34,6 +34,7 @@ class User extends Authenticatable
         'avatar',
         'password',
         'role',
+        'status',
         'last_login_at',
         'last_login_ip',
     ];
@@ -108,6 +109,24 @@ class User extends Authenticatable
     public function isEmployee(): bool
     {
         return $this->role === 'karyawan';
+    }
+
+    /**
+     * Check if user is active.
+     */
+    public function isActive(): bool
+    {
+        return $this->status !== 'off';
+    }
+
+    /**
+     * Scope query to only include active users.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('status', '!=', 'off')->orWhereNull('status');
+        });
     }
 
     /**

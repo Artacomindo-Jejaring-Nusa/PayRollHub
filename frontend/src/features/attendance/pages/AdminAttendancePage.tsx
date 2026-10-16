@@ -61,8 +61,8 @@ export const AdminAttendancePage: React.FC = () => {
   // Recap & Filter State
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
-  const [filterType, setFilterType] = useState<'sp' | 'daily'>('sp');
-  const [selectedSp, setSelectedSp] = useState<string>('SP 8');
+  const [filterType, setFilterType] = useState<'sp' | 'daily'>('daily');
+  const [selectedSp, setSelectedSp] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
   });
@@ -1411,6 +1411,7 @@ export const AdminAttendancePage: React.FC = () => {
                       onChange={(e) => setSelectedSp(e.target.value)}
                       className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-semibold focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                     >
+                      <option value="all">Semua Periode SP (1-12)</option>
                       {SP_PERIOD_LIST.map((sp) => (
                         <option key={sp.code} value={sp.code}>
                           {sp.fullLabel}

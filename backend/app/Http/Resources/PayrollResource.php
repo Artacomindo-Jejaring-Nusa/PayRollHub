@@ -14,7 +14,7 @@ class PayrollResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $user = $request->user();
+        $user = $request->user() ?: auth()->user() ?: auth('sanctum')->user();
         $isAdmin = $user && $user->isAdmin();
 
         $userNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;

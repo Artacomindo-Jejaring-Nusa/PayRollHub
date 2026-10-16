@@ -272,6 +272,14 @@ class PayrollService
                 return null;
             }
 
+            // Cegah pembuatan user untuk formula Excel / baris ringkasan / kuota
+            if (
+                str_starts_with($name, '=') ||
+                preg_match('/^(total|jumlah|kuota|subtotal|grand\s*total)/i', $name)
+            ) {
+                return null;
+            }
+
             // 1. Cari user yang sudah ada berdasarkan NIK di perusahaan yang sama
             $user = null;
             if (!empty($nik)) {
@@ -315,6 +323,28 @@ class PayrollService
                 if (!empty($payroll->whatsapp) && empty($user->phone)) {
                     $updates['phone'] = $payroll->whatsapp;
                 }
+
+                // Sinkronkan status aktif vs off
+                if ($payroll->status === 'off') {
+                    $hasOtherActive = Payroll::where('company', $company)
+                        ->where(function ($q) use ($name, $nik) {
+                            if (!empty($nik)) {
+                                $q->where('nik', $nik);
+                            } else {
+                                $q->where('employee_name', $name);
+                            }
+                        })
+                        ->where('id', '!=', $payroll->id)
+                        ->where(fn ($q) => $q->where('status', '!=', 'off')->orWhereNull('status'))
+                        ->exists();
+
+                    if (!$hasOtherActive && $user->status !== 'off') {
+                        $updates['status'] = 'off';
+                    }
+                } elseif (($payroll->status === 'active' || empty($payroll->status)) && $user->status === 'off') {
+                    $updates['status'] = 'active';
+                }
+
                 if (!empty($updates)) {
                     $user->update($updates);
                 }
@@ -339,6 +369,7 @@ class PayrollService
                 'school_unit' => !empty($schoolUnit) ? $schoolUnit : null,
                 'company' => $company,
                 'role' => 'karyawan',
+                'status' => $payroll->status ?: 'active',
                 'birth_date' => $payroll->birth_date ?: null,
                 'gender' => $payroll->gender ?: null,
                 'phone' => $payroll->whatsapp ?: null,

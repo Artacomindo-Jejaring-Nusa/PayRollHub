@@ -64,7 +64,7 @@ export function getStorageUrl(path: string | null | undefined): string {
   // 1. Determine active backend host
   let rootHost = '';
   const apiBase = import.meta.env.VITE_API_URL;
-  if (apiBase && (apiBase.startsWith('http://') || apiBase.startsWith('https://'))) {
+  if (apiBase && (apiBase.startsWith('http://') || apiBase.startsWith('https://')) && !apiBase.includes('api.rimbunbuanasejahtera.com')) {
     rootHost = apiBase.replace(/\/api\/?$/, '');
   } else if (typeof window !== 'undefined') {
     if (window.location.port === '5173') {

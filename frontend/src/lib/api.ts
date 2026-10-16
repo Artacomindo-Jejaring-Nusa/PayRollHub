@@ -1,10 +1,20 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const getBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  // In browser on production domains (e.g. rimbunbuanasejahtera.com, riamamandiripratama.com, or server IP),
+  // ALWAYS use same-origin relative '/api' to eliminate CORS preflight blockage, domain mismatches, and 403 errors.
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api';
+    }
+  }
+  return envUrl || 'http://localhost:8000/api';
+};
 
 export const api = axios.create({
-  baseURL,
+  baseURL: getBaseURL(),
   headers: {
     'Accept': 'application/json',
   },

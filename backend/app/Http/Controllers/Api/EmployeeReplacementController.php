@@ -149,12 +149,23 @@ class EmployeeReplacementController extends Controller
             'replacement_date' => $validated['replacement_date'],
         ]);
 
-        // 3. Pastikan data karyawan lama berstatus 'off'
+        // 3. Pastikan data karyawan lama berstatus 'off' dan nonaktifkan akun presensinya
         if ($oldPayroll && $oldPayroll->status !== 'off') {
             $oldPayroll->update([
                 'status' => 'off',
                 'resign_date' => $oldPayroll->resign_date ?: $validated['replacement_date'],
             ]);
+
+            \App\Models\User::where('company', $oldPayroll->company)
+                ->whereNotIn('role', ['admin', 'super_admin'])
+                ->where(function ($q) use ($oldPayroll) {
+                    if (!empty($oldPayroll->nik)) {
+                        $q->where('nik', $oldPayroll->nik);
+                    } else {
+                        $q->where('name', $oldPayroll->employee_name);
+                    }
+                })
+                ->update(['status' => 'off']);
         }
 
         ActivityLog::record(

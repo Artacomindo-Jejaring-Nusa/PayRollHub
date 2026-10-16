@@ -224,7 +224,7 @@ export const payrollService = {
   },
 
   updateProvinceSetting: async (
-    province: string,
+    identifier: string | number,
     data: {
       ump: number;
       bpjs_kes: number;
@@ -240,12 +240,12 @@ export const payrollService = {
       message: string;
       data: ProvincePayrollSetting;
       affected_employees: number;
-    }>(`/province-settings/${encodeURIComponent(province)}`, data);
+    }>(`/province-settings/${encodeURIComponent(identifier)}`, data);
     return response.data;
   },
 
   applyProvinceSettingToEmployees: async (
-    province: string,
+    identifier: string | number,
     company?: string
   ): Promise<{ status: string; message: string; affected_employees: number }> => {
     const activeTenant = detectInitialTenant();
@@ -253,9 +253,18 @@ export const payrollService = {
       status: string;
       message: string;
       affected_employees: number;
-    }>(`/province-settings/${encodeURIComponent(province)}/apply`, null, {
+    }>(`/province-settings/${encodeURIComponent(identifier)}/apply`, null, {
       params: { company: company || activeTenant },
     });
+    return response.data;
+  },
+
+  deleteProvinceSetting: async (
+    identifier: string | number
+  ): Promise<{ status: string; message: string }> => {
+    const response = await api.delete<{ status: string; message: string }>(
+      `/province-settings/${encodeURIComponent(identifier)}`
+    );
     return response.data;
   },
 

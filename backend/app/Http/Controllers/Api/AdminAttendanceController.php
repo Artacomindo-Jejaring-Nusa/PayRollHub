@@ -83,7 +83,7 @@ class AdminAttendanceController extends Controller
         if ($role === 'admin') {
             $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
         } elseif ($role === 'user' || $role === 'karyawan') {
-            $query->whereHas('user', fn ($u) => $u->where('role', 'user'));
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
 
         // Filter rentang: SP Periode > Spesifik Tanggal > Bulan
@@ -154,8 +154,8 @@ class AdminAttendanceController extends Controller
             $usersQuery->whereIn('role', ['admin', 'super_admin']);
             $attendanceQuery->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
         } elseif ($role === 'user' || $role === 'karyawan') {
-            $usersQuery->where('role', 'user');
-            $attendanceQuery->whereHas('user', fn ($u) => $u->where('role', 'user'));
+            $usersQuery->whereIn('role', ['user', 'karyawan']);
+            $attendanceQuery->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
 
         if ($targetCompany) {
@@ -164,12 +164,27 @@ class AdminAttendanceController extends Controller
         }
 
         $spRange = $this->getSpDateRange($spPeriod);
-        if ($spRange) {
+        if ($spRange && $spPeriod && strtolower(trim($spPeriod)) !== 'all') {
             $attendanceQuery->whereBetween('date', $spRange);
             $label = "Periode {$spPeriod}";
+
+            // Filter karyawan yang terdaftar dan aktif di periode SP tersebut
+            $spClean = trim($spPeriod);
+            $usersQuery->whereIn('name', function ($q) use ($targetCompany, $spClean) {
+                $q->select('employee_name')
+                    ->from('payrolls')
+                    ->where('period', $spClean)
+                    ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany))
+                    ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'));
+            });
         } else {
             $attendanceQuery->where('date', $date);
             $label = $date;
+
+            // Untuk absensi harian / global: hanya hitung karyawan yang berstatus aktif
+            $usersQuery->where(function ($q) {
+                $q->where('status', '!=', 'off')->orWhereNull('status');
+            });
         }
 
         $totalEmployees = $usersQuery->count();
@@ -223,7 +238,7 @@ class AdminAttendanceController extends Controller
             ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
             : ($currentUser->company ?: 'rbs');
 
-        $spPeriod = $request->query('sp_period') ?: $request->query('sp', 'SP 8');
+        $spPeriod = $request->query('sp_period') ?: $request->query('sp');
         $spRange = $this->getSpDateRange($spPeriod) ?: [
             Carbon::today('Asia/Jakarta')->startOfMonth()->toDateString(),
             Carbon::today('Asia/Jakarta')->endOfMonth()->toDateString(),
@@ -242,11 +257,27 @@ class AdminAttendanceController extends Controller
         if ($role === 'admin') {
             $usersQuery->whereIn('role', ['admin', 'super_admin']);
         } elseif ($role === 'user' || $role === 'karyawan') {
-            $usersQuery->where('role', 'user');
+            $usersQuery->whereIn('role', ['user', 'karyawan']);
         }
 
         if ($targetCompany) {
             $usersQuery->where('company', $targetCompany);
+        }
+
+        // Filter karyawan yang terdaftar dan aktif di periode SP tersebut
+        if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+            $spClean = trim($spPeriod);
+            $usersQuery->whereIn('name', function ($q) use ($targetCompany, $spClean) {
+                $q->select('employee_name')
+                    ->from('payrolls')
+                    ->where('period', $spClean)
+                    ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany))
+                    ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'));
+            });
+        } else {
+            $usersQuery->where(function ($q) {
+                $q->where('status', '!=', 'off')->orWhereNull('status');
+            });
         }
         if (!empty($selectedUserIds)) {
             $usersQuery->whereIn('id', $selectedUserIds);
@@ -643,10 +674,26 @@ class AdminAttendanceController extends Controller
             if ($role === 'admin') {
                 $usersQuery->whereIn('role', ['admin', 'super_admin']);
             } elseif ($role === 'user' || $role === 'karyawan') {
-                $usersQuery->where('role', 'user');
+                $usersQuery->whereIn('role', ['user', 'karyawan']);
             }
             if ($targetCompany) {
                 $usersQuery->where('company', $targetCompany);
+            }
+
+            // Filter karyawan yang terdaftar dan aktif di periode SP tersebut
+            if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+                $spClean = trim($spPeriod);
+                $usersQuery->whereIn('name', function ($q) use ($targetCompany, $spClean) {
+                    $q->select('employee_name')
+                        ->from('payrolls')
+                        ->where('period', $spClean)
+                        ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany))
+                        ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'));
+                });
+            } else {
+                $usersQuery->where(function ($q) {
+                    $q->where('status', '!=', 'off')->orWhereNull('status');
+                });
             }
             if (!empty($selectedUserIds)) {
                 $usersQuery->whereIn('id', $selectedUserIds);
@@ -907,7 +954,7 @@ class AdminAttendanceController extends Controller
         if ($role === 'admin') {
             $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
         } elseif ($role === 'user' || $role === 'karyawan') {
-            $query->whereHas('user', fn ($u) => $u->where('role', 'user'));
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
 
         if (!empty($selectedUserIds)) {

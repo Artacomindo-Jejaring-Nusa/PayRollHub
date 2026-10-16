@@ -469,7 +469,7 @@ export const DashboardOverviewPage: React.FC = () => {
             <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100">
               <div className="text-[11px] font-medium text-emerald-800">Total Hadir</div>
               <div className="text-[20px] font-bold text-emerald-900 mt-0.5">
-                {isAttendanceLoading ? '...' : `${attendanceSummary?.total_present ?? 0} Staf`}
+                {isAttendanceLoading ? <Skeleton className="h-6 w-16 my-0.5 rounded" /> : `${attendanceSummary?.total_present ?? 0} Staf`}
               </div>
               <div className="text-[10px] text-emerald-700 mt-0.5">Tercatat hari ini</div>
             </div>
@@ -477,7 +477,7 @@ export const DashboardOverviewPage: React.FC = () => {
             <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100">
               <div className="text-[11px] font-medium text-blue-800">Tepat Waktu</div>
               <div className="text-[20px] font-bold text-blue-900 mt-0.5">
-                {isAttendanceLoading ? '...' : `${attendanceSummary?.total_on_time ?? 0} Staf`}
+                {isAttendanceLoading ? <Skeleton className="h-6 w-16 my-0.5 rounded" /> : `${attendanceSummary?.total_on_time ?? 0} Staf`}
               </div>
               <div className="text-[10px] text-blue-700 mt-0.5">Sebelum batas jam masuk</div>
             </div>
@@ -485,7 +485,7 @@ export const DashboardOverviewPage: React.FC = () => {
             <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100">
               <div className="text-[11px] font-medium text-amber-800">Terlambat</div>
               <div className="text-[20px] font-bold text-amber-900 mt-0.5">
-                {isAttendanceLoading ? '...' : `${attendanceSummary?.total_late ?? 0} Staf`}
+                {isAttendanceLoading ? <Skeleton className="h-6 w-16 my-0.5 rounded" /> : `${attendanceSummary?.total_late ?? 0} Staf`}
               </div>
               <div className="text-[10px] text-amber-700 mt-0.5">Melewati toleransi</div>
             </div>
@@ -493,14 +493,33 @@ export const DashboardOverviewPage: React.FC = () => {
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
               <div className="text-[11px] font-medium text-slate-700">Rata-rata Radius GPS</div>
               <div className="text-[20px] font-bold text-slate-900 mt-0.5">
-                {isAttendanceLoading ? '...' : `${attendanceSummary?.avg_distance_meters ?? 0} m`}
+                {isAttendanceLoading ? <Skeleton className="h-6 w-16 my-0.5 rounded" /> : `${attendanceSummary?.avg_distance_meters ?? 0} m`}
               </div>
               <div className="text-[10px] text-slate-500 mt-0.5">Dari titik kantor</div>
             </div>
           </div>
 
           {/* Mini List: Siapa saja yang baru absen hari ini */}
-          {recentAttendances.length > 0 ? (
+          {isAttendanceLoading ? (
+            <div className="pt-2">
+              <Skeleton className="h-3.5 w-64 mb-2.5 rounded" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="p-2.5 rounded-lg border border-border-subtle bg-surface space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-28 rounded" />
+                      <Skeleton className="h-4 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-36 rounded" />
+                    <Skeleton className="h-3 w-44 rounded" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : recentAttendances.length > 0 ? (
             <div className="pt-2">
               <div className="text-[11.5px] font-semibold text-text-muted uppercase tracking-wider mb-2">
                 Staf Yang Baru Saja Melakukan Absensi Hari Ini:
@@ -529,7 +548,7 @@ export const DashboardOverviewPage: React.FC = () => {
                 ))}
               </div>
             </div>
-          ) : !isAttendanceLoading && (
+          ) : (
             <div className="py-4 text-center text-text-muted text-[12.5px] bg-surface-container-low/40 rounded-lg border border-dashed border-border-subtle">
               Belum ada staf yang melakukan absensi pada hari ini.
             </div>
@@ -585,11 +604,17 @@ export const DashboardOverviewPage: React.FC = () => {
             </div>
 
             {isLoading ? (
-              <div className="space-y-3 py-3">
+              <div className="space-y-2.5 pt-3">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex items-center justify-between p-2">
-                    <Skeleton className="h-5 w-28 rounded" />
-                    <Skeleton className="h-5 w-32 rounded" />
+                  <div key={i} className="p-2.5 rounded-lg border border-border-subtle bg-surface space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1">
+                        <Skeleton className="w-5 h-5 rounded-md" />
+                        <Skeleton className="h-4 w-32 rounded" />
+                      </div>
+                      <Skeleton className="h-4 w-20 rounded" />
+                    </div>
+                    <Skeleton className="w-full h-1.5 rounded-full" />
                   </div>
                 ))}
               </div>
@@ -747,14 +772,20 @@ export const DashboardOverviewPage: React.FC = () => {
           </div>
 
           {isLoading ? (
-            <div className="space-y-3 py-1">
+            <div className="space-y-2.5 py-1">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center justify-between p-2">
-                  <div className="space-y-1">
-                    <Skeleton className="h-4 w-32 rounded" />
-                    <Skeleton className="h-3 w-20 rounded" />
+                <div key={i} className="py-2.5 px-2.5 flex items-center justify-between gap-3 rounded-lg border border-border-subtle/60">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                    <div className="space-y-1.5 min-w-0 flex-1">
+                      <Skeleton className="h-4 w-36 rounded" />
+                      <Skeleton className="h-3 w-48 rounded" />
+                    </div>
                   </div>
-                  <Skeleton className="h-5 w-24 rounded" />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </div>
                 </div>
               ))}
             </div>

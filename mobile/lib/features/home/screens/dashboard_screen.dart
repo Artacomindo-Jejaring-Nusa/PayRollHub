@@ -16,6 +16,8 @@ import '../models/attendance_today_model.dart';
 import '../services/announcement_service.dart';
 import '../services/attendance_service.dart';
 import '../services/employee_portal_service.dart';
+import '../../../core/storage/token_storage.dart';
+import '../widgets/onboarding_tutorial_dialog.dart';
 import 'complaints_screen.dart';
 import 'live_chat_screen.dart';
 import 'profile_edit_screen.dart';
@@ -102,6 +104,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         });
       }
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowTutorial();
+    });
+  }
+
+  Future<void> _checkAndShowTutorial({bool force = false}) async {
+    if (!mounted) return;
+    try {
+      final seen = await TokenStorage.hasSeenTutorial();
+      if (!seen || force) {
+        if (mounted) {
+          await Future.delayed(const Duration(milliseconds: 650));
+          if (mounted) {
+            await OnboardingTutorialDialog.show(
+              context,
+              user: widget.user,
+              onFinish: () async {
+                await TokenStorage.setHasSeenTutorial(true);
+              },
+            );
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -313,29 +339,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return '${isNegative ? '-Rp ' : 'Rp '}$buffer';
   }
 
-  // Format Helper: Period Name (e.g. SP 1 -> Surat Pesanan 1 (SP 1))
+  // Format Helper: Period Name (sama seperti web dashboard: langsung menampilkan bulan & tahun tanpa kata SP)
   String _formatPeriodName(String period) {
     final trimmed = period.trim();
-    if (trimmed.toUpperCase().startsWith('SP ')) {
-      final spNum = trimmed.substring(3).trim();
-      return 'Surat Pesanan $spNum ($trimmed)';
+    const monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+
+    // Cek format SP X / SPX (e.g. SP 1 -> Januari 2026, SP 8 -> Agustus 2026)
+    final spMatch = RegExp(r'^SP\s*(\d+)$', caseSensitive: false).firstMatch(trimmed);
+    if (spMatch != null) {
+      final num = int.tryParse(spMatch.group(1)!) ?? 1;
+      if (num >= 1 && num <= 12) {
+        return '${monthNames[num - 1]} 2026';
+      }
+      return 'Bulan $num 2026';
     }
-    if (trimmed.toUpperCase().startsWith('SP')) {
-      final spNum = trimmed.substring(2).trim();
-      return 'Surat Pesanan $spNum (SP $spNum)';
+
+    // Cek format Surat Pesanan X
+    final suratPesananMatch = RegExp(r'^Surat\s+Pesanan\s*(\d+)', caseSensitive: false).firstMatch(trimmed);
+    if (suratPesananMatch != null) {
+      final num = int.tryParse(suratPesananMatch.group(1)!) ?? 1;
+      if (num >= 1 && num <= 12) {
+        return '${monthNames[num - 1]} 2026';
+      }
+      return 'Bulan $num 2026';
     }
+
+    // Cek format YYYY-MM (e.g. 2026-08 -> Agustus 2026, 2026-03 -> Maret 2026)
     final match = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(trimmed);
     if (match != null) {
       final year = match.group(1);
       final month = int.tryParse(match.group(2)!) ?? 1;
-      const monthNames = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-      ];
       if (month >= 1 && month <= 12) {
         return '${monthNames[month - 1]} $year';
       }
     }
+
     return trimmed;
   }
 
@@ -1064,34 +1105,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ],
                   ),
                   const SizedBox(width: 10),
-                  Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 19,
-                        backgroundColor: secondaryLightColor,
-                        child: Text(
-                          widget.user.name.isNotEmpty ? widget.user.name[0].toUpperCase() : 'U',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: secondaryDarkColor,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
+                  Tooltip(
+                    message: 'Panduan Aplikasi',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(22),
+                      onTap: () => _checkAndShowTutorial(force: true),
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 19,
+                            backgroundColor: secondaryLightColor,
+                            child: Text(
+                              widget.user.name.isNotEmpty ? widget.user.name[0].toUpperCase() : 'U',
+                              style: GoogleFonts.plusJakartaSans(
+                                color: secondaryDarkColor,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 11,
-                          height: 11,
-                          decoration: BoxDecoration(
-                            color: AppColors.success,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              width: 11,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: AppColors.success,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -3606,7 +3654,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                _formatPeriodName(period),
+                                _formatPeriodName(period).toLowerCase().startsWith('periode')
+                                    ? _formatPeriodName(period)
+                                    : 'Periode ${_formatPeriodName(period)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.plusJakartaSans(
@@ -3857,7 +3907,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   ),
                                 ),
                                 Text(
-                                  _formatPeriodName(period),
+                                  _formatPeriodName(period).toLowerCase().startsWith('periode')
+                                      ? _formatPeriodName(period)
+                                      : 'Periode ${_formatPeriodName(period)}',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 11,
                                     color: AppColors.neutral500,
@@ -6200,6 +6252,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 8),
           _buildSettingGroupCard(
             children: [
+              _buildSettingItem(
+                icon: Icons.auto_awesome_rounded,
+                iconBgColor: const Color(0xFFFDF4FF),
+                iconColor: const Color(0xFFC026D3),
+                title: 'Panduan Aplikasi & Tutorial Fitur',
+                subtitle: 'Pelajari kembali 5 fungsi utama dasbor aplikasi',
+                onTap: () {
+                  _checkAndShowTutorial(force: true);
+                },
+              ),
+              const Divider(height: 1, indent: 56, endIndent: 16, color: Color(0xFFF1F5F9)),
               _buildSettingItem(
                 icon: Icons.support_agent_rounded,
                 iconBgColor: iconBgColor,

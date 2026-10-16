@@ -42,6 +42,31 @@ class ChatMessageModel {
     required this.createdAt,
   });
 
+  /// Mengembalikan full URL untuk attachment gambar (baik dari path relatif maupun absolut)
+  String? getFullAttachmentUrl([String? baseOrigin]) {
+    if (attachmentUrl == null || attachmentUrl!.trim().isEmpty) return null;
+    final trimmed = attachmentUrl!.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    String origin = (baseOrigin != null && baseOrigin.trim().isNotEmpty)
+        ? baseOrigin.trim()
+        : 'https://rimbunbuanasejahtera.com';
+
+    if (origin.endsWith('/api')) {
+      origin = origin.substring(0, origin.length - 4);
+    } else if (origin.endsWith('/api/')) {
+      origin = origin.substring(0, origin.length - 5);
+    }
+    origin = origin.replaceAll(RegExp(r'/+$'), '');
+
+    if (trimmed.startsWith('/')) {
+      return '$origin$trimmed';
+    }
+    return '$origin/$trimmed';
+  }
+
   factory ChatMessageModel.fromJson(Map<String, dynamic> json) {
     DateTime parsedCreatedAt = DateTime.now();
     if (json['created_at'] != null) {

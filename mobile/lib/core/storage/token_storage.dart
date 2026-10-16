@@ -69,6 +69,18 @@ class TokenStorage {
     await prefs.setString(AppConstants.activeApiUrlKey, url);
   }
 
+  static const String tutorialSeenKey = 'hc_has_seen_onboarding_tutorial_v1';
+
+  static Future<bool> hasSeenTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(tutorialSeenKey) ?? false;
+  }
+
+  static Future<void> setHasSeenTutorial(bool seen) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(tutorialSeenKey, seen);
+  }
+
   static Future<void> clearAll() async {
     await clearToken();
     final prefs = await SharedPreferences.getInstance();

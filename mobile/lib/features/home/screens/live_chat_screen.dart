@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../auth/models/user_model.dart';
 import '../models/chat_model.dart';
@@ -25,6 +26,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   bool _isSending = false;
   ChatSessionModel? _session;
   List<ChatMessageModel> _messages = [];
+  String _baseUrl = '';
 
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -41,8 +43,44 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   @override
   void initState() {
     super.initState();
+    _initBaseUrl();
     _loadSession();
     _startPolling();
+  }
+
+  void _initBaseUrl() async {
+    try {
+      final url = await TokenStorage.getBaseUrl();
+      if (mounted) {
+        setState(() {
+          _baseUrl = url;
+        });
+      }
+    } catch (_) {}
+  }
+
+  String _resolveAttachmentUrl(String? rawUrl) {
+    if (rawUrl == null || rawUrl.trim().isEmpty) return '';
+    final trimmed = rawUrl.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    String origin = _baseUrl.isNotEmpty
+        ? _baseUrl
+        : (_isRiama ? AppConstants.riamaApiUrl : AppConstants.rbsApiUrl);
+
+    if (origin.endsWith('/api')) {
+      origin = origin.substring(0, origin.length - 4);
+    } else if (origin.endsWith('/api/')) {
+      origin = origin.substring(0, origin.length - 5);
+    }
+    origin = origin.replaceAll(RegExp(r'/+$'), '');
+
+    if (trimmed.startsWith('/')) {
+      return '$origin$trimmed';
+    }
+    return '$origin/$trimmed';
   }
 
   @override
@@ -99,12 +137,10 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
           if (event == 'new_message' && eventData is Map<String, dynamic>) {
             final msg = ChatMessageModel.fromJson(eventData);
-            if (!_messages.any((m) => m.id == msg.id)) {
-              setState(() {
-                _messages.add(msg);
-              });
-              _scrollToBottom();
-            }
+            setState(() {
+              _addUniqueMessage(msg);
+            });
+            _scrollToBottom();
           } else if (event == 'agent_claimed' || event == 'status_changed' || event == 'session_closed') {
             _loadSession(silent: true);
           }
@@ -142,9 +178,16 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
     if (!mounted) return;
     if (res['success'] == true) {
+      final rawMessages = (res['messages'] as List<ChatMessageModel>?) ?? [];
+      final Map<int, ChatMessageModel> uniqueMap = {};
+      for (final m in rawMessages) {
+        uniqueMap[m.id] = m;
+      }
+      final sortedList = uniqueMap.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+
       setState(() {
         _session = res['session'] as ChatSessionModel?;
-        _messages = (res['messages'] as List<ChatMessageModel>?) ?? [];
+        _messages = sortedList;
         if (!silent) _isLoading = false;
       });
       _scrollToBottom();
@@ -161,10 +204,12 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
   Future<void> _pollMessages() async {
     if (_session == null) return;
-    final lastMsg = _messages.isNotEmpty ? _messages.last : null;
-    final lastId = lastMsg?.id ?? 0;
+    int maxId = 0;
+    for (final m in _messages) {
+      if (m.id > maxId) maxId = m.id;
+    }
 
-    final res = await ChatService.pollMessages(_session!.id, lastId);
+    final res = await ChatService.pollMessages(_session!.id, maxId);
     if (!mounted) return;
 
     if (res['success'] == true) {
@@ -173,7 +218,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
       if (newItems.isNotEmpty) {
         setState(() {
-          _messages.addAll(newItems);
+          _addUniqueMessages(newItems);
         });
         _scrollToBottom();
       }
@@ -212,8 +257,34 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
     });
   }
 
+  void _addUniqueMessage(ChatMessageModel msg) {
+    final idx = _messages.indexWhere((m) => m.id == msg.id);
+    if (idx == -1) {
+      _messages.add(msg);
+      _messages.sort((a, b) => a.id.compareTo(b.id));
+    } else {
+      _messages[idx] = msg;
+    }
+  }
+
+  void _addUniqueMessages(List<ChatMessageModel> items) {
+    bool changed = false;
+    for (final item in items) {
+      final idx = _messages.indexWhere((m) => m.id == item.id);
+      if (idx == -1) {
+        _messages.add(item);
+        changed = true;
+      } else {
+        _messages[idx] = item;
+      }
+    }
+    if (changed) {
+      _messages.sort((a, b) => a.id.compareTo(b.id));
+    }
+  }
+
   Future<void> _sendMessage({String? customMessage, String? actionCode}) async {
-    if (_session == null) return;
+    if (_session == null || _isSending) return;
     final text = customMessage ?? _textController.text.trim();
     if (text.isEmpty && _selectedPhoto == null && actionCode == null) return;
 
@@ -239,8 +310,8 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
       setState(() {
         if (updatedSession != null) _session = updatedSession;
-        if (userMsg != null) _messages.add(userMsg);
-        if (botMsg != null) _messages.add(botMsg);
+        if (userMsg != null) _addUniqueMessage(userMsg);
+        if (botMsg != null) _addUniqueMessage(botMsg);
       });
       _scrollToBottom();
     } else {
@@ -254,7 +325,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   }
 
   Future<void> _requestAgent() async {
-    if (_session == null) return;
+    if (_session == null || _isSending) return;
     setState(() => _isSending = true);
 
     final res = await ChatService.requestAgent(_session!.id);
@@ -267,7 +338,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
       setState(() {
         if (updatedSession != null) _session = updatedSession;
-        if (sysMsg != null) _messages.add(sysMsg);
+        if (sysMsg != null) _addUniqueMessage(sysMsg);
       });
       _scrollToBottom();
     }
@@ -357,6 +428,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
   }
 
   void _showFullscreenImage(String imageUrl) {
+    final fullUrl = _resolveAttachmentUrl(imageUrl);
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -369,11 +441,28 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Image.network(
-                  imageUrl,
+                  fullUrl,
                   fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    );
+                  },
                   errorBuilder: (_, __, ___) => Container(
                     padding: const EdgeInsets.all(24),
-                    color: Colors.white,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: const Text('Gagal memuat gambar.'),
                   ),
                 ),
@@ -691,7 +780,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: InkWell(
-        onTap: () => _sendMessage(actionCode: actionCode),
+        onTap: _isSending ? null : () => _sendMessage(actionCode: actionCode),
         borderRadius: BorderRadius.circular(20),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -808,34 +897,88 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                             ),
                           ),
                         ),
-                      Text(
-                        msg.message,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          color: isUser ? Colors.white : const Color(0xFF1E293B),
-                          height: 1.4,
-                        ),
-                      ),
-                      if (msg.attachmentUrl != null && msg.attachmentUrl!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () => _showFullscreenImage(msg.attachmentUrl!),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              msg.attachmentUrl!,
-                              width: 180,
-                              height: 130,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                width: 180,
-                                height: 80,
-                                color: Colors.grey.shade200,
-                                child: const Center(child: Text('Foto terlampir')),
-                              ),
-                            ),
+                      if (msg.message.trim().isNotEmpty)
+                        Text(
+                          msg.message,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            color: isUser ? Colors.white : const Color(0xFF1E293B),
+                            height: 1.4,
                           ),
                         ),
+                      if (msg.attachmentUrl != null && msg.attachmentUrl!.trim().isNotEmpty) ...[
+                        () {
+                          final resolvedUrl = msg.getFullAttachmentUrl(_baseUrl) ?? _resolveAttachmentUrl(msg.attachmentUrl);
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (msg.message.trim().isNotEmpty) const SizedBox(height: 8),
+                              GestureDetector(
+                                onTap: () => _showFullscreenImage(resolvedUrl),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    resolvedUrl,
+                                    width: 220,
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        width: 220,
+                                        height: 130,
+                                        decoration: BoxDecoration(
+                                          color: isUser ? Colors.white.withOpacity(0.15) : Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            value: loadingProgress.expectedTotalBytes != null
+                                                ? loadingProgress.cumulativeBytesLoaded /
+                                                    loadingProgress.expectedTotalBytes!
+                                                : null,
+                                            color: isUser ? Colors.white : _primaryColor,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (_, error, __) {
+                                      debugPrint('Error loading chat image: $error for $resolvedUrl');
+                                      return Container(
+                                        width: 220,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: isUser ? Colors.white.withOpacity(0.15) : Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.broken_image_rounded,
+                                              size: 20,
+                                              color: isUser ? Colors.white70 : Colors.grey.shade600,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Text(
+                                                'Gagal memuat gambar',
+                                                style: GoogleFonts.plusJakartaSans(
+                                                  fontSize: 12,
+                                                  color: isUser ? Colors.white70 : Colors.grey.shade700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }(),
                       ],
                     ],
                   ),
@@ -850,7 +993,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                       runSpacing: 6,
                       children: msg.suggestedActions.map((action) {
                         return InkWell(
-                          onTap: () => _sendMessage(actionCode: action.action),
+                          onTap: _isSending ? null : () => _sendMessage(actionCode: action.action),
                           borderRadius: BorderRadius.circular(16),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

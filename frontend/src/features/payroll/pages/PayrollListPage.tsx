@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../../store/authStore';
 import { useTenantTheme } from '../../../lib/theme';
@@ -32,7 +32,6 @@ import {
   RefreshCw,
   Loader2,
   Download,
-  Lock,
   UserX,
   UserCheck,
   AlertTriangle,
@@ -64,6 +63,8 @@ export const PayrollListPage: React.FC = () => {
 
   // Filter, Search & Pagination states
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const latestRequestId = useRef(0);
   const [selectedProvince, setSelectedProvince] = useState(searchParams.get('province') || '');
   const [selectedPosition, setSelectedPosition] = useState(searchParams.get('position') || '');
   const [selectedPeriod, setSelectedPeriod] = useState(searchParams.get('period') || '');
@@ -74,6 +75,15 @@ export const PayrollListPage: React.FC = () => {
   const [perPage, setPerPage] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+
+  // Debounce search input to avoid race condition and excessive network requests
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Sync state when URL params change (e.g. clicking dashboard cards)
   useEffect(() => {
@@ -102,8 +112,6 @@ export const PayrollListPage: React.FC = () => {
   const [filterDuplicateAccount, setFilterDuplicateAccount] = useState(false);
   const [totalDuplicateAccounts, setTotalDuplicateAccounts] = useState(0);
 
-  // Restricted export modal state for user
-  const [isExportRestrictedModalOpen, setIsExportRestrictedModalOpen] = useState(false);
 
   // Status Change Modal (Turn Off / Re-activate)
   const [statusTarget, setStatusTarget] = useState<PayrollItem | null>(null);
@@ -120,10 +128,11 @@ export const PayrollListPage: React.FC = () => {
 
   // Load data
   const fetchData = useCallback(async () => {
+    const reqId = ++latestRequestId.current;
     setIsLoading(true);
     try {
       const response = await payrollService.getPayrolls({
-        search: search.trim(),
+        search: debouncedSearch.trim(),
         province: selectedProvince,
         position: selectedPosition,
         period: selectedPeriod,
@@ -139,6 +148,9 @@ export const PayrollListPage: React.FC = () => {
         visibility: selectedVisibility ? (selectedVisibility as 'visible' | 'hidden') : undefined,
       });
 
+      // Discard response if a newer request has already been initiated
+      if (reqId !== latestRequestId.current) return;
+
       setPayrolls(response.data);
       setMeta(response.meta);
       setTotalDuplicateAccounts(response.metrics?.total_duplicate_accounts || 0);
@@ -152,11 +164,14 @@ export const PayrollListPage: React.FC = () => {
         setPeriodOptions(response.filters.periods);
       }
     } catch (err) {
+      if (reqId !== latestRequestId.current) return;
       console.error('Failed to load payrolls:', err);
     } finally {
-      setIsLoading(false);
+      if (reqId === latestRequestId.current) {
+        setIsLoading(false);
+      }
     }
-  }, [search, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id, filterDuplicateAccount, selectedVisibility]);
+  }, [debouncedSearch, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id, filterDuplicateAccount, selectedVisibility]);
 
   useEffect(() => {
     fetchData();
@@ -164,27 +179,23 @@ export const PayrollListPage: React.FC = () => {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setDebouncedSearch(search);
     setPage(1);
     fetchData();
   };
 
   const handleExport = async (format: 'xlsx' | 'csv' | 'pdf') => {
-    if (!isAdmin) {
-      setIsExportRestrictedModalOpen(true);
-      return;
-    }
-
     setIsExporting(format);
     try {
       await payrollService.exportFile(format, {
-        search,
+        search: debouncedSearch.trim() || search.trim(),
         province: selectedProvince,
         position: selectedPosition,
         period: selectedPeriod,
         status: selectedStatus,
       });
-    } catch (err) {
-      alert('Gagal mengekspor data: ' + err);
+    } catch (err: any) {
+      alert('Gagal mengekspor data: ' + (err?.response?.data?.message || err?.message || err));
     } finally {
       setIsExporting(null);
     }
@@ -364,7 +375,7 @@ export const PayrollListPage: React.FC = () => {
               type="text"
               placeholder={
                 isAdmin
-                  ? 'Cari Nama, NIK, Sekolah, No Rekening...'
+                  ? 'Cari Nama, NIK, Sekolah, Wilayah, No Rekening...'
                   : 'Cari Nama, NIK, Sekolah Rakyat, Wilayah...'
               }
               value={search}
@@ -1033,39 +1044,6 @@ export const PayrollListPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Modal Only Admin For Export */}
-      <Modal
-        isOpen={isExportRestrictedModalOpen}
-        onClose={() => setIsExportRestrictedModalOpen(false)}
-        title="Akses Dibatasi: Only Admin"
-        maxWidth="sm"
-      >
-        <div className="space-y-4 py-2 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-sm">
-            <Lock className="w-7 h-7" />
-          </div>
-
-          <div className="space-y-2">
-            <h4 className="font-title-card text-[16px] font-bold text-text-primary">
-              Only Admin for Export
-            </h4>
-            <p className="font-body-default text-[13px] text-text-muted leading-relaxed">
-              Mohon maaf, fitur ekspor rekapan data (Excel, CSV, dan PDF) hanya dapat diakses oleh akun dengan peran <strong>Administrator</strong>.
-            </p>
-          </div>
-
-          <div className="pt-2">
-            <Button
-              variant="primary"
-              size="md"
-              className="w-full justify-center"
-              onClick={() => setIsExportRestrictedModalOpen(false)}
-            >
-              Saya Mengerti
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Pengaturan Gaji Wilayah Modal (UMP & BPJS) */}
       <ProvinceSettingsModal

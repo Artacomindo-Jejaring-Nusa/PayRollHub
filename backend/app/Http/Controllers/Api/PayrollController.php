@@ -264,25 +264,31 @@ class PayrollController extends Controller
     public function export(Request $request): Response
     {
         $user = $request->user();
-        $isAdmin = $user && $user->isAdmin();
-
-        if (!$isAdmin) {
-            abort(403, 'Akses ditolak. Fitur ekspor laporan hanya dapat diakses oleh Administrator.');
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
         }
 
+        // Karyawan biasa tidak memiliki akses ekspor data rekapitulasi seluruh staf
+        if ($user->isEmployee()) {
+            abort(403, 'Akses ditolak. Fitur ekspor laporan hanya dapat diakses oleh Administrator dan User Dashboard.');
+        }
+
+        $isAdmin = $user->isAdmin();
+
         $format = strtolower($request->input('format', 'xlsx'));
-        $filename = 'rekap_payroll_' . date('Ymd_His');
+        $filename = ($isAdmin ? 'rekap_payroll_' : 'rekap_data_karyawan_') . date('Ymd_His');
 
         $resolvedCompany = $this->payrollService->resolveCompany($request);
 
         \App\Models\ActivityLog::record(
             action: 'EXPORT_DATA',
             module: 'payroll',
-            description: "Mengekspor data penggajian format " . strtoupper($format),
+            description: ($isAdmin ? "Mengekspor data penggajian format " : "Mengekspor rekap penempatan karyawan (Dashboard) format ") . strtoupper($format),
             details: [
                 'format' => $format,
                 'period' => $request->input('period'),
                 'company' => $resolvedCompany,
+                'role' => $user->role ?? 'user',
             ],
             company: $resolvedCompany
         );

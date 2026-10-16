@@ -16,6 +16,9 @@ import { formatCurrency } from '../../../lib/utils';
 import { SP_PERIOD_LIST, formatPeriodDisplay } from '../../../lib/period';
 import {
   FileSpreadsheet,
+  FileText,
+  Download,
+  Loader2,
   Plus,
   Upload,
   Calendar,
@@ -67,6 +70,23 @@ export const DashboardOverviewPage: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [wilayahTab, setWilayahTab] = useState<'top5' | 'all'>('top5');
+  const [isExporting, setIsExporting] = useState<string | null>(null);
+
+  const handleExportDashboard = async (format: 'xlsx' | 'csv' | 'pdf') => {
+    setIsExporting(format);
+    try {
+      await payrollService.exportFile(format, {
+        province: selectedProvince,
+        period: selectedPeriod,
+        status: selectedStatus,
+        company: tenant.id,
+      });
+    } catch (err: any) {
+      alert('Gagal mengekspor data: ' + (err?.response?.data?.message || err?.message || err));
+    } finally {
+      setIsExporting(null);
+    }
+  };
 
   // Load dashboard data
   const fetchDashboardData = useCallback(async () => {
@@ -251,6 +271,52 @@ export const DashboardOverviewPage: React.FC = () => {
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             <span>Reset</span>
           </button>
+
+          {/* Export Data Sesuai Dashboard */}
+          <div className="flex items-center rounded-lg border border-border-subtle bg-surface-panel p-0.5 shadow-sm h-9">
+            <button
+              type="button"
+              onClick={() => handleExportDashboard('xlsx')}
+              disabled={!!isExporting}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-semibold text-text-primary hover:bg-surface-container rounded-md transition-colors disabled:opacity-50"
+              title="Export Data Tampilan Dashboard ke Excel (.xlsx)"
+            >
+              {isExporting === 'xlsx' ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+              ) : (
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              )}
+              <span>Export</span>
+            </button>
+            <div className="w-[1px] h-4 bg-border-row" />
+            <button
+              type="button"
+              onClick={() => handleExportDashboard('csv')}
+              disabled={!!isExporting}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-text-muted hover:text-text-primary hover:bg-surface-container rounded-md transition-colors disabled:opacity-50"
+              title="Export ke CSV (.csv)"
+            >
+              {isExporting === 'csv' ? (
+                <Loader2 className="w-3 h-3 animate-spin text-primary" />
+              ) : (
+                'CSV'
+              )}
+            </button>
+            <div className="w-[1px] h-4 bg-border-row" />
+            <button
+              type="button"
+              onClick={() => handleExportDashboard('pdf')}
+              disabled={!!isExporting}
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-text-muted hover:text-text-primary hover:bg-surface-container rounded-md transition-colors disabled:opacity-50"
+              title="Export ke PDF (.pdf)"
+            >
+              {isExporting === 'pdf' ? (
+                <Loader2 className="w-3 h-3 animate-spin text-primary" />
+              ) : (
+                'PDF'
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

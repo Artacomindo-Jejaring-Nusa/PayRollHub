@@ -29,6 +29,7 @@ class UpdateUserRequest extends FormRequest
             'company' => ['nullable', 'string', 'in:rbs,rimamandiri'],
             'nik' => ['nullable', 'string', 'max:50'],
             'school_unit' => ['nullable', 'string', 'max:200'],
+            'marital_status' => ['nullable', 'string', 'max:50'],
         ];
     }
 

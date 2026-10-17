@@ -50,6 +50,7 @@ export const UserListPage: React.FC = () => {
   const [formCompany, setFormCompany] = useState<'rbs' | 'rimamandiri'>('rbs');
   const [formNik, setFormNik] = useState('');
   const [formSchoolUnit, setFormSchoolUnit] = useState('');
+  const [formMaritalStatus, setFormMaritalStatus] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -97,6 +98,7 @@ export const UserListPage: React.FC = () => {
     setFormCompany(tenant.id);
     setFormNik('');
     setFormSchoolUnit('');
+    setFormMaritalStatus('');
     setFormErrors({});
     setModalOpen(true);
   };
@@ -110,6 +112,7 @@ export const UserListPage: React.FC = () => {
     setFormCompany((user.company as any) || 'rbs');
     setFormNik(user.nik || '');
     setFormSchoolUnit(user.school_unit || '');
+    setFormMaritalStatus(user.marital_status || '');
     setFormErrors({});
     setModalOpen(true);
   };
@@ -126,6 +129,7 @@ export const UserListPage: React.FC = () => {
       company: formRole === 'super_admin' ? null : formCompany,
       nik: formNik.trim() || null,
       school_unit: formSchoolUnit.trim() || null,
+      marital_status: formMaritalStatus || null,
       ...(formPassword.trim() ? { password: formPassword.trim() } : {}),
     };
 
@@ -296,6 +300,11 @@ export const UserListPage: React.FC = () => {
                             NIK: <span className="font-mono font-medium text-slate-700">{item.nik}</span>
                           </div>
                         )}
+                        {item.marital_status && (
+                          <div className="text-[10.5px] text-indigo-700 font-medium mt-0.5 inline-flex items-center gap-1 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                            <span>💍 {item.marital_status}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <Badge
@@ -435,23 +444,49 @@ export const UserListPage: React.FC = () => {
           )}
 
           {formRole === 'karyawan' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100">
-              <Input
-                label="NIK Karyawan"
-                placeholder="Contoh: 320123456789"
-                value={formNik}
-                onChange={(e) => setFormNik(e.target.value)}
-                error={formErrors.nik}
-                helperText="Digunakan sebagai ID login cepat & sandi default"
-              />
-              <Input
-                label="Unit Sekolah / Lokasi"
-                placeholder="Contoh: SD IT Rabbani"
-                value={formSchoolUnit}
-                onChange={(e) => setFormSchoolUnit(e.target.value)}
-                error={formErrors.school_unit}
-                helperText="Terisi otomatis saat import/input gaji"
-              />
+            <div className="space-y-3 bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="NIK Karyawan"
+                  placeholder="Contoh: 320123456789"
+                  value={formNik}
+                  onChange={(e) => setFormNik(e.target.value)}
+                  error={formErrors.nik}
+                  helperText="Digunakan sebagai ID login cepat & sandi default"
+                />
+                <Input
+                  label="Unit Sekolah / Lokasi"
+                  placeholder="Contoh: SD IT Rabbani"
+                  value={formSchoolUnit}
+                  onChange={(e) => setFormSchoolUnit(e.target.value)}
+                  error={formErrors.school_unit}
+                  helperText="Terisi otomatis saat import/input gaji"
+                />
+              </div>
+
+              <div>
+                <Select
+                  label="Status Perkawinan"
+                  value={formMaritalStatus}
+                  onChange={(e) => setFormMaritalStatus(e.target.value)}
+                  options={[
+                    { label: '-- Pilih Status Perkawinan --', value: '' },
+                    { label: 'Kawin', value: 'Kawin' },
+                    { label: 'Belum Kawin', value: 'Belum Kawin' },
+                    { label: 'Nikah Anak 1', value: 'Nikah Anak 1' },
+                    { label: 'Nikah Anak 2', value: 'Nikah Anak 2' },
+                    { label: 'Nikah Anak 3', value: 'Nikah Anak 3' },
+                    { label: 'Duda Anak 1', value: 'Duda Anak 1' },
+                    { label: 'Duda Anak 2', value: 'Duda Anak 2' },
+                    { label: 'Duda Anak 3', value: 'Duda Anak 3' },
+                    { label: 'Tidak Kawin', value: 'Tidak Kawin' },
+                  ]}
+                  error={formErrors.marital_status}
+                />
+                <p className="text-[11px] text-text-muted mt-1">
+                  Data internal admin / HRD (tidak ditampilkan ke akun karyawan & slip gaji)
+                </p>
+              </div>
             </div>
           )}
 

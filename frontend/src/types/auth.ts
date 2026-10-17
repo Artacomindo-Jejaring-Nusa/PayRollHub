@@ -8,6 +8,7 @@ export interface User {
   phone?: string;
   birth_date?: string | null;
   gender?: string | null;
+  marital_status?: string | null;
   company?: string;
   school_unit?: string | null;
   bank_name?: string;

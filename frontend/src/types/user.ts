@@ -21,4 +21,5 @@ export interface UserFormData {
   company?: string | null;
   nik?: string | null;
   school_unit?: string | null;
+  marital_status?: string | null;
 }

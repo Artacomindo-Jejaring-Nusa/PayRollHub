@@ -24,6 +24,7 @@ class User extends Authenticatable
         'phone',
         'birth_date',
         'gender',
+        'marital_status',
         'company',
         'school_unit',
         'attendance_location_id',

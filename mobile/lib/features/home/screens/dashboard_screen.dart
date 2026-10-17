@@ -5867,6 +5867,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final iconBgColor = isRiama ? const Color(0xFFD1FAE5) : const Color(0xFFE0E7FF);
     final iconColor = isRiama ? const Color(0xFF065F46) : const Color(0xFF2563EB);
 
+    if (_isLoadingProfile && _profileData == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 150),
+          child: CircularProgressIndicator(color: primaryBrandColor),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.only(top: 106, bottom: 95, left: 16, right: 16),
       child: Column(

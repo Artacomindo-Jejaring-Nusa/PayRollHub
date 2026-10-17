@@ -21,6 +21,7 @@ import '../widgets/onboarding_tutorial_dialog.dart';
 import 'complaints_screen.dart';
 import 'live_chat_screen.dart';
 import 'profile_edit_screen.dart';
+import 'live_attendance_camera_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   final UserModel user;
@@ -607,31 +608,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _performCheckInWithCamera(String attendanceType) async {
     try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-        imageQuality: 70,
-        maxWidth: 1024,
+      // 1. Dapatkan dan validasi posisi GPS terlebih dahulu
+      setState(() => _isSubmittingAction = true);
+      final position = await _determinePosition();
+      setState(() => _isSubmittingAction = false);
+
+      if (position == null) return;
+      if (!mounted) return;
+
+      // 2. Buka Live Camera Depan langsung di dalam aplikasi (Tanpa Intent / Tanpa Galeri / Anti TimeMark)
+      final File? capturedPhoto = await Navigator.of(context).push<File>(
+        MaterialPageRoute(
+          builder: (_) => LiveAttendanceCameraScreen(
+            title: 'Foto Selfie Kehadiran',
+            subtitle: 'Wajib live camera depan • Dilarang upload gambar/galeri',
+            latitude: position.latitude,
+            longitude: position.longitude,
+            locationName: _todayAttendance?.assignedLocation?.name ?? 'Lokasi Penugasan',
+            userName: widget.user.name,
+          ),
+        ),
       );
 
-      if (picked == null) return;
+      if (capturedPhoto == null) return;
 
       setState(() => _isSubmittingAction = true);
 
-      // Dapatkan GPS
-      final position = await _determinePosition();
-      if (position == null) {
-        setState(() => _isSubmittingAction = false);
-        return;
-      }
-
-      final file = File(picked.path);
       final res = await AttendanceService.checkIn(
         attendanceType: attendanceType,
         latitude: position.latitude,
         longitude: position.longitude,
-        photoFile: file,
+        shiftId: _todayAttendance?.assignedShift?.id,
+        photoFile: capturedPhoto,
       );
 
       setState(() => _isSubmittingAction = false);
@@ -723,6 +731,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 attendanceType: attendanceType,
                 latitude: position?.latitude,
                 longitude: position?.longitude,
+                shiftId: _todayAttendance?.assignedShift?.id,
                 notes: notes,
               );
               setState(() => _isSubmittingAction = false);
@@ -875,6 +884,303 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         );
       }
     }
+  }
+
+  Future<void> _showShiftSelectionModal() async {
+    final availableShifts = _todayAttendance?.availableShifts ?? [];
+    if (availableShifts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tidak ada pilihan shift tambahan untuk unit Anda.'),
+          backgroundColor: AppColors.neutral700,
+        ),
+      );
+      return;
+    }
+
+    final currentShiftId = _todayAttendance?.assignedShift?.id;
+    int? selectedId = currentShiftId;
+    bool isSaving = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalCtx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.82,
+              ),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle bar
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: AppColors.neutral300,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: secondaryLightColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.schedule_rounded, color: secondaryDarkColor, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Pilih Shift Kerja',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.neutral900,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Pilih pola shift sesuai jadwal tugas Anda hari ini',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: AppColors.neutral500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: AppColors.neutral500),
+                            onPressed: () => Navigator.pop(modalCtx),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+
+                    // Shift list
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        itemCount: availableShifts.length,
+                        separatorBuilder: (sepCtx, sepIdx) => const SizedBox(height: 10),
+                        itemBuilder: (ctx, index) {
+                          final shift = availableShifts[index];
+                          final isSelected = shift.id == selectedId;
+                          final is3Shift = shift.code.contains('3_SHIFT') || shift.name.contains('3 Shift');
+                          final is2Shift = shift.code.contains('2_SHIFT') || shift.name.contains('2 Shift');
+
+                          return InkWell(
+                            onTap: isSaving
+                                ? null
+                                : () async {
+                                    setModalState(() {
+                                      selectedId = shift.id;
+                                      isSaving = true;
+                                    });
+
+                                    final messenger = ScaffoldMessenger.of(context);
+                                    final res = await AttendanceService.selectShift(shift.id);
+
+                                    if (mounted) {
+                                      if (res['success'] == true) {
+                                        setState(() {
+                                          _todayAttendance = _todayAttendance?.copyWith(assignedShift: shift);
+                                        });
+                                        if (modalCtx.mounted) {
+                                          Navigator.pop(modalCtx);
+                                        }
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text('Shift berhasil diatur ke ${shift.name} (${shift.formattedTime ?? '${shift.startTime} - ${shift.endTime}'})'),
+                                            backgroundColor: AppColors.success,
+                                          ),
+                                        );
+                                      } else {
+                                        setModalState(() => isSaving = false);
+                                        messenger.showSnackBar(
+                                          SnackBar(
+                                            content: Text(res['message']?.toString() ?? 'Gagal mengubah shift.'),
+                                            backgroundColor: AppColors.error,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                            borderRadius: BorderRadius.circular(16),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: isSelected ? secondaryLightColor.withValues(alpha: 0.5) : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected ? secondaryAccentColor : const Color(0xFFE2E8F0),
+                                  width: isSelected ? 1.8 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  // Radio Indicator
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isSelected ? secondaryAccentColor : AppColors.neutral400,
+                                        width: 2,
+                                      ),
+                                      color: isSelected ? secondaryAccentColor : Colors.transparent,
+                                    ),
+                                    child: isSelected
+                                        ? const Center(
+                                            child: Icon(Icons.check, size: 14, color: Colors.white),
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 14),
+
+                                  // Shift Details
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                shift.name,
+                                                style: GoogleFonts.plusJakartaSans(
+                                                  fontSize: 13.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: isSelected ? secondaryDarkColor : AppColors.neutral900,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            if (is3Shift)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFDBEAFE),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  '3 Shift',
+                                                  style: GoogleFonts.plusJakartaSans(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: const Color(0xFF1D4ED8),
+                                                  ),
+                                                ),
+                                              )
+                                            else if (is2Shift)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFFEF3C7),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  '2 Shift',
+                                                  style: GoogleFonts.plusJakartaSans(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: const Color(0xFFB45309),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.access_time_filled_rounded, size: 13, color: isSelected ? secondaryDarkColor : AppColors.neutral500),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${shift.formattedTime ?? '${shift.startTime} - ${shift.endTime}'} WIB',
+                                              style: GoogleFonts.plusJakartaSans(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: isSelected ? secondaryDarkColor : AppColors.neutral700,
+                                              ),
+                                            ),
+                                            if (shift.crossDay) ...[
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '(Lintas Hari)',
+                                                style: GoogleFonts.plusJakartaSans(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: const Color(0xFF7C3AED),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        if (shift.description != null && shift.description!.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            shift.description!,
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 11,
+                                              color: AppColors.neutral500,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+
+                                  if (isSelected && isSaving)
+                                    const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -1618,29 +1924,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      '$shiftName: ',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 10.5,
-                                        color: Colors.white70,
+                              child: InkWell(
+                                onTap: hasCheckedIn ? null : _showShiftSelectionModal,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        '$shiftName: ',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 10.5,
+                                          color: Colors.white70,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  Text(
-                                    shiftTime,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
+                                    Text(
+                                      shiftTime,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    if (!hasCheckedIn) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(Icons.swap_horiz_rounded, size: 14, color: Colors.white70),
+                                    ],
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -1733,6 +2047,117 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                           ),
                         ],
+                      ),
+
+                      // Interactive Shift Selector Pill / Banner (Pilihan 5 Shift Sekolah & Riama)
+                      InkWell(
+                        onTap: hasCheckedIn ? null : _showShiftSelectionModal,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: secondaryAccentColor.withValues(alpha: 0.35),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: secondaryLightColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.schedule_rounded, size: 16, color: secondaryDarkColor),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Shift Kerja: ',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.neutral500,
+                                          ),
+                                        ),
+                                        Flexible(
+                                          child: Text(
+                                            shiftName,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppColors.neutral900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '$shiftTime WIB',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: secondaryDarkColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!hasCheckedIn) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
+                                  decoration: BoxDecoration(
+                                    color: secondaryAccentColor.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: secondaryAccentColor.withValues(alpha: 0.25)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Pilih Shift',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: secondaryDarkColor,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Icon(Icons.keyboard_arrow_down_rounded, size: 15, color: secondaryDarkColor),
+                                    ],
+                                  ),
+                                ),
+                              ] else ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.neutral200,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'Tersimpan',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.neutral600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 18),

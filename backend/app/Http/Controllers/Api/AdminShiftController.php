@@ -73,11 +73,12 @@ class AdminShiftController extends Controller
         $shift = Shift::create($validated);
 
         ActivityLog::record(
-            $currentUser->id,
-            'create_shift',
-            "Menambahkan master shift baru: {$shift->name} ({$shift->formatted_time}) untuk entitas {$shift->company}",
-            $request,
-            ['shift_id' => $shift->id, 'code' => $shift->code]
+            action: 'CREATE_SHIFT',
+            module: 'shift',
+            description: "Menambahkan master shift baru: {$shift->name} ({$shift->formatted_time}) untuk entitas {$shift->company}",
+            details: ['shift_id' => $shift->id, 'code' => $shift->code, 'start_time' => $shift->start_time, 'end_time' => $shift->end_time],
+            company: $shift->company,
+            user: $currentUser
         );
 
         return response()->json([
@@ -116,11 +117,12 @@ class AdminShiftController extends Controller
         $shift->update($validated);
 
         ActivityLog::record(
-            $currentUser->id,
-            'update_shift',
-            "Memperbarui master shift: {$shift->name} ({$shift->formatted_time})",
-            $request,
-            ['shift_id' => $shift->id]
+            action: 'UPDATE_SHIFT',
+            module: 'shift',
+            description: "Memperbarui master shift: {$shift->name} ({$shift->formatted_time})",
+            details: ['shift_id' => $shift->id, 'code' => $shift->code, 'start_time' => $shift->start_time, 'end_time' => $shift->end_time],
+            company: $shift->company,
+            user: $currentUser
         );
 
         return response()->json([
@@ -154,11 +156,12 @@ class AdminShiftController extends Controller
         }
 
         ActivityLog::record(
-            $currentUser->id,
-            'delete_shift',
-            "Menghapus / menonaktifkan shift: {$shift->name}",
-            $request,
-            ['shift_id' => $shift->id]
+            action: 'DELETE_SHIFT',
+            module: 'shift',
+            description: "Menghapus / menonaktifkan shift: {$shift->name}",
+            details: ['shift_id' => $shift->id, 'name' => $shift->name],
+            company: $shift->company,
+            user: $currentUser
         );
 
         return response()->json([
@@ -209,11 +212,12 @@ class AdminShiftController extends Controller
         $updatedCount = $query->update(['shift_id' => $shift->id]);
 
         ActivityLog::record(
-            $currentUser->id,
-            'assign_shift',
-            "Menetapkan shift '{$shift->name}' ke {$updatedCount} karyawan.",
-            $request,
-            ['shift_id' => $shift->id, 'updated_count' => $updatedCount]
+            action: 'ASSIGN_SHIFT',
+            module: 'shift',
+            description: "Menetapkan shift '{$shift->name}' ke {$updatedCount} karyawan.",
+            details: ['shift_id' => $shift->id, 'updated_count' => $updatedCount],
+            company: $shift->company,
+            user: $currentUser
         );
 
         return response()->json([

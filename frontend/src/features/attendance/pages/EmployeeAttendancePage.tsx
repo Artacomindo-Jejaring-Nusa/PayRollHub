@@ -53,9 +53,7 @@ export const EmployeeAttendancePage: React.FC = () => {
   const [dinasNotes, setDinasNotes] = useState<string>('');
   const [checkInNotes, setCheckInNotes] = useState<string>('');
 
-  // Camera & Photo State
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dinasFileInputRef = useRef<HTMLInputElement>(null);
+  // Camera & Photo State (Live Camera Sensor Only)
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -215,28 +213,12 @@ export const EmployeeAttendancePage: React.FC = () => {
     requestLocation();
   }, [requestLocation]);
 
-  // Handle Ambil Foto Kamera / Upload
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setMessage({ text: 'Ukuran foto terlalu besar (maksimal 10MB).', type: 'error' });
-        return;
-      }
-      setPhotoFile(file);
-      const url = URL.createObjectURL(file);
-      setPhotoPreview(url);
-    }
-  };
-
   const handleResetPhoto = () => {
     if (photoPreview && photoPreview.startsWith('blob:')) {
       URL.revokeObjectURL(photoPreview);
     }
     setPhotoFile(null);
     setPhotoPreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (dinasFileInputRef.current) dinasFileInputRef.current.value = '';
   };
 
   // Kalkulasi Jarak Terhadap Seluruh 100+ Lokasi Aktif
@@ -781,15 +763,6 @@ export const EmployeeAttendancePage: React.FC = () => {
                       )}
                     </label>
 
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="user"
-                      onChange={handlePhotoChange}
-                      className="hidden"
-                    />
-
                     {!photoPreview ? (
                       <button
                         type="button"
@@ -1040,15 +1013,6 @@ export const EmployeeAttendancePage: React.FC = () => {
                           </span>
                         )}
                       </label>
-
-                      <input
-                        ref={dinasFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handlePhotoChange}
-                        className="hidden"
-                      />
 
                       {!photoPreview ? (
                         <button

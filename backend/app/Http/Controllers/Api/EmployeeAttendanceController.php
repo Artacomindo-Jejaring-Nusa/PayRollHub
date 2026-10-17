@@ -44,7 +44,16 @@ class EmployeeAttendanceController extends Controller
         $assignedLocation = $this->resolveUserAssignedLocation($user, $targetCompany, $setting, $hqLocation);
         $isLocationLocked = true;
 
-        $assignedShift = $user->shift ?: \App\Models\Shift::where('code', 'REGULER')->first();
+        // Point Bang Maun: Default shift untuk karyawan sekolah / Riama
+        $defaultShift = null;
+        if (!empty($user->school_unit) || $targetCompany === 'rimamandiri') {
+            $defaultShift = \App\Models\Shift::where('code', 'SHIFT_1_3_SHIFT')->first();
+        }
+        if (!$defaultShift) {
+            $defaultShift = \App\Models\Shift::where('code', 'REGULER')->first();
+        }
+
+        $assignedShift = $user->shift ?: $defaultShift;
 
         return response()->json([
             'status' => 'success',
@@ -55,7 +64,7 @@ class EmployeeAttendanceController extends Controller
                 'assigned_location' => $assignedLocation,
                 'is_location_locked' => true,
                 'assigned_shift' => $assignedShift,
-                'available_shifts' => \App\Models\Shift::getAvailableForCompany($targetCompany),
+                'available_shifts' => \App\Models\Shift::getAvailableForUser($user),
                 'is_admin_user' => $isAdmin,
                 'is_admin_headquarters_enforced' => $isAdmin,
                 'headquarters_location' => $hqLocation,
@@ -177,6 +186,7 @@ class EmployeeAttendanceController extends Controller
             'latitude' => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
             'location_id' => 'nullable|integer',
+            'shift_id' => 'nullable|integer',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -226,9 +236,26 @@ class EmployeeAttendanceController extends Controller
             ], 422);
         }
 
-        // Tentukan status keterlambatan berdasarkan Shift aktif karyawan
+        // Tentukan status keterlambatan berdasarkan Shift aktif karyawan (atau shift yang dipilih saat check-in)
         $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
-        $userShift = $user->shift ?: \App\Models\Shift::where('code', 'REGULER')->first();
+
+        $userShift = null;
+        if (!empty($validated['shift_id'])) {
+            $chosenShift = \App\Models\Shift::where('is_active', true)->find($validated['shift_id']);
+            if ($chosenShift) {
+                $user->update(['shift_id' => $chosenShift->id]);
+                $userShift = $chosenShift;
+            }
+        }
+        if (!$userShift) {
+            $userShift = $user->shift;
+            if (!$userShift) {
+                if (!empty($user->school_unit) || $targetCompany === 'rimamandiri') {
+                    $userShift = \App\Models\Shift::where('code', 'SHIFT_1_3_SHIFT')->first();
+                }
+                $userShift = $userShift ?: \App\Models\Shift::where('code', 'REGULER')->first();
+            }
+        }
 
         $shiftStartTime = $userShift ? $userShift->start_time : $setting->work_start_time;
         $shiftTolerance = $userShift ? (int) $userShift->late_tolerance_minutes : (int) $setting->late_tolerance_minutes;
@@ -579,6 +606,27 @@ class EmployeeAttendanceController extends Controller
         }
 
         return $hqLocation;
+    }
+
+    /**
+     * Karyawan memilih shift kerja aktif (misal dari 5 pilihan shift sekolah).
+     */
+    public function selectShift(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'shift_id' => 'required|integer|exists:shifts,id',
+        ]);
+
+        $user = $request->user();
+        $shift = Shift::where('is_active', true)->findOrFail($validated['shift_id']);
+
+        $user->update(['shift_id' => $shift->id]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Shift kerja berhasil diatur menjadi '{$shift->name}' ({$shift->formatted_time}).",
+            'data' => $shift,
+        ]);
     }
 }
 

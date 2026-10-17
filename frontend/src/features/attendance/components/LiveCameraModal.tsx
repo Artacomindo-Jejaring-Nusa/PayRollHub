@@ -9,7 +9,7 @@ import {
   SwitchCamera,
   Sparkles,
   ShieldCheck,
-  Upload,
+  Lock,
 } from 'lucide-react';
 
 interface LiveCameraModalProps {
@@ -33,7 +33,6 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileFallbackRef = useRef<HTMLInputElement>(null);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>(defaultFacingMode);
@@ -237,17 +236,6 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
     onClose();
   };
 
-  // Fallback upload input if hardware camera is completely unavailable
-  const handleFallbackFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      stopStream();
-      onCapture(file, url);
-      onClose();
-    }
-  };
-
   const handleCloseModal = () => {
     stopStream();
     onClose();
@@ -292,22 +280,19 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                 <div className="font-semibold text-sm text-white">Kamera Tidak Dapat Dibuka</div>
                 <div className="text-xs text-rose-300/90 leading-relaxed">{cameraError}</div>
               </div>
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+              <div className="pt-2 flex flex-col items-center justify-center gap-2">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => startCamera(facingMode)}
                   className="w-full sm:w-auto text-xs bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1" /> Coba Lagi
+                  <RotateCcw className="w-3.5 h-3.5 mr-1" /> Coba Sambungkan Kamera Lagi
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => fileFallbackRef.current?.click()}
-                  className="w-full sm:w-auto text-xs bg-primary hover:bg-primary-hover text-white"
-                >
-                  <Upload className="w-3.5 h-3.5 mr-1" /> Unggah Foto Alternatif
-                </Button>
+                <div className="text-[11.5px] text-rose-300/80 flex items-center gap-1.5 mt-1">
+                  <Lock className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                  <span>Sistem mewajibkan foto kamera langsung (upload galeri/file dilarang)</span>
+                </div>
               </div>
             </div>
           ) : isInitializing ? (
@@ -373,26 +358,12 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
           )}
         </div>
 
-        {/* Hidden File Input for fallback */}
-        <input
-          ref={fileFallbackRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFallbackFileChange}
-          className="hidden"
-        />
-
         {/* Control Footer */}
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Subtle Fallback link */}
-          <div className="order-2 sm:order-1 text-[11px] text-text-muted">
-            <button
-              type="button"
-              onClick={() => fileFallbackRef.current?.click()}
-              className="text-text-muted hover:text-primary transition-colors underline cursor-pointer"
-            >
-              Kamera tidak berfungsi? Klik di sini untuk unggah foto
-            </button>
+          {/* Strict Security Badge */}
+          <div className="order-2 sm:order-1 text-[11.5px] text-text-muted flex items-center gap-1.5 font-medium">
+            <Lock className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Kamera Live Depan Wajib • Dilarang Upload Foto Galeri / Berkas</span>
           </div>
 
           {/* Action Buttons */}

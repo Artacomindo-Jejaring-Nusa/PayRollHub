@@ -94,4 +94,40 @@ class Shift extends Model
         }
         return $query->orderBy('start_time', 'asc')->get();
     }
+
+    /**
+     * Dapatkan daftar shift yang tersedia untuk pengguna spesifik.
+     * Pilihan 5 master shift sekolah HANYA untuk karyawan PT Riama Mandiri Pratama.
+     * Entitas lain (RBS, dll.) hanya mendapatkan shift perusahaannya masing-masing.
+     */
+    public static function getAvailableForUser(User $user)
+    {
+        $company = strtolower($user->company ?: 'rbs');
+        $isRiama = in_array($company, ['rimamandiri', 'riama']);
+
+        $query = self::where('is_active', true);
+
+        if ($isRiama) {
+            // Khusus RIAMA: Karyawan Riama Mandiri dapat memilih di antara 5 master shift sekolah Riama
+            $query->where(function ($q) {
+                $q->where('company', 'all')
+                  ->orWhere('company', 'rimamandiri')
+                  ->orWhere('company', 'riama');
+            });
+        } else {
+            // Perusahaan lain (seperti RBS): TIDAK menampilkan 5 shift sekolah Riama
+            $query->where(function ($q) use ($company) {
+                $q->where('company', 'all')
+                  ->orWhere('company', $company);
+            })->where('code', 'NOT LIKE', 'SHIFT_%');
+        }
+
+        return $query->orderByRaw("
+            CASE 
+                WHEN code LIKE 'SHIFT_%' THEN 1 
+                WHEN code = 'REGULER' THEN 2 
+                ELSE 3 
+            END ASC, start_time ASC
+        ")->get();
+    }
 }

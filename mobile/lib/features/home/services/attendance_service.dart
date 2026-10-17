@@ -30,6 +30,7 @@ class AttendanceService {
     double? latitude,
     double? longitude,
     int? locationId,
+    int? shiftId,
     String? notes,
     File? photoFile,
   }) async {
@@ -45,6 +46,7 @@ class AttendanceService {
           if (latitude != null) 'latitude': latitude,
           if (longitude != null) 'longitude': longitude,
           if (locationId != null) 'location_id': locationId,
+          if (shiftId != null) 'shift_id': shiftId,
           if (notes != null && notes.isNotEmpty) 'notes': notes,
           'photo': base64Image,
         };
@@ -61,6 +63,7 @@ class AttendanceService {
           if (latitude != null) 'latitude': latitude,
           if (longitude != null) 'longitude': longitude,
           if (locationId != null) 'location_id': locationId,
+          if (shiftId != null) 'shift_id': shiftId,
           if (notes != null && notes.isNotEmpty) 'notes': notes,
         };
 
@@ -73,9 +76,29 @@ class AttendanceService {
       }
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] ??
-          (e.response?.data?['errors'] != null
-              ? (e.response!.data['errors'] as Map).values.first.toString()
-              : 'Gagal melakukan absen masuk. Pastikan Anda berada dalam radius kantor.');
+          e.message ??
+          'Koneksi gagal saat melakukan absensi.';
+      return {'success': false, 'message': msg};
+    } catch (e) {
+      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};
+    }
+  }
+
+  /// Karyawan memilih shift kerja aktif (misal dari 5 pilihan shift sekolah)
+  static Future<Map<String, dynamic>> selectShift(int shiftId) async {
+    try {
+      final dio = await ApiClient.getInstance();
+      final response = await dio.post(
+        '/employee/attendance/shift/select',
+        data: {'shift_id': shiftId},
+      );
+      return {
+        'success': response.statusCode == 200,
+        'message': response.data['message'] ?? 'Shift berhasil diperbarui.',
+        'data': response.data['data'] != null ? ShiftModel.fromJson(response.data['data']) : null,
+      };
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Gagal mengubah shift.';
       return {'success': false, 'message': msg};
     } catch (e) {
       return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};

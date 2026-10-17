@@ -40,6 +40,8 @@ class ShiftModel {
   final String startTime;
   final String endTime;
   final String? formattedTime;
+  final String? description;
+  final bool crossDay;
 
   ShiftModel({
     required this.id,
@@ -48,6 +50,8 @@ class ShiftModel {
     required this.startTime,
     required this.endTime,
     this.formattedTime,
+    this.description,
+    this.crossDay = false,
   });
 
   factory ShiftModel.fromJson(Map<String, dynamic> json) {
@@ -58,6 +62,8 @@ class ShiftModel {
       startTime: json['start_time']?.toString() ?? '08:00',
       endTime: json['end_time']?.toString() ?? '17:00',
       formattedTime: json['formatted_time']?.toString(),
+      description: json['description']?.toString(),
+      crossDay: json['cross_day'] == true || json['cross_day'] == 1 || json['cross_day'] == '1',
     );
   }
 }
@@ -112,6 +118,7 @@ class TodayAttendanceDataModel {
   final AttendanceRecordModel? attendance;
   final AttendanceLocationModel? assignedLocation;
   final ShiftModel? assignedShift;
+  final List<ShiftModel> availableShifts;
   final Map<String, dynamic>? officeSetting;
 
   TodayAttendanceDataModel({
@@ -120,10 +127,20 @@ class TodayAttendanceDataModel {
     this.attendance,
     this.assignedLocation,
     this.assignedShift,
+    this.availableShifts = const [],
     this.officeSetting,
   });
 
   factory TodayAttendanceDataModel.fromJson(Map<String, dynamic> json) {
+    var rawShifts = json['available_shifts'];
+    List<ShiftModel> parsedShifts = [];
+    if (rawShifts is List) {
+      parsedShifts = rawShifts
+          .whereType<Map<String, dynamic>>()
+          .map((s) => ShiftModel.fromJson(s))
+          .toList();
+    }
+
     return TodayAttendanceDataModel(
       today: json['today']?.toString() ?? '',
       serverTime: json['server_time']?.toString() ?? '',
@@ -136,9 +153,30 @@ class TodayAttendanceDataModel {
       assignedShift: json['assigned_shift'] != null
           ? ShiftModel.fromJson(json['assigned_shift'])
           : null,
+      availableShifts: parsedShifts,
       officeSetting: json['office_setting'] is Map<String, dynamic>
           ? json['office_setting']
           : null,
+    );
+  }
+
+  TodayAttendanceDataModel copyWith({
+    String? today,
+    String? serverTime,
+    AttendanceRecordModel? attendance,
+    AttendanceLocationModel? assignedLocation,
+    ShiftModel? assignedShift,
+    List<ShiftModel>? availableShifts,
+    Map<String, dynamic>? officeSetting,
+  }) {
+    return TodayAttendanceDataModel(
+      today: today ?? this.today,
+      serverTime: serverTime ?? this.serverTime,
+      attendance: attendance ?? this.attendance,
+      assignedLocation: assignedLocation ?? this.assignedLocation,
+      assignedShift: assignedShift ?? this.assignedShift,
+      availableShifts: availableShifts ?? this.availableShifts,
+      officeSetting: officeSetting ?? this.officeSetting,
     );
   }
 }

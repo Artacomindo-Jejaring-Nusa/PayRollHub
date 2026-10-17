@@ -97,6 +97,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/attendance/check-in', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'checkIn']);
         Route::post('/attendance/check-out', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'checkOut']);
         Route::get('/attendance/history', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'history']);
+        Route::post('/attendance/shift/select', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'selectShift']);
     });
 
     // Admin Only Operations

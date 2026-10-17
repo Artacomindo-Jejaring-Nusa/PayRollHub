@@ -97,10 +97,10 @@ class _OnboardingTutorialDialogState extends State<OnboardingTutorialDialog> {
         accentColor: const Color(0xFF2563EB),
         highlights: [
           'Memuat nama lengkap, NIK, dan perusahaan Anda ($companyName).',
-          'Jadwal Shift Kerja resmi hari ini (Jam masuk dan pulang).',
+          'Pilihan 5 Shift Sekolah: Sentuh kartu shift untuk memilih pola 3 Shift atau 2 Shift.',
           'Unit penempatan sekolah/kantor dan status aktif secara real-time.',
         ],
-        tipText: 'Sentuh foto profil di pojok kanan atas untuk melihat data akun & pengaturan.',
+        tipText: 'Sentuh bagian shift kerja di atas untuk mengganti shift harian Anda secara fleksibel.',
       ),
       TutorialStepItem(
         step: 2,
@@ -110,7 +110,7 @@ class _OnboardingTutorialDialogState extends State<OnboardingTutorialDialog> {
         icon: Icons.fingerprint_rounded,
         accentColor: const Color(0xFF10B981),
         highlights: [
-          'Jam digital tersinkronisasi langsung dengan server pusat.',
+          'Kotak "Pilih Shift" otomatis menyesuaikan jadwal masuk & batas toleransi Anda.',
           'Indikator "GPS Siap" mendeteksi apakah Anda berada di dalam radius kantor/sekolah.',
           'Tombol cepat Absen Masuk (Check In) & Absen Keluar (Check Out).',
         ],

@@ -44,13 +44,24 @@ class ActivityLog extends Model
         string $action,
         string $module,
         string $description,
-        ?array $details = null,
+        mixed $details = null,
         ?string $company = null,
         ?User $user = null
     ): ?self {
         try {
             $currentUser = $user ?: Auth::user();
             $request = request();
+
+            $formattedDetails = null;
+            if ($details instanceof \Illuminate\Http\Request) {
+                $formattedDetails = $details->except(['password', 'password_confirmation', 'token']);
+            } elseif (is_object($details) && method_exists($details, 'toArray')) {
+                $formattedDetails = $details->toArray();
+            } elseif (is_array($details)) {
+                $formattedDetails = $details;
+            } elseif (!is_null($details)) {
+                $formattedDetails = ['value' => (string) $details];
+            }
 
             return self::create([
                 'user_id' => $currentUser?->id,
@@ -61,7 +72,7 @@ class ActivityLog extends Model
                 'action' => $action,
                 'module' => $module,
                 'description' => $description,
-                'details' => $details,
+                'details' => $formattedDetails,
                 'ip_address' => $request?->ip(),
                 'user_agent' => $request ? substr((string) $request->userAgent(), 0, 500) : null,
             ]);

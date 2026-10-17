@@ -240,6 +240,7 @@ class EmployeePortalController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
+            'nik' => ['nullable', 'string', 'max:50', 'unique:users,nik,' . $user->id],
             'phone' => ['nullable', 'string', 'max:50'],
             'birth_date' => ['nullable', 'string', 'max:50'],
             'gender' => ['nullable', 'string', 'max:30'],
@@ -260,6 +261,11 @@ class EmployeePortalController extends Controller
                 ], 422);
             }
             $user->password = Hash::make($validated['new_password']);
+        }
+
+        if (array_key_exists('nik', $validated)) {
+            $cleanedNik = trim((string) $validated['nik']);
+            $user->nik = $cleanedNik !== '' ? $cleanedNik : null;
         }
 
         if (array_key_exists('phone', $validated)) {

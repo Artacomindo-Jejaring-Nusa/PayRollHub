@@ -73,31 +73,31 @@ export const EmployeeLayout: React.FC = () => {
       {/* ============================================================== */}
       <header className="bg-surface-panel border-b border-border-subtle sticky top-0 z-40 shadow-xs">
         {/* Tier 1: Brand & User Controls */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-7 sm:pt-9 pb-5 sm:pb-6 min-h-[92px] sm:min-h-[98px] flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-2.5 sm:py-3.5 min-h-[56px] sm:min-h-[64px] flex items-center justify-between gap-3">
           {/* Brand Logo & Company Title */}
-          <div className="flex items-center space-x-3.5 flex-shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-sm shrink-0">
-              <Wallet className="w-5 h-5" />
+          <div className="flex items-center space-x-2.5 sm:space-x-3.5 flex-shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-sm shrink-0">
+              <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2.5">
-                <span className="font-headline-page text-[17px] sm:text-[18px] font-bold text-text-primary tracking-tight">
+              <div className="flex items-center gap-1.5 sm:gap-2.5">
+                <span className="font-headline-page text-[15px] sm:text-[18px] font-bold text-text-primary tracking-tight">
                   Portal Karyawan
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-primary/10 text-primary border border-primary/20 uppercase tracking-wider">
+                <span className="px-2 py-0.5 rounded-full text-[9.5px] sm:text-[10.5px] font-semibold bg-primary/10 text-primary border border-primary/20 uppercase tracking-wider">
                   {tenant.badgeText}
                 </span>
               </div>
-              <span className="block text-[12px] text-text-muted font-medium mt-0.5">
+              <span className="hidden sm:block text-[12px] text-text-muted font-medium mt-0.5">
                 {tenant.companyLegalName}
               </span>
             </div>
           </div>
 
           {/* Right Section: User Profile Chip & Logout */}
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-4 flex-shrink-0">
             {/* User Chip */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <div className="text-right hidden sm:block">
                 <div className="font-semibold text-[13.5px] text-text-primary leading-tight">
                   {user?.name}
@@ -106,18 +106,18 @@ export const EmployeeLayout: React.FC = () => {
                   NIK: {user?.nik || '-'}
                 </div>
               </div>
-              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs shrink-0">
                 {userInitial}
               </div>
             </div>
 
-            <div className="h-6 w-px bg-border-subtle" />
+            <div className="h-5 sm:h-6 w-px bg-border-subtle" />
 
             {/* Logout Button (Always clearly visible on Mobile & Desktop) */}
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-[12.5px] font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-all border border-rose-200 shadow-2xs cursor-pointer active:scale-95 shrink-0"
+              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-[12.5px] font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-all border border-rose-200 shadow-2xs cursor-pointer active:scale-95 shrink-0"
               title="Keluar dari Akun"
             >
               <LogOut className="w-3.5 h-3.5 text-rose-500 shrink-0" />
@@ -160,7 +160,7 @@ export const EmployeeLayout: React.FC = () => {
       {/* ============================================================== */}
       {/* 2. MAIN PAGE CONTENT (Generous Padding & Standard Container)  */}
       {/* ============================================================== */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 pb-24">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-8 pb-20 md:pb-12">
         <Outlet />
       </main>
 

@@ -21,6 +21,7 @@ import {
   FileText,
   AlertTriangle,
   ShieldAlert,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuthStore } from '../../../store/authStore';
 import {
@@ -99,6 +100,10 @@ export const EmployeeAttendancePage: React.FC = () => {
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
   // Modal Konfirmasi Absen Pulang < 8 Jam Kerja
   const [earlyCheckOutModalOpen, setEarlyCheckOutModalOpen] = useState<boolean>(false);
+  // Modal Pilih Shift Kerja Karyawan
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
+  const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null);
+  const [shiftSaving, setShiftSaving] = useState<boolean>(false);
 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -149,6 +154,11 @@ export const EmployeeAttendancePage: React.FC = () => {
         setSelectedLocationId(data.assigned_location.id);
       }
 
+      // Default selected shift ke assigned_shift
+      if (data.assigned_shift) {
+        setSelectedShiftId(data.assigned_shift.id);
+      }
+
       const historyData = await attendanceService.getEmployeeHistory(selectedMonth);
       setHistory(historyData.data || []);
     } catch (err: any) {
@@ -161,6 +171,24 @@ export const EmployeeAttendancePage: React.FC = () => {
       setLoading(false);
     }
   }, [selectedMonth, selectedLocationId]);
+
+  // Handle Simpan & Terapkan Shift Baru
+  const handleSaveShift = async (shiftId: number) => {
+    try {
+      setShiftSaving(true);
+      const res = await attendanceService.selectShift(shiftId);
+      setMessage({ text: res.message || 'Shift kerja berhasil diperbarui!', type: 'success' });
+      setIsShiftModalOpen(false);
+      await fetchData();
+    } catch (err: any) {
+      setMessage({
+        text: err.response?.data?.message || 'Gagal mengubah shift kerja.',
+        type: 'error',
+      });
+    } finally {
+      setShiftSaving(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -304,6 +332,7 @@ export const EmployeeAttendancePage: React.FC = () => {
         latitude: coords.lat,
         longitude: coords.lng,
         location_id: activeTargetLocation?.id,
+        shift_id: todayData?.assigned_shift?.id,
         notes: checkInNotes.trim() || undefined,
         photo: photoFile,
       });
@@ -334,6 +363,7 @@ export const EmployeeAttendancePage: React.FC = () => {
         attendance_type: 'dinas_luar',
         latitude: coords?.lat,
         longitude: coords?.lng,
+        shift_id: todayData?.assigned_shift?.id,
         notes: dinasNotes.trim(),
         photo: photoFile,
       });
@@ -452,27 +482,32 @@ export const EmployeeAttendancePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto pb-12">
       {/* Header Page */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-text-primary flex items-center gap-2.5">
-            <Clock className="w-6 h-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-text-primary flex items-center gap-2">
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
             <span>Presensi & Absensi Karyawan</span>
           </h1>
-          <p className="text-sm text-text-muted mt-1">
+          <p className="text-xs sm:text-sm text-text-muted mt-0.5 sm:mt-1">
             Mendukung 100+ titik lokasi kerja (Radius Geofencing) & Opsi Absen Libur tanpa batasan radius.
           </p>
         </div>
 
         {/* Live Digital Clock Badge */}
-        <div className="bg-surface-panel border border-border-subtle rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs shrink-0">
-          <Clock className="w-5 h-5 text-primary animate-pulse" />
+        <div className="bg-surface-panel border border-border-subtle rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between sm:justify-start gap-3 shadow-2xs shrink-0">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary animate-pulse shrink-0" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted sm:hidden">
+              Waktu Server:
+            </span>
+          </div>
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            <div className="hidden sm:block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
               Waktu Server (WIB)
             </div>
-            <div className="text-lg font-mono font-bold text-text-primary leading-tight">
+            <div className="text-base sm:text-lg font-mono font-bold text-text-primary leading-tight">
               {currentTime || '--:--:-- WIB'}
             </div>
           </div>
@@ -482,38 +517,39 @@ export const EmployeeAttendancePage: React.FC = () => {
       {/* Alert Notification */}
       {message && (
         <div
-          className={`p-4 rounded-xl border flex items-start gap-3 shadow-2xs animate-in fade-in ${
+          className={`p-3 sm:p-4 rounded-xl border flex items-start gap-2.5 sm:gap-3 shadow-2xs animate-in fade-in ${
             message.type === 'success'
               ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
               : 'bg-rose-50/80 border-rose-200 text-rose-800'
           }`}
         >
           {message.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-emerald-600 mt-0.5" />
           ) : (
-            <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 mt-0.5" />
+            <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-rose-600 mt-0.5" />
           )}
-          <div className="text-[13.5px] font-medium leading-relaxed">{message.text}</div>
+          <div className="text-xs sm:text-[13.5px] font-medium leading-relaxed">{message.text}</div>
         </div>
       )}
 
       {/* Navigation Switch Mode: Absen Masuk vs Perjalanan Dinas vs Absen Libur */}
       {!hasCheckedIn && (
-        <div className="bg-surface-panel border border-border-subtle p-1.5 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-2 shadow-2xs">
+        <div className="bg-surface-panel border border-border-subtle p-1 sm:p-1.5 rounded-2xl grid grid-cols-3 gap-1 sm:gap-2 shadow-2xs">
           <button
             type="button"
             onClick={() => {
               setAttendanceMode('masuk');
               handleResetPhoto();
             }}
-            className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer ${
               attendanceMode === 'masuk'
                 ? 'bg-primary text-white shadow-xs'
                 : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
             }`}
           >
-            <Briefcase className="w-4 h-4 shrink-0" />
-            <span className="truncate">Absen Masuk (Radius + Foto)</span>
+            <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate hidden sm:inline">Absen Masuk (Radius + Foto)</span>
+            <span className="truncate sm:hidden font-medium">Masuk</span>
           </button>
 
           <button
@@ -522,14 +558,15 @@ export const EmployeeAttendancePage: React.FC = () => {
               setAttendanceMode('dinas_luar');
               handleResetPhoto();
             }}
-            className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer ${
               attendanceMode === 'dinas_luar'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
             }`}
           >
-            <Car className="w-4 h-4 shrink-0" />
-            <span className="truncate">Perjalanan Dinas (Bebas Radius)</span>
+            <Car className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate hidden sm:inline">Perjalanan Dinas (Bebas Radius)</span>
+            <span className="truncate sm:hidden font-medium">Dinas</span>
           </button>
 
           <button
@@ -538,14 +575,15 @@ export const EmployeeAttendancePage: React.FC = () => {
               setAttendanceMode('libur');
               handleResetPhoto();
             }}
-            className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer ${
               attendanceMode === 'libur'
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
             }`}
           >
-            <SunMedium className="w-4 h-4 shrink-0" />
-            <span className="truncate">Absen Libur / Off (Bebas Radius)</span>
+            <SunMedium className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate hidden sm:inline">Absen Libur / Off (Bebas Radius)</span>
+            <span className="truncate sm:hidden font-medium">Libur/Off</span>
           </button>
         </div>
       )}
@@ -618,7 +656,75 @@ export const EmployeeAttendancePage: React.FC = () => {
                           </div>
                         </div>
                       </div>
+
+                      {/* Tombol Pilih / Ganti Shift */}
+                      {!hasCheckedIn && todayData?.available_shifts && todayData.available_shifts.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedShiftId(todayData.assigned_shift?.id || null);
+                            setIsShiftModalOpen(true);
+                          }}
+                          className="shrink-0 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-sky-50 text-sky-700 border border-sky-300 shadow-2xs hover:shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-sky-600" />
+                          <span>Pilih / Ganti Shift</span>
+                        </button>
+                      )}
                     </div>
+
+                    {/* Bar Pemilihan Shift Cepat Langsung di Card */}
+                    {!hasCheckedIn && todayData?.available_shifts && todayData.available_shifts.length > 1 && (
+                      <div className="mt-3 pt-3 border-t border-sky-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                          <span className="text-xs font-bold text-sky-900">
+                            Pilih Shift Kerja Hari Ini:
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 sm:max-w-md">
+                          <select
+                            value={todayData.assigned_shift?.id || ''}
+                            onChange={(e) => {
+                              const sId = Number(e.target.value);
+                              if (sId) {
+                                setSelectedShiftId(sId);
+                                handleSaveShift(sId);
+                              }
+                            }}
+                            disabled={shiftSaving}
+                            className="w-full px-3 py-1.5 text-xs font-semibold bg-white border border-sky-300 rounded-xl text-sky-950 focus:ring-2 focus:ring-sky-500 focus:outline-none shadow-2xs cursor-pointer disabled:opacity-60"
+                          >
+                            {todayData.available_shifts.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({s.formatted_time || `${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)}`}) {s.cross_day ? '🌙 (+1 Hari)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedShiftId(todayData.assigned_shift?.id || null);
+                              setIsShiftModalOpen(true);
+                            }}
+                            className="shrink-0 px-2.5 py-1.5 text-xs font-semibold text-sky-700 bg-white hover:bg-sky-100/70 border border-sky-300 rounded-xl transition-all cursor-pointer shadow-2xs"
+                            title="Buka dialog info shift lengkap"
+                          >
+                            Semua Shift
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Jika Sudah Absen Masuk, Beri Info Shift Terkunci */}
+                    {hasCheckedIn && (
+                      <div className="mt-3 pt-3 border-t border-sky-200/80 flex items-center justify-between gap-2 text-xs text-sky-800">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Shift terkunci untuk presensi hari ini karena Anda sudah melakukan absen masuk.</span>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -767,18 +873,18 @@ export const EmployeeAttendancePage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleOpenLiveCamera('selfie')}
-                        className="w-full py-4 px-4 rounded-xl border-2 border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-all flex flex-col sm:flex-row items-center justify-center gap-3 text-primary font-medium text-xs cursor-pointer group shadow-2xs"
+                        className="w-full py-3 px-3 sm:py-4 sm:px-4 rounded-xl border-2 border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-all flex items-center justify-start gap-3 text-primary font-medium text-xs cursor-pointer group shadow-2xs text-left"
                       >
-                        <div className="w-11 h-11 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0">
-                          <Camera className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
+                        <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0">
+                          <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-primary group-hover:scale-110 transition-transform" />
                         </div>
-                        <div className="text-center sm:text-left">
-                          <div className="font-bold text-text-primary text-[13px] flex items-center justify-center sm:justify-start gap-1.5">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-text-primary text-[12.5px] sm:text-[13px] flex items-center gap-1.5 flex-wrap">
                             <span>Buka Kamera & Ambil Foto Selfie Langsung</span>
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
                           </div>
-                          <div className="text-[11px] text-text-muted mt-0.5">
-                            Nyalakan kamera live (webcam/kamera depan) untuk jepret foto bukti kehadiran
+                          <div className="text-[10.5px] sm:text-[11px] text-text-muted mt-0.5 line-clamp-1 sm:line-clamp-none">
+                            Nyalakan kamera live untuk jepret foto bukti kehadiran
                           </div>
                         </div>
                       </button>
@@ -1547,6 +1653,124 @@ export const EmployeeAttendancePage: React.FC = () => {
                 className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all cursor-pointer"
               >
                 {actionLoading ? 'Menyimpan...' : 'Ya, Tetap Absen Pulang'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pemilihan Shift Kerja Karyawan */}
+      {isShiftModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-text-primary">Pilih Jadwal Shift Kerja</h3>
+                  <p className="text-xs text-text-muted">
+                    Sesuaikan shift kerja Anda hari ini sebelum melakukan presensi masuk
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsShiftModalOpen(false)}
+                className="w-8 h-8 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 py-1">
+              {todayData?.available_shifts?.map((shift) => {
+                const isSelected = selectedShiftId === shift.id;
+                const isCurrent = todayData?.assigned_shift?.id === shift.id;
+
+                return (
+                  <div
+                    key={shift.id}
+                    onClick={() => setSelectedShiftId(shift.id)}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                      isSelected
+                        ? 'border-sky-500 bg-sky-50/70 shadow-xs ring-1 ring-sky-500/30'
+                        : 'border-border-subtle bg-surface-panel hover:bg-surface-container hover:border-border-default'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center mt-0.5 shrink-0 ${
+                        isSelected ? 'border-sky-600 bg-sky-600 text-white' : 'border-border-subtle bg-white'
+                      }`}>
+                        {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-text-primary">{shift.name}</span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                            {shift.code}
+                          </span>
+                          {shift.cross_day && (
+                            <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                              +1 Hari (Malam)
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                              Shift Aktif Saat Ini
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-text-secondary font-mono font-semibold mt-1">
+                          Jam Kerja: {shift.formatted_time || `${shift.start_time.substring(0, 5)} - ${shift.end_time.substring(0, 5)}`} WIB
+                        </div>
+
+                        <div className="text-[11px] text-text-muted mt-0.5 flex items-center gap-3 flex-wrap">
+                          <span>Toleransi: <strong className="text-text-secondary">{shift.late_tolerance_minutes} menit</strong></span>
+                          <span>•</span>
+                          <span>Durasi Target: <strong className="text-text-secondary">{shift.work_hours} jam</strong></span>
+                          {shift.description && (
+                            <>
+                              <span>•</span>
+                              <span className="italic">{shift.description}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border-subtle">
+              <button
+                type="button"
+                onClick={() => setIsShiftModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-border-subtle text-text-secondary hover:bg-surface-container transition-all cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={shiftSaving || !selectedShiftId || selectedShiftId === todayData?.assigned_shift?.id}
+                onClick={() => selectedShiftId && handleSaveShift(selectedShiftId)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover disabled:opacity-50 text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                {shiftSaving ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Terapkan Shift Ini</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

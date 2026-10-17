@@ -21,6 +21,7 @@ export const attendanceService = {
     latitude?: number;
     longitude?: number;
     location_id?: number;
+    shift_id?: number;
     notes?: string;
     photo?: File | string | null;
   }): Promise<any> => {
@@ -34,6 +35,7 @@ export const attendanceService = {
         formData.append('longitude', String(payload.longitude));
       }
       if (payload.location_id) formData.append('location_id', String(payload.location_id));
+      if (payload.shift_id) formData.append('shift_id', String(payload.shift_id));
       if (payload.notes) formData.append('notes', payload.notes);
       formData.append('photo', payload.photo);
 
@@ -44,6 +46,11 @@ export const attendanceService = {
     }
 
     const response = await api.post('/employee/attendance/check-in', payload);
+    return response.data;
+  },
+
+  selectShift: async (shiftId: number): Promise<any> => {
+    const response = await api.post('/employee/attendance/shift/select', { shift_id: shiftId });
     return response.data;
   },
 

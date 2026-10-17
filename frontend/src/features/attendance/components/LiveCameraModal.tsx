@@ -248,20 +248,25 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
       title={title}
       maxWidth="lg"
     >
-      <div className="space-y-4">
-        {/* Description & Live Badge */}
+      <div className="space-y-3 sm:space-y-4">
+        {/* Petunjuk Penggunaan & Live Sensor Badge */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <p className="text-text-muted leading-relaxed">{description}</p>
+          <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/90 border border-amber-200/90 text-amber-900 text-[11.5px] sm:text-xs flex items-center gap-2 flex-1">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Arahkan wajah ke lingkaran hijau, lalu <strong>tekan tombol kamera di bawah</strong> untuk mengambil foto.
+            </span>
+          </div>
           <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 text-emerald-600" /> Live Sensor
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Live Sensor
             </span>
           </div>
         </div>
 
-        {/* Viewfinder Area */}
-        <div className="relative w-full aspect-4/3 sm:aspect-16/10 bg-slate-950 rounded-2xl overflow-hidden shadow-inner border border-slate-800 flex items-center justify-center">
+        {/* Viewfinder Area (Tinggi fleksibel adaptif untuk layar HP) */}
+        <div className="relative w-full h-[45vh] sm:h-[380px] max-h-[380px] min-h-[220px] bg-slate-950 rounded-2xl overflow-hidden shadow-inner border border-slate-800 flex items-center justify-center">
           {/* Hidden Canvas for capture processing */}
           <canvas ref={canvasRef} className="hidden" />
 
@@ -328,11 +333,11 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
               {/* Face Guide Oval Overlay (for selfie attendance) */}
               {showFaceGuide && facingMode === 'user' && (
                 <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                  <div className="w-48 h-60 sm:w-56 sm:h-72 rounded-[50%] border-2 border-dashed border-emerald-400/70 shadow-[0_0_25px_rgba(16,185,129,0.25)] flex items-center justify-center">
+                  <div className="w-36 h-48 sm:w-48 sm:h-60 rounded-[50%] border-2 border-dashed border-emerald-400/80 shadow-[0_0_20px_rgba(16,185,129,0.25)] flex items-center justify-center">
                     <div className="w-3 h-3 rounded-full bg-emerald-400/40 animate-ping"></div>
                   </div>
-                  <span className="mt-2 text-[10.5px] font-medium text-white/80 bg-slate-950/60 backdrop-blur-xs px-2.5 py-0.5 rounded-full border border-white/10">
-                    Posisikan wajah Anda di dalam garis oval
+                  <span className="mt-2 text-[10px] sm:text-[10.5px] font-medium text-white/90 bg-slate-950/70 backdrop-blur-xs px-2.5 py-0.5 rounded-full border border-white/10">
+                    Posisikan wajah di dalam garis oval
                   </span>
                 </div>
               )}
@@ -342,7 +347,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                 <button
                   type="button"
                   onClick={handleToggleCamera}
-                  className="absolute top-3 right-3 p-2 rounded-xl bg-slate-900/80 backdrop-blur-md text-white hover:bg-slate-800 border border-slate-700 transition-colors shadow-md cursor-pointer group"
+                  className="absolute top-2.5 right-2.5 p-2 rounded-xl bg-slate-900/80 backdrop-blur-md text-white hover:bg-slate-800 border border-slate-700 transition-colors shadow-md cursor-pointer group z-20"
                   title="Putar Kamera (Depan / Belakang)"
                 >
                   <SwitchCamera className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
@@ -350,38 +355,53 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
               )}
 
               {/* Mode indicator */}
-              <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-700 text-[10.5px] font-medium text-slate-200 flex items-center gap-1.5">
+              <div className="absolute top-2.5 left-2.5 bg-slate-900/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-700 text-[10.5px] font-medium text-slate-200 flex items-center gap-1.5 z-20">
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
                 <span>{facingMode === 'user' ? 'Kamera Depan (Selfie)' : 'Kamera Belakang'}</span>
+              </div>
+
+              {/* FLOATING CIRCULAR SHUTTER BUTTON INSIDE VIEWFINDER (Pasti terlihat di semua layar HP!) */}
+              <div className="absolute bottom-2.5 inset-x-0 flex flex-col items-center justify-center gap-1 z-20 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={handleSnap}
+                  className="w-13 h-13 sm:w-15 sm:h-15 rounded-full bg-white hover:bg-emerald-50 active:scale-95 border-4 border-emerald-500 shadow-2xl flex items-center justify-center transition-all cursor-pointer group ring-4 ring-emerald-400/30"
+                  title="Klik untuk mengambil foto selfie"
+                >
+                  <Camera className="w-6 h-6 text-emerald-600 group-hover:scale-110 transition-transform" />
+                </button>
+                <span className="text-[10px] sm:text-[11px] font-bold text-white bg-slate-950/85 backdrop-blur-xs px-2.5 py-0.5 rounded-full border border-white/20 shadow-md">
+                  📸 Tekan Untuk Jepret Foto
+                </span>
               </div>
             </div>
           )}
         </div>
 
         {/* Control Footer */}
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Strict Security Badge */}
-          <div className="order-2 sm:order-1 text-[11.5px] text-text-muted flex items-center gap-1.5 font-medium">
-            <Lock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Kamera Live Depan Wajib • Dilarang Upload Foto Galeri / Berkas</span>
+        <div className="pt-1 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3">
+          {/* Security Badge */}
+          <div className="order-2 sm:order-1 text-[11px] text-text-muted flex items-center gap-1.5 font-medium">
+            <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span>Kamera Live Depan Wajib • Dilarang Upload Galeri</span>
           </div>
 
           {/* Action Buttons */}
-          <div className="order-1 sm:order-2 w-full sm:w-auto flex items-center justify-end gap-2.5">
+          <div className="order-1 sm:order-2 w-full sm:w-auto flex items-center justify-end gap-2">
             {capturedPreview ? (
               <>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleRetake}
-                  className="flex-1 sm:flex-initial px-4 py-2 text-xs h-auto min-h-10 whitespace-nowrap cursor-pointer"
+                  className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-semibold h-auto min-h-10 whitespace-nowrap cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5 mr-1.5 shrink-0" /> Ambil Ulang
                 </Button>
                 <Button
                   type="button"
                   onClick={handleConfirm}
-                  className="flex-1 sm:flex-initial px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white h-auto min-h-10 whitespace-nowrap cursor-pointer"
+                  className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-auto min-h-10 whitespace-nowrap shadow-md cursor-pointer"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" /> Gunakan Foto Ini
                 </Button>
@@ -392,7 +412,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                   type="button"
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="px-4 py-2 text-xs h-auto min-h-10 whitespace-nowrap cursor-pointer"
+                  className="px-4 py-2.5 text-xs h-auto min-h-10 whitespace-nowrap cursor-pointer font-medium"
                 >
                   Batal
                 </Button>
@@ -400,7 +420,7 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
                   type="button"
                   onClick={handleSnap}
                   disabled={isInitializing || !!cameraError}
-                  className="px-4 sm:px-5 py-2.5 text-xs font-semibold bg-primary hover:bg-primary-hover text-white shadow-md inline-flex items-center justify-center gap-2 whitespace-nowrap h-auto min-h-10 cursor-pointer"
+                  className="flex-1 sm:flex-initial px-5 py-2.5 text-xs font-bold bg-primary hover:bg-primary-hover text-white shadow-md inline-flex items-center justify-center gap-2 whitespace-nowrap h-auto min-h-10 cursor-pointer"
                 >
                   <Camera className="w-4 h-4 shrink-0" />
                   <span>Ambil Foto Sekarang (Jepret)</span>

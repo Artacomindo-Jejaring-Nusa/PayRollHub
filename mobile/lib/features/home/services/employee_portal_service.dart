@@ -173,6 +173,7 @@ class EmployeePortalService {
 
   /// Memperbarui data profil dan data pribadi karyawan
   static Future<Map<String, dynamic>> updateProfile({
+    String? nik,
     String? phone,
     String? email,
     String? birthDate,
@@ -187,6 +188,7 @@ class EmployeePortalService {
       final dio = await ApiClient.getInstance();
       final body = <String, dynamic>{};
 
+      if (nik != null && nik.trim().isNotEmpty) body['nik'] = nik.trim();
       if (phone != null) body['phone'] = phone.trim();
       if (email != null && email.trim().isNotEmpty) body['email'] = email.trim();
       if (birthDate != null) body['birth_date'] = birthDate.trim();

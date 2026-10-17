@@ -51,7 +51,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   const modalNode = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/65 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-6 bg-slate-950/65 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -60,16 +60,16 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         className={cn(
-          'w-full bg-surface-panel rounded-2xl shadow-2xl border border-border-subtle overflow-hidden flex flex-col max-h-[90vh] my-auto transition-all transform animate-in zoom-in-95 duration-150',
+          'w-full bg-surface-panel rounded-2xl shadow-2xl border border-border-subtle overflow-hidden flex flex-col max-h-[96dvh] sm:max-h-[90vh] my-auto transition-all transform animate-in zoom-in-95 duration-150',
           maxWidths[maxWidth]
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-border-row shrink-0 bg-surface-panel">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4.5 border-b border-border-row shrink-0 bg-surface-panel">
           <div>
-            <h3 className="font-title-card text-title-card text-text-primary">{title}</h3>
+            <h3 className="font-title-card text-title-card text-text-primary text-[15px] sm:text-base">{title}</h3>
             {description && (
-              <p className="font-caption-regular text-caption-regular text-text-muted mt-0.5">
+              <p className="font-caption-regular text-caption-regular text-text-muted mt-0.5 text-xs">
                 {description}
               </p>
             )}
@@ -84,7 +84,7 @@ export const Modal: React.FC<ModalProps> = ({
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 bg-surface-panel">{children}</div>
+        <div className="p-3.5 sm:p-6 overflow-y-auto flex-1 bg-surface-panel">{children}</div>
       </div>
     </div>
   );

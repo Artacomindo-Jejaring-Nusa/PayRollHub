@@ -70,6 +70,7 @@ export const employeeService = {
   },
 
   async updateProfile(data: {
+    nik?: string;
     phone?: string;
     birth_date?: string | null;
     gender?: string | null;

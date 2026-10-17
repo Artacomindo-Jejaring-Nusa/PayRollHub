@@ -26,7 +26,8 @@ export const EmployeeProfilePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Form Fields (Editable by employee - including yellow data)
+  // Form Fields (Editable by employee - including yellow data and NIK)
+  const [nik, setNik] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -46,6 +47,7 @@ export const EmployeeProfilePage: React.FC = () => {
     try {
       const data = await employeeService.getProfile();
       setProfileData(data);
+      setNik(data.user.nik || '');
       setPhone(data.user.phone || '');
       setEmail(data.user.email || '');
       setBirthDate(data.user.birth_date || '');
@@ -67,6 +69,7 @@ export const EmployeeProfilePage: React.FC = () => {
 
     try {
       const updatedUser = await employeeService.updateProfile({
+        nik: nik.trim() || undefined,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
         birth_date: birthDate.trim() || null,
@@ -78,7 +81,8 @@ export const EmployeeProfilePage: React.FC = () => {
       });
 
       setUser(updatedUser);
-      setSuccessMessage('Data profil & informasi pribadi Anda berhasil disimpan.');
+      setProfileData((prev) => prev ? { ...prev, user: updatedUser } : null);
+      setSuccessMessage('Data profil & NIK Anda berhasil disimpan.');
       setCurrentPassword('');
       setNewPassword('');
     } catch (err: any) {
@@ -136,9 +140,12 @@ export const EmployeeProfilePage: React.FC = () => {
               <span className="font-semibold text-text-primary">{u?.name}</span>
             </div>
 
-            <div className="p-3 bg-surface rounded-lg border border-border-subtle">
-              <span className="text-text-muted text-[11px] block">Nomor Induk Karyawan (NIK)</span>
-              <span className="font-mono font-semibold text-text-primary">{u?.nik || '-'}</span>
+            <div className="p-3 bg-surface rounded-lg border border-sky-200/80 bg-sky-50/20">
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-text-muted text-[11px] block">Nomor Induk Karyawan (NIK)</span>
+                <span className="text-[10px] text-sky-700 font-semibold bg-sky-100/90 px-1.5 py-0.5 rounded border border-sky-200">Bisa Diedit</span>
+              </div>
+              <span className="font-mono font-bold text-sky-900">{u?.nik || '-'}</span>
             </div>
 
             <div className="p-3 bg-surface rounded-lg border border-border-subtle">
@@ -182,6 +189,25 @@ export const EmployeeProfilePage: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Field NIK - Dibuka agar karyawan dapat menginput / mengedit NIK sendiri */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[12px] font-semibold text-text-primary mb-1">
+                      Nomor Induk Karyawan (NIK) <span className="text-sky-600 font-normal">(Dapat diedit / diinput mandiri)</span>
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="w-4 h-4 text-sky-600 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Masukkan NIK Anda (contoh: 3210060310830001)"
+                        value={nik}
+                        onChange={(e) => setNik(e.target.value)}
+                        className="w-full h-10 pl-9 pr-3 rounded-lg border border-sky-300 bg-sky-50/40 text-[13px] font-mono font-bold text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                      />
+                    </div>
+                    <p className="text-[11px] text-text-muted mt-1">
+                      Karyawan dapat menginput atau mengoreksi NIK sendiri untuk sinkronisasi absensi dan data slip gaji.
+                    </p>
+                  </div>
                   <div>
                     <label className="block text-[12px] font-medium text-text-primary mb-1">
                       Nomor WhatsApp / HP Aktif

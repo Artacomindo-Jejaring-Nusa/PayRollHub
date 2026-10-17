@@ -108,11 +108,10 @@ class Shift extends Model
         $query = self::where('is_active', true);
 
         if ($isRiama) {
-            // Khusus RIAMA: Karyawan Riama Mandiri dapat memilih di antara 5 master shift sekolah Riama
+            // Khusus RIAMA: Karyawan Riama Mandiri dapat memilih di antara 5 master shift sekolah Riama (+ Reguler)
             $query->where(function ($q) {
-                $q->where('company', 'all')
-                  ->orWhere('company', 'rimamandiri')
-                  ->orWhere('company', 'riama');
+                $q->where('code', 'LIKE', 'SHIFT_%')
+                  ->orWhereIn('code', ['REGULER', 'RIAMA-STD']);
             });
         } else {
             // Perusahaan lain (seperti RBS): TIDAK menampilkan 5 shift sekolah Riama
@@ -124,9 +123,13 @@ class Shift extends Model
 
         return $query->orderByRaw("
             CASE 
-                WHEN code LIKE 'SHIFT_%' THEN 1 
-                WHEN code = 'REGULER' THEN 2 
-                ELSE 3 
+                WHEN code = 'SHIFT_1_3_SHIFT' THEN 1
+                WHEN code = 'SHIFT_2_3_SHIFT' THEN 2
+                WHEN code = 'SHIFT_3_3_SHIFT' THEN 3
+                WHEN code = 'SHIFT_1_2_SHIFT' THEN 4
+                WHEN code = 'SHIFT_2_2_SHIFT' THEN 5
+                WHEN code = 'REGULER' THEN 6
+                ELSE 7 
             END ASC, start_time ASC
         ")->get();
     }

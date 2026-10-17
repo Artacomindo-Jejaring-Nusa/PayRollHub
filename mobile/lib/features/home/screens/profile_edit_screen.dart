@@ -25,6 +25,7 @@ class ProfileEditScreen extends StatefulWidget {
 class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  late TextEditingController _nikController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
   late TextEditingController _birthDateController;
@@ -60,6 +61,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     super.initState();
     final u = widget.initialProfileData?['user'] as Map<String, dynamic>?;
 
+    _nikController = TextEditingController(
+      text: u?['nik']?.toString() ?? widget.user.nik ?? '',
+    );
     _phoneController = TextEditingController(
       text: u?['phone']?.toString() ?? widget.user.phone ?? '',
     );
@@ -113,6 +117,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
   @override
   void dispose() {
+    _nikController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _birthDateController.dispose();
@@ -222,6 +227,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     }
 
     final res = await EmployeePortalService.updateProfile(
+      nik: _nikController.text.trim(),
       phone: _phoneController.text.trim(),
       email: _emailController.text.trim(),
       birthDate: birthDateToSend,
@@ -704,6 +710,26 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Nomor Induk Karyawan (NIK)
+                _buildInputLabel('Nomor Induk Karyawan (NIK)'),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _nikController,
+                  keyboardType: TextInputType.text,
+                  style: GoogleFonts.jetBrainsMono(fontSize: 13.5, fontWeight: FontWeight.w700),
+                  decoration: _inputDecoration(
+                    hintText: 'Masukkan NIK Anda (contoh: 3210060310830001)',
+                    prefixIcon: Icons.badge_rounded,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Karyawan dapat menginput atau mengedit NIK sendiri untuk sinkronisasi data presensi.',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B)),
+                ),
+
+                const SizedBox(height: 14),
+
                 // Nomor WhatsApp / HP Aktif
                 _buildInputLabel('Nomor WhatsApp / HP Aktif'),
                 const SizedBox(height: 6),

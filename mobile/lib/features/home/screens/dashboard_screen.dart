@@ -6293,7 +6293,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     final displayName = u?['name']?.toString() ?? widget.user.name;
     final displayNik = u?['nik']?.toString() ?? widget.user.nik ?? '-';
-    final displayPosition = job?['position']?.toString() ?? widget.user.position ?? 'Operasional Lapangan';
+    final rawPos = job?['position']?.toString() ?? widget.user.position;
+    final displayPosition = (rawPos != null && !rawPos.toLowerCase().contains('lapangan')) ? rawPos : (rawPos == null || rawPos.toLowerCase().contains('lapangan') ? '-' : rawPos);
     final displaySchool = job?['school_unit']?.toString() ?? widget.user.schoolUnit ?? (_todayAttendance?.assignedLocation?.name ?? '-');
     final statusKerja = job?['status']?.toString() ?? 'Tetap';
 

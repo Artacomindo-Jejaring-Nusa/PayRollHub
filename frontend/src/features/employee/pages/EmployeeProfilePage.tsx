@@ -150,7 +150,11 @@ export const EmployeeProfilePage: React.FC = () => {
 
             <div className="p-3 bg-surface rounded-lg border border-border-subtle">
               <span className="text-text-muted text-[11px] block">Jabatan / Posisi</span>
-              <span className="font-semibold text-text-primary">{job?.position && job.position !== 'Staf Lapangan' ? job.position : '-'}</span>
+              <span className="font-semibold text-text-primary">
+                {job?.position && !job.position.toLowerCase().includes('staf lapangan') && !job.position.toLowerCase().includes('staff lapangan')
+                  ? job.position
+                  : '-'}
+              </span>
             </div>
 
             <div className="p-3 bg-surface rounded-lg border border-border-subtle">

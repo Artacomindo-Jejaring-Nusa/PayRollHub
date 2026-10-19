@@ -27,12 +27,21 @@ class EmployeePortalController extends Controller
 
         // 1. Latest Payroll strictly scoped to employee's company
         $latestPayroll = null;
-        if ($user->nik) {
+        if (!empty($user->nik)) {
             $cleanNik = trim(ltrim((string) $user->nik, "'"));
             $latestPayroll = Payroll::where(function ($q) use ($cleanNik) {
                     $q->where('nik', $cleanNik)
                       ->orWhere('nik', "'{$cleanNik}");
                 })
+                ->where('company', $user->company ?: 'rbs')
+                ->where('is_visible_to_user', true)
+                ->latest('period')
+                ->first();
+        }
+
+        // Fallback: cari berdasarkan nama jika NIK kosong atau belum tersinkron
+        if (!$latestPayroll && !empty($user->name)) {
+            $latestPayroll = Payroll::where('employee_name', $user->name)
                 ->where('company', $user->company ?: 'rbs')
                 ->where('is_visible_to_user', true)
                 ->latest('period')
@@ -53,12 +62,18 @@ class EmployeePortalController extends Controller
 
         // 4. Total Payroll periods strictly scoped
         $totalPayrolls = 0;
-        if ($user->nik) {
+        if (!empty($user->nik)) {
             $cleanNik = trim(ltrim((string) $user->nik, "'"));
-            $totalPayrolls = Payroll::where(function ($q) use ($cleanNik) {
+            $totalPayrolls = Payroll::where(function ($q) use ($cleanNik, $user) {
                     $q->where('nik', $cleanNik)
-                      ->orWhere('nik', "'{$cleanNik}");
+                      ->orWhere('nik', "'{$cleanNik}")
+                      ->orWhere('employee_name', $user->name);
                 })
+                ->where('company', $user->company ?: 'rbs')
+                ->where('is_visible_to_user', true)
+                ->count();
+        } elseif (!empty($user->name)) {
+            $totalPayrolls = Payroll::where('employee_name', $user->name)
                 ->where('company', $user->company ?: 'rbs')
                 ->where('is_visible_to_user', true)
                 ->count();
@@ -103,22 +118,28 @@ class EmployeePortalController extends Controller
     public function payrolls(Request $request): JsonResponse
     {
         $user = $request->user();
+        $cleanNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;
 
-        if (!$user->nik) {
+        if (!$cleanNik && empty($user->name)) {
             return response()->json([
                 'status' => 'success',
                 'data' => [],
-                'message' => 'NIK belum terhubung dengan akun ini.',
+                'message' => 'Akun belum terhubung dengan data penggajian.',
             ]);
         }
 
-        $cleanNik = trim(ltrim((string) $user->nik, "'"));
-        $query = Payroll::where(function ($q) use ($cleanNik) {
-                $q->where('nik', $cleanNik)
-                  ->orWhere('nik', "'{$cleanNik}");
-            })
-            ->where('company', $user->company ?: 'rbs')
+        $query = Payroll::where('company', $user->company ?: 'rbs')
             ->where('is_visible_to_user', true);
+
+        if ($cleanNik) {
+            $query->where(function ($q) use ($cleanNik, $user) {
+                $q->where('nik', $cleanNik)
+                  ->orWhere('nik', "'{$cleanNik}")
+                  ->orWhere('employee_name', $user->name);
+            });
+        } else {
+            $query->where('employee_name', $user->name);
+        }
 
         if ($request->filled('period') && $request->input('period') !== 'all') {
             $query->byPeriod($request->input('period'));
@@ -142,15 +163,20 @@ class EmployeePortalController extends Controller
     public function showPayroll(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $cleanNik = trim(ltrim((string) $user->nik, "'"));
+        $cleanNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;
 
         $payroll = Payroll::where('id', $id)
-            ->where(function ($q) use ($cleanNik) {
-                $q->where('nik', $cleanNik)
-                  ->orWhere('nik', "'{$cleanNik}");
-            })
             ->where('company', $user->company ?: 'rbs')
             ->where('is_visible_to_user', true)
+            ->where(function ($q) use ($cleanNik, $user) {
+                if ($cleanNik) {
+                    $q->where('nik', $cleanNik)
+                      ->orWhere('nik', "'{$cleanNik}")
+                      ->orWhere('employee_name', $user->name);
+                } else {
+                    $q->where('employee_name', $user->name);
+                }
+            })
             ->first();
 
         if (!$payroll) {
@@ -172,15 +198,20 @@ class EmployeePortalController extends Controller
     public function downloadSlipPdf(Request $request, int $id)
     {
         $user = $request->user();
-        $cleanNik = trim(ltrim((string) $user->nik, "'"));
+        $cleanNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;
 
         $payroll = Payroll::where('id', $id)
-            ->where(function ($q) use ($cleanNik) {
-                $q->where('nik', $cleanNik)
-                  ->orWhere('nik', "'{$cleanNik}");
-            })
             ->where('company', $user->company ?: 'rbs')
             ->where('is_visible_to_user', true)
+            ->where(function ($q) use ($cleanNik, $user) {
+                if ($cleanNik) {
+                    $q->where('nik', $cleanNik)
+                      ->orWhere('nik', "'{$cleanNik}")
+                      ->orWhere('employee_name', $user->name);
+                } else {
+                    $q->where('employee_name', $user->name);
+                }
+            })
             ->first();
 
         if (!$payroll) {
@@ -206,12 +237,19 @@ class EmployeePortalController extends Controller
     {
         $user = $request->user();
         $latestPayroll = null;
-        if ($user->nik) {
+        if (!empty($user->nik)) {
             $cleanNik = trim(ltrim((string) $user->nik, "'"));
             $latestPayroll = Payroll::where(function ($q) use ($cleanNik) {
                     $q->where('nik', $cleanNik)
                       ->orWhere('nik', "'{$cleanNik}");
                 })
+                ->latest('period')
+                ->first();
+        }
+
+        if (!$latestPayroll && !empty($user->name)) {
+            $latestPayroll = Payroll::where('employee_name', $user->name)
+                ->where('company', $user->company ?: 'rbs')
                 ->latest('period')
                 ->first();
         }

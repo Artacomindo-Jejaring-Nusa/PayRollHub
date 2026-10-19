@@ -295,7 +295,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
 
     final employeeName = u?['name']?.toString() ?? widget.user.name;
     final nik = u?['nik']?.toString() ?? widget.user.nik ?? '-';
-    final position = job?['position']?.toString() ?? widget.user.position ?? 'Operasional Lapangan';
+    final rawPos = job?['position']?.toString() ?? widget.user.position;
+    final position = (rawPos != null && !rawPos.toLowerCase().contains('lapangan')) ? rawPos : (rawPos == null || rawPos.toLowerCase().contains('lapangan') ? '-' : rawPos);
     final schoolUnit = job?['school_unit']?.toString() ?? widget.user.schoolUnit ?? job?['province']?.toString() ?? '-';
     final statusKerja = job?['status']?.toString() ?? 'Aktif';
 

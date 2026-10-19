@@ -112,7 +112,7 @@ export const EmployeeDashboardPage: React.FC = () => {
             <span className="font-semibold text-text-primary">{user?.name}</span>
             <span>•</span>
             <span className="font-mono">NIK: {user?.nik || latest?.nik || '-'}</span>
-            {latest?.position && latest.position !== 'Staf Lapangan' && (
+            {latest?.position && !latest.position.toLowerCase().includes('staf lapangan') && !latest.position.toLowerCase().includes('staff lapangan') && (
               <>
                 <span>•</span>
                 <span>{latest.position}</span>
@@ -332,7 +332,9 @@ export const EmployeeDashboardPage: React.FC = () => {
                         Jabatan / Posisi
                       </span>
                       <span className="text-[14px] font-bold text-text-primary block mt-0.5 truncate">
-                        {latest.position && latest.position !== 'Staf Lapangan' ? latest.position : '-'}
+                        {latest?.position && !latest.position.toLowerCase().includes('staf lapangan') && !latest.position.toLowerCase().includes('staff lapangan')
+                          ? latest.position
+                          : '-'}
                       </span>
                     </div>
                   </div>

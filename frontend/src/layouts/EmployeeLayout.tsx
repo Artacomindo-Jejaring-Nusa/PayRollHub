@@ -33,6 +33,7 @@ export const EmployeeLayout: React.FC = () => {
 
   interface EmployeeNavItem {
     label: string;
+    mobileLabel?: string;
     path: string;
     icon: any;
     badge?: string;
@@ -40,21 +41,23 @@ export const EmployeeLayout: React.FC = () => {
   }
 
   const navItems: EmployeeNavItem[] = [
-    { label: 'Beranda', path: '/employee/dashboard', icon: Home },
-    { label: 'Absensi', path: '/employee/attendance', icon: Clock },
-    { label: 'Slip Gaji', path: '/employee/payrolls', icon: FileText },
+    { label: 'Beranda', mobileLabel: 'Beranda', path: '/employee/dashboard', icon: Home },
+    { label: 'Absensi', mobileLabel: 'Absensi', path: '/employee/attendance', icon: Clock },
+    { label: 'Slip Gaji', mobileLabel: 'Slip', path: '/employee/payrolls', icon: FileText },
     {
       label: 'Laporan Kerja',
+      mobileLabel: 'Laporan',
       path: '/employee/reports',
       icon: ClipboardList,
     },
-    { label: 'Pengumuman', path: '/employee/announcements', icon: Bell },
+    { label: 'Pengumuman', mobileLabel: 'Info', path: '/employee/announcements', icon: Bell },
     {
       label: 'Keluhan',
+      mobileLabel: 'Keluhan',
       path: '/employee/complaints',
       icon: MessageSquareWarning,
     },
-    { label: 'Profil Saya', path: '/employee/profile', icon: User },
+    { label: 'Profil Saya', mobileLabel: 'Profil', path: '/employee/profile', icon: User },
   ];
 
   const visibleNavItems = navItems.filter((item) => {
@@ -96,20 +99,30 @@ export const EmployeeLayout: React.FC = () => {
 
           {/* Right Section: User Profile Chip & Logout */}
           <div className="flex items-center gap-2.5 sm:gap-4 flex-shrink-0">
-            {/* User Chip */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            {/* User Chip (Clickable: Opens /employee/profile directly) */}
+            <NavLink
+              to="/employee/profile"
+              className={({ isActive }) =>
+                `flex items-center gap-2 sm:gap-3 p-1 sm:p-1.5 rounded-full sm:rounded-xl transition-all cursor-pointer group ${
+                  isActive
+                    ? 'ring-2 ring-primary/40 bg-primary/10'
+                    : 'hover:bg-surface-container active:scale-95'
+                }`
+              }
+              title="Buka Profil Saya"
+            >
               <div className="text-right hidden sm:block">
-                <div className="font-semibold text-[13.5px] text-text-primary leading-tight">
+                <div className="font-semibold text-[13.5px] text-text-primary group-hover:text-primary transition-colors leading-tight">
                   {user?.name}
                 </div>
                 <div className="text-[11.5px] text-text-muted font-mono mt-0.5">
                   NIK: {user?.nik || '-'}
                 </div>
               </div>
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs shrink-0 group-hover:scale-105 group-hover:bg-primary group-hover:text-white transition-all">
                 {userInitial}
               </div>
-            </div>
+            </NavLink>
 
             <div className="h-5 sm:h-6 w-px bg-border-subtle" />
 
@@ -160,14 +173,14 @@ export const EmployeeLayout: React.FC = () => {
       {/* ============================================================== */}
       {/* 2. MAIN PAGE CONTENT (Generous Padding & Standard Container)  */}
       {/* ============================================================== */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-8 pb-20 md:pb-12">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-8 pb-24 md:pb-12">
         <Outlet />
       </main>
 
       {/* ============================================================== */}
       {/* 3. MOBILE BOTTOM NAVIGATION (Only for screens < 768px)        */}
       {/* ============================================================== */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-surface-panel border-t border-border-subtle z-40 px-3 py-2 shadow-lg flex items-center justify-around">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-surface-panel/95 backdrop-blur-md border-t border-border-subtle z-40 px-1 py-1.5 shadow-lg flex items-center justify-between overflow-x-auto no-scrollbar touch-pan-x">
         {visibleNavItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -175,32 +188,33 @@ export const EmployeeLayout: React.FC = () => {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex flex-col items-center justify-center py-1 px-2.5 rounded-lg text-[11px] transition-colors ${
+                `flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[10.5px] transition-all flex-1 min-w-[46px] max-w-[62px] shrink-0 ${
                   isActive
-                    ? 'text-primary font-bold'
-                    : 'text-text-muted hover:text-text-primary font-medium'
+                    ? 'text-primary font-bold bg-primary/10 shadow-2xs'
+                    : 'text-text-muted hover:text-text-primary font-medium hover:bg-surface-container/60'
                 }`
               }
             >
-              <Icon className="w-5 h-5 mb-1" />
-              <span className="flex items-center gap-0.5">
-                <span>{item.label}</span>
-                {item.badge && <span className="text-[9px]">{item.badge}</span>}
-              </span>
+              {({ isActive }) => (
+                <>
+                  <Icon
+                    className={`w-4.5 h-4.5 mb-0.5 transition-transform ${
+                      isActive ? 'scale-110 text-primary' : 'text-text-muted'
+                    }`}
+                  />
+                  <span className="truncate w-full text-center leading-tight">
+                    {item.mobileLabel || item.label}
+                  </span>
+                  {item.badge && (
+                    <span className="text-[8.5px] px-1 bg-primary text-white rounded-full mt-0.5 leading-none font-bold">
+                      {item.badge}
+                    </span>
+                  )}
+                </>
+              )}
             </NavLink>
           );
         })}
-
-        {/* Quick Logout for Mobile Bottom Navigation */}
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[11px] text-rose-600 hover:text-rose-700 font-semibold active:scale-95 transition-all cursor-pointer"
-          title="Keluar dari Akun"
-        >
-          <LogOut className="w-5 h-5 mb-1 text-rose-500" />
-          <span>Keluar</span>
-        </button>
       </nav>
 
       {/* Floating Live Chat & AI Bot Widget */}

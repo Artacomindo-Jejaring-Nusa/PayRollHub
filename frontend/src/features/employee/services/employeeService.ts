@@ -60,8 +60,12 @@ export const employeeService = {
     link.download = `Slip_Gaji_${employeeName.replace(/\s+/g, '_')}_${period}.pdf`;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      window.URL.revokeObjectURL(url);
+    }, 2000);
   },
 
   async getProfile(): Promise<EmployeeProfileData> {
@@ -85,8 +89,8 @@ export const employeeService = {
     return res.data.data;
   },
 
-  async getWorkReports(page: number = 1): Promise<{ data: WorkReport[]; meta: any }> {
-    const res = await api.get(`/employee/work-reports?page=${page}`);
+  async getWorkReports(page: number = 1, perPage: number = 15): Promise<{ data: WorkReport[]; meta: any }> {
+    const res = await api.get(`/employee/work-reports?page=${page}&per_page=${perPage}`);
     return { data: res.data.data, meta: res.data.meta };
   },
 

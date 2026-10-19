@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { workReportService } from '../services/workReportService';
 import { WorkReport } from '../../../types/auth';
+import { Pagination } from '../../../components/shared/Pagination';
+import { PayrollPaginationMeta } from '../../../types/payroll';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { getStorageUrl } from '../../../lib/utils';
@@ -114,7 +116,18 @@ export const AdminWorkReportsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
+  const [meta, setMeta] = useState<PayrollPaginationMeta>({
+    current_page: 1,
+    last_page: 1,
+    per_page: 15,
+    total: 0,
+    from: 0,
+    to: 0,
+  });
 
   // View Mode: 'table' (default for 2000+ employees) or 'cards'
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
@@ -141,19 +154,33 @@ export const AdminWorkReportsPage: React.FC = () => {
   const [feedback, setFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     fetchReports();
-  }, [statusFilter, dateFilter]);
+  }, [page, perPage, statusFilter, dateFilter, debouncedSearch]);
 
   const fetchReports = async () => {
     setIsLoading(true);
     try {
       const res = await workReportService.getAdminWorkReports({
+        page,
+        per_page: perPage,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         date: dateFilter || undefined,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
       });
       setReports(res.data);
+      if (res.meta) {
+        setMeta(res.meta);
+      }
     } catch (err) {
       console.error('Failed to load work reports', err);
     } finally {
@@ -310,7 +337,10 @@ export const AdminWorkReportsPage: React.FC = () => {
           {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
             className="h-9 px-3 rounded-lg border border-border-subtle bg-surface text-[12.5px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
           >
             <option value="all">Semua Status</option>
@@ -323,13 +353,19 @@ export const AdminWorkReportsPage: React.FC = () => {
           <input
             type="date"
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => {
+              setDateFilter(e.target.value);
+              setPage(1);
+            }}
             className="h-9 px-3 rounded-lg border border-border-subtle bg-surface text-[12.5px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
 
           {dateFilter && (
             <button
-              onClick={() => setDateFilter('')}
+              onClick={() => {
+                setDateFilter('');
+                setPage(1);
+              }}
               className="text-[12px] text-text-muted hover:text-text-primary cursor-pointer"
             >
               Reset Tanggal
@@ -345,7 +381,12 @@ export const AdminWorkReportsPage: React.FC = () => {
             placeholder="Cari nama, NIK, atau tugas..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchReports()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setDebouncedSearch(search);
+                setPage(1);
+              }
+            }}
             className="w-full h-9 pl-9 pr-3 rounded-lg border border-border-subtle bg-surface text-[12.5px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
@@ -395,7 +436,7 @@ export const AdminWorkReportsPage: React.FC = () => {
                     >
                       {/* No */}
                       <td className="py-3 px-4 text-center text-text-muted font-mono text-[11.5px]">
-                        {idx + 1}
+                        {(meta.from || 1) + idx}
                       </td>
 
                       {/* Tanggal */}
@@ -529,6 +570,18 @@ export const AdminWorkReportsPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          <Pagination
+            meta={meta}
+            onPageChange={(p) => setPage(p)}
+            perPage={perPage}
+            onPerPageChange={(newPerPage) => {
+              setPerPage(newPerPage);
+              setPage(1);
+            }}
+            isLoading={isLoading}
+          />
         </div>
       ) : (
         /* MODE KARTU GRID: Tampilan Visual 4 Kolom Penuh */
@@ -715,6 +768,20 @@ export const AdminWorkReportsPage: React.FC = () => {
               </div>
             );
           })}
+
+          {/* Pagination for Card Mode */}
+          <div className="bg-surface-panel rounded-2xl border border-border-subtle shadow-xs overflow-hidden">
+            <Pagination
+              meta={meta}
+              onPageChange={(p) => setPage(p)}
+              perPage={perPage}
+              onPerPageChange={(newPerPage) => {
+                setPerPage(newPerPage);
+                setPage(1);
+              }}
+              isLoading={isLoading}
+            />
+          </div>
         </div>
       )}
 

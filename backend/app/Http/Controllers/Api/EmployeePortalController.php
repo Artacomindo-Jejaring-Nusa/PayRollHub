@@ -319,10 +319,16 @@ class EmployeePortalController extends Controller
     {
         $user = $request->user();
 
+        $perPage = (int) $request->input('per_page', 15);
+        if ($perPage <= 0 || $perPage > 100) {
+            $perPage = 15;
+        }
+
         $reports = WorkReport::where('user_id', $user->id)
             ->with('reviewer:id,name')
-            ->latest('report_date')
-            ->paginate(15);
+            ->orderByDesc('report_date')
+            ->orderByDesc('id')
+            ->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -330,7 +336,10 @@ class EmployeePortalController extends Controller
             'meta' => [
                 'current_page' => $reports->currentPage(),
                 'last_page' => $reports->lastPage(),
+                'per_page' => $reports->perPage(),
                 'total' => $reports->total(),
+                'from' => $reports->firstItem(),
+                'to' => $reports->lastItem(),
             ],
         ]);
     }

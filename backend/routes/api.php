@@ -96,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/attendance/today', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'today']);
         Route::post('/attendance/check-in', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'checkIn']);
         Route::post('/attendance/check-out', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'checkOut']);
+        Route::post('/attendance/cancel-holiday', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'cancelHoliday']);
         Route::get('/attendance/history', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'history']);
         Route::post('/attendance/shift/select', [\App\Http\Controllers\Api\EmployeeAttendanceController::class, 'selectShift']);
     });
@@ -124,6 +125,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/attendances/recap-by-employee', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'recapByEmployee']);
         Route::post('/admin/attendances', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'store']);
         Route::put('/admin/attendances/{attendance}', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'update']);
+        Route::put('/admin/attendances/{attendance}/verify', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'verify']);
         Route::delete('/admin/attendances/{attendance}', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'destroy']);
         Route::get('/admin/attendances/export', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'export']);
         Route::get('/admin/attendance-settings', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'getSettings']);

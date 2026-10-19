@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { employeeService } from '../services/employeeService';
 import { WorkReport } from '../../../types/auth';
+import { Pagination } from '../../../components/shared/Pagination';
+import { PayrollPaginationMeta } from '../../../types/payroll';
 import { Card } from '../../../components/ui/Card';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
@@ -143,16 +145,29 @@ export const EmployeeReportsPage: React.FC = () => {
   const [photoKegiatanLain, setPhotoKegiatanLain] = useState<File | null>(null);
   const [previewKegiatanLain, setPreviewKegiatanLain] = useState<string | null>(null);
   const [descKegiatanLain, setDescKegiatanLain] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
+  const [meta, setMeta] = useState<PayrollPaginationMeta>({
+    current_page: 1,
+    last_page: 1,
+    per_page: 15,
+    total: 0,
+    from: 0,
+    to: 0,
+  });
 
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [page, perPage]);
 
   const fetchReports = async () => {
     setIsLoading(true);
     try {
-      const res = await employeeService.getWorkReports();
+      const res = await employeeService.getWorkReports(page, perPage);
       setReports(res.data);
+      if (res.meta) {
+        setMeta(res.meta);
+      }
     } catch (err) {
       console.error('Failed to fetch reports', err);
     } finally {
@@ -786,6 +801,20 @@ export const EmployeeReportsPage: React.FC = () => {
               </Card>
             );
           })}
+
+          {/* Pagination for Employee Reports */}
+          <div className="bg-surface-panel rounded-2xl border border-border-subtle shadow-xs overflow-hidden">
+            <Pagination
+              meta={meta}
+              onPageChange={(p) => setPage(p)}
+              perPage={perPage}
+              onPerPageChange={(newPerPage) => {
+                setPerPage(newPerPage);
+                setPage(1);
+              }}
+              isLoading={isLoading}
+            />
+          </div>
         </div>
       )}
 

@@ -25,7 +25,12 @@ class AdminChatController extends Controller
 
         // Filter Perusahaan
         if ($request->filled('company') && $request->company !== 'all') {
-            $query->where('company_name', strtolower($request->company));
+            $comp = strtolower($request->company);
+            if ($comp === 'rimbun' || $comp === 'rbs') {
+                $query->whereIn('company_name', ['rimbun', 'rbs']);
+            } else {
+                $query->whereIn('company_name', ['riama', 'rimamandiri']);
+            }
         }
 
         // Filter Status Tab
@@ -48,7 +53,12 @@ class AdminChatController extends Controller
         // Hitung Counter Tabs
         $baseCompanyQuery = ChatSession::query();
         if ($request->filled('company') && $request->company !== 'all') {
-            $baseCompanyQuery->where('company_name', strtolower($request->company));
+            $comp = strtolower($request->company);
+            if ($comp === 'rimbun' || $comp === 'rbs') {
+                $baseCompanyQuery->whereIn('company_name', ['rimbun', 'rbs']);
+            } else {
+                $baseCompanyQuery->whereIn('company_name', ['riama', 'rimamandiri']);
+            }
         }
 
         $counters = [

@@ -30,6 +30,11 @@ class AdminWorkReportController extends Controller
         $search = $request->input('search');
         $date = $request->input('date');
 
+        $perPage = (int) $request->input('per_page', 15);
+        if ($perPage <= 0 || $perPage > 100) {
+            $perPage = 15;
+        }
+
         $targetCompany = $currentUser->isSuperAdmin()
             ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
             : ($currentUser->company ?: 'rbs');
@@ -50,8 +55,9 @@ class AdminWorkReportController extends Controller
                         ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$s}%"));
                 });
             })
-            ->latest('report_date')
-            ->paginate(15);
+            ->orderByDesc('report_date')
+            ->orderByDesc('id')
+            ->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -59,7 +65,10 @@ class AdminWorkReportController extends Controller
             'meta' => [
                 'current_page' => $reports->currentPage(),
                 'last_page' => $reports->lastPage(),
+                'per_page' => $reports->perPage(),
                 'total' => $reports->total(),
+                'from' => $reports->firstItem(),
+                'to' => $reports->lastItem(),
             ],
         ]);
     }

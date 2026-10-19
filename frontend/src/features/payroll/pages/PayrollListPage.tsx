@@ -71,10 +71,12 @@ export const PayrollListPage: React.FC = () => {
   const [startPeriod, setStartPeriod] = useState('');
   const [endPeriod, setEndPeriod] = useState('');
   const [selectedStatus, setSelectedStatus] = useState(searchParams.get('status') || '');
+  const [selectedMaritalStatus, setSelectedMaritalStatus] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState<string | null>(null);
+  const [downloadingSlipId, setDownloadingSlipId] = useState<number | null>(null);
 
   // Debounce search input to avoid race condition and excessive network requests
   useEffect(() => {
@@ -139,6 +141,7 @@ export const PayrollListPage: React.FC = () => {
         start_period: startPeriod || undefined,
         end_period: endPeriod || undefined,
         status: selectedStatus,
+        marital_status: selectedMaritalStatus || undefined,
         company: tenant.id,
         page,
         per_page: perPage,
@@ -171,7 +174,7 @@ export const PayrollListPage: React.FC = () => {
         setIsLoading(false);
       }
     }
-  }, [debouncedSearch, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, page, perPage, tenant.id, filterDuplicateAccount, selectedVisibility]);
+  }, [debouncedSearch, selectedProvince, selectedPosition, selectedPeriod, startPeriod, endPeriod, selectedStatus, selectedMaritalStatus, page, perPage, tenant.id, filterDuplicateAccount, selectedVisibility]);
 
   useEffect(() => {
     fetchData();
@@ -203,10 +206,19 @@ export const PayrollListPage: React.FC = () => {
 
   const handleDownloadSlip = async (e: React.MouseEvent, item: PayrollItem) => {
     e.stopPropagation();
+    e.preventDefault();
+    if (downloadingSlipId) return;
+
+    setDownloadingSlipId(item.id);
     try {
       await payrollService.downloadSlipPdf(item.id, item.employee_name, item.period);
-    } catch (err) {
-      alert('Gagal mengunduh slip gaji: ' + err);
+    } catch (err: any) {
+      if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || (err?.message && String(err.message).toLowerCase().includes('abort'))) {
+        return;
+      }
+      alert('Gagal mengunduh slip gaji: ' + (err?.response?.data?.message || err?.message || err));
+    } finally {
+      setDownloadingSlipId(null);
     }
   };
 
@@ -471,6 +483,7 @@ export const PayrollListPage: React.FC = () => {
                   onClick={() => {
                     setSearch('');
                     setSelectedStatus('');
+                    setSelectedMaritalStatus('');
                     setSelectedProvince('');
                     setSelectedPosition('');
                     setSelectedPeriod('');
@@ -549,6 +562,31 @@ export const PayrollListPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <div className="flex items-center gap-1.5 bg-surface-container/60 border border-border-subtle rounded-md px-2 py-1">
+                    <span className="text-[11px] font-medium text-text-muted">Status Nikah:</span>
+                    <select
+                      value={selectedMaritalStatus}
+                      onChange={(e) => {
+                        setSelectedMaritalStatus(e.target.value);
+                        setPage(1);
+                      }}
+                      className="bg-transparent text-[11px] font-semibold text-text-primary outline-none cursor-pointer"
+                    >
+                      <option value="">Semua</option>
+                      <option value="Kawin">💍 Kawin</option>
+                      <option value="Belum Kawin">Belum Kawin</option>
+                      <option value="Nikah Anak 1">Nikah Anak 1</option>
+                      <option value="Nikah Anak 2">Nikah Anak 2</option>
+                      <option value="Nikah Anak 3">Nikah Anak 3</option>
+                      <option value="Duda Anak 1">Duda Anak 1</option>
+                      <option value="Duda Anak 2">Duda Anak 2</option>
+                      <option value="Duda Anak 3">Duda Anak 3</option>
+                      <option value="Tidak Kawin">Tidak Kawin</option>
+                    </select>
+                  </div>
+                )}
+
                 {isAdmin && (
                   <div className="flex items-center gap-1.5 bg-surface-container/60 border border-border-subtle rounded-md px-2 py-1">
                     <span className="text-[11px] font-medium text-text-muted">Visibilitas:</span>
@@ -754,7 +792,7 @@ export const PayrollListPage: React.FC = () => {
 
                       {/* Nama Lengkap */}
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <div className="font-semibold text-text-primary group-hover:text-primary transition-colors text-[13px] flex items-center gap-1.5">
+                        <div className="font-semibold text-text-primary group-hover:text-primary transition-colors text-[13px] flex items-center gap-1.5 flex-wrap">
                           <span>{item.employee_name}</span>
                           {isAdmin && item.is_visible_to_user === false && (
                             <span
@@ -762,6 +800,14 @@ export const PayrollListPage: React.FC = () => {
                               title="Karyawan di luar SP: Hanya tampil di Admin, disembunyikan dari User View"
                             >
                               🔒 Luar SP (Admin Only)
+                            </span>
+                          )}
+                          {isAdmin && item.marital_status && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                              title={`Status Perkawinan: ${item.marital_status}`}
+                            >
+                              💍 {item.marital_status}
                             </span>
                           )}
                         </div>
@@ -914,12 +960,20 @@ export const PayrollListPage: React.FC = () => {
                           {/* PDF Slip Download Button (Admin only) */}
                           {isAdmin && (
                             <button
+                              type="button"
+                              disabled={downloadingSlipId === item.id}
                               onClick={(e) => handleDownloadSlip(e, item)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11.5px] font-medium border border-border-subtle bg-surface hover:bg-emerald-50 hover:border-emerald-300 text-text-primary hover:text-emerald-700 transition-colors cursor-pointer"
+                              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11.5px] font-medium border border-border-subtle bg-surface hover:bg-emerald-50 hover:border-emerald-300 text-text-primary hover:text-emerald-700 transition-colors cursor-pointer ${
+                                downloadingSlipId === item.id ? 'opacity-60 cursor-not-allowed' : ''
+                              }`}
                               title="Unduh Slip Gaji (PDF)"
                             >
-                              <Download className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>PDF</span>
+                              {downloadingSlipId === item.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                              )}
+                              <span>{downloadingSlipId === item.id ? '...' : 'PDF'}</span>
                             </button>
                           )}
 

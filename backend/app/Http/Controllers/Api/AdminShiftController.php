@@ -18,17 +18,34 @@ class AdminShiftController extends Controller
     public function index(Request $request): JsonResponse
     {
         $currentUser = $request->user();
-        $targetCompany = $currentUser->isSuperAdmin()
-            ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
-            : ($currentUser->company ?: 'rbs');
-
         $query = Shift::withCount('users');
 
-        if ($targetCompany) {
-            $query->where(function ($q) use ($targetCompany) {
-                $q->where('company', 'all')
-                  ->orWhere('company', $targetCompany);
-            });
+        if ($currentUser->isSuperAdmin()) {
+            $targetCompany = $request->query('company');
+            if ($targetCompany && $targetCompany !== 'all') {
+                $compLower = strtolower($targetCompany);
+                if (str_contains($compLower, 'riama') || str_contains($compLower, 'rimamandiri')) {
+                    $query->whereIn('company', ['rimamandiri', 'riama']);
+                } else {
+                    $query->whereIn('company', ['rbs', 'rimbun']);
+                }
+            }
+        } else {
+            $adminComp = strtolower($currentUser->company ?: 'rbs');
+            $isRiama = str_contains($adminComp, 'riama') || str_contains($adminComp, 'rimamandiri');
+            if ($isRiama) {
+                // Admin Riama -> hanya shift Riama & bersama
+                $query->where(function ($q) {
+                    $q->whereIn('company', ['rimamandiri', 'riama'])
+                      ->orWhere('company', 'all');
+                })->whereNotIn('company', ['rbs', 'rimbun']);
+            } else {
+                // Admin Rimbun -> hanya shift Rimbun & bersama
+                $query->where(function ($q) {
+                    $q->whereIn('company', ['rbs', 'rimbun'])
+                      ->orWhere('company', 'all');
+                })->whereNotIn('company', ['rimamandiri', 'riama']);
+            }
         }
 
         $shifts = $query->orderBy('start_time', 'asc')->get();
@@ -52,7 +69,7 @@ class AdminShiftController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:150',
             'code' => 'required|string|max:50|unique:shifts,code',
-            'company' => ['required', Rule::in(['all', 'rbs', 'rimamandiri'])],
+            'company' => ['nullable', Rule::in(['all', 'rbs', 'rimamandiri', 'riama', 'rimbun'])],
             'start_time' => 'required|string',
             'end_time' => 'required|string',
             'late_tolerance_minutes' => 'nullable|integer|min:0|max:120',
@@ -61,6 +78,19 @@ class AdminShiftController extends Controller
             'description' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
         ]);
+
+        // Otomatisasi entitas pembuat shift:
+        // Jika Admin Rimbun -> otomatis entitas 'rbs' (tampil untuk seluruh karyawan Rimbun)
+        // Jika Admin Riama -> otomatis entitas 'rimamandiri' (tampil untuk seluruh karyawan Riama)
+        if (!$currentUser->isSuperAdmin()) {
+            $adminComp = strtolower($currentUser->company ?: 'rbs');
+            $validated['company'] = (str_contains($adminComp, 'riama') || str_contains($adminComp, 'rimamandiri')) ? 'rimamandiri' : 'rbs';
+        } else {
+            $c = strtolower($validated['company'] ?? 'all');
+            if ($c === 'rimbun') $c = 'rbs';
+            if ($c === 'riama') $c = 'rimamandiri';
+            $validated['company'] = $c;
+        }
 
         // Standarisasi format waktu HH:MM:SS
         $validated['start_time'] = strlen($validated['start_time']) === 5 ? $validated['start_time'] . ':00' : $validated['start_time'];
@@ -83,7 +113,7 @@ class AdminShiftController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => "Master Shift '{$shift->name}' berhasil ditambahkan.",
+            'message' => "Master Shift '{$shift->name}' berhasil ditambahkan untuk entitas {$shift->company}.",
             'data' => $shift->loadCount('users'),
         ], 201);
     }
@@ -98,10 +128,22 @@ class AdminShiftController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Hanya Admin yang berhak mengelola shift.'], 403);
         }
 
+        // Validasi akses tenant
+        if (!$currentUser->isSuperAdmin()) {
+            $adminComp = strtolower($currentUser->company ?: 'rbs');
+            $isRiamaAdmin = str_contains($adminComp, 'riama') || str_contains($adminComp, 'rimamandiri');
+            $shiftComp = strtolower($shift->company);
+            $isRiamaShift = str_contains($shiftComp, 'riama') || str_contains($shiftComp, 'rimamandiri');
+
+            if ($isRiamaAdmin !== $isRiamaShift && $shift->company !== 'all') {
+                return response()->json(['status' => 'error', 'message' => 'Anda tidak berhak mengedit shift dari perusahaan lain.'], 403);
+            }
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:150',
             'code' => ['required', 'string', 'max:50', Rule::unique('shifts', 'code')->ignore($shift->id)],
-            'company' => ['required', Rule::in(['all', 'rbs', 'rimamandiri'])],
+            'company' => ['nullable', Rule::in(['all', 'rbs', 'rimamandiri', 'riama', 'rimbun'])],
             'start_time' => 'required|string',
             'end_time' => 'required|string',
             'late_tolerance_minutes' => 'nullable|integer|min:0|max:120',
@@ -110,6 +152,16 @@ class AdminShiftController extends Controller
             'description' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
         ]);
+
+        if (!$currentUser->isSuperAdmin()) {
+            $adminComp = strtolower($currentUser->company ?: 'rbs');
+            $validated['company'] = (str_contains($adminComp, 'riama') || str_contains($adminComp, 'rimamandiri')) ? 'rimamandiri' : 'rbs';
+        } elseif (!empty($validated['company'])) {
+            $c = strtolower($validated['company']);
+            if ($c === 'rimbun') $c = 'rbs';
+            if ($c === 'riama') $c = 'rimamandiri';
+            $validated['company'] = $c;
+        }
 
         $validated['start_time'] = strlen($validated['start_time']) === 5 ? $validated['start_time'] . ':00' : $validated['start_time'];
         $validated['end_time'] = strlen($validated['end_time']) === 5 ? $validated['end_time'] . ':00' : $validated['end_time'];
@@ -140,6 +192,18 @@ class AdminShiftController extends Controller
         $currentUser = $request->user();
         if (!$currentUser->isAdmin() && !$currentUser->isSuperAdmin()) {
             return response()->json(['status' => 'error', 'message' => 'Hanya Admin yang berhak mengelola shift.'], 403);
+        }
+
+        // Validasi akses tenant
+        if (!$currentUser->isSuperAdmin()) {
+            $adminComp = strtolower($currentUser->company ?: 'rbs');
+            $isRiamaAdmin = str_contains($adminComp, 'riama') || str_contains($adminComp, 'rimamandiri');
+            $shiftComp = strtolower($shift->company);
+            $isRiamaShift = str_contains($shiftComp, 'riama') || str_contains($shiftComp, 'rimamandiri');
+
+            if ($isRiamaAdmin !== $isRiamaShift && $shift->company !== 'all') {
+                return response()->json(['status' => 'error', 'message' => 'Anda tidak berhak menghapus shift dari perusahaan lain.'], 403);
+            }
         }
 
         // Cek apakah shift sedang digunakan di data absensi historis
@@ -193,19 +257,32 @@ class AdminShiftController extends Controller
 
         // Multi-tenant check
         if (!$currentUser->isSuperAdmin()) {
-            $query->where('company', $currentUser->company ?: 'rbs');
+            $adminComp = strtolower($currentUser->company ?: 'rbs');
+            $isRiama = str_contains($adminComp, 'riama') || str_contains($adminComp, 'rimamandiri');
+            if ($isRiama) {
+                $query->whereIn('company', ['rimamandiri', 'riama']);
+            } else {
+                $query->whereIn('company', ['rbs', 'rimbun']);
+            }
         } elseif (!empty($validated['company']) && $validated['company'] !== 'all') {
-            $query->where('company', $validated['company']);
+            $c = strtolower($validated['company']);
+            if (str_contains($c, 'riama') || str_contains($c, 'rimamandiri')) {
+                $query->whereIn('company', ['rimamandiri', 'riama']);
+            } else {
+                $query->whereIn('company', ['rbs', 'rimbun']);
+            }
         }
 
         if (!empty($validated['user_ids'])) {
             $query->whereIn('id', $validated['user_ids']);
         } elseif (!empty($validated['school_unit'])) {
             $query->where('school_unit', $validated['school_unit']);
+        } elseif (!empty($validated['company']) || $request->input('assign_mode') === 'company' || !$currentUser->isSuperAdmin()) {
+            // Terapkan ke seluruh karyawan dalam entitas perusahaan (Rimbun / Riama)
         } else {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Pilih karyawan spesifik (user_ids) atau pilih unit sekolah untuk menetapkan shift.',
+                'message' => 'Pilih karyawan spesifik (user_ids), pilih unit sekolah, atau pilih seluruh karyawan perusahaan.',
             ], 422);
         }
 
@@ -233,15 +310,27 @@ class AdminShiftController extends Controller
     public function employees(Request $request): JsonResponse
     {
         $currentUser = $request->user();
-        $targetCompany = $currentUser->isSuperAdmin()
-            ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
-            : ($currentUser->company ?: 'rbs');
-
         $query = User::whereNotIn('role', ['admin', 'super_admin'])
             ->with(['shift', 'attendanceLocation']);
 
-        if ($targetCompany) {
-            $query->where('company', $targetCompany);
+        if (!$currentUser->isSuperAdmin()) {
+            $adminComp = strtolower($currentUser->company ?: 'rbs');
+            $isRiama = str_contains($adminComp, 'riama') || str_contains($adminComp, 'rimamandiri');
+            if ($isRiama) {
+                $query->whereIn('company', ['rimamandiri', 'riama']);
+            } else {
+                $query->whereIn('company', ['rbs', 'rimbun']);
+            }
+        } else {
+            $comp = $request->query('company');
+            if ($comp && $comp !== 'all') {
+                $c = strtolower($comp);
+                if (str_contains($c, 'riama') || str_contains($c, 'rimamandiri')) {
+                    $query->whereIn('company', ['rimamandiri', 'riama']);
+                } else {
+                    $query->whereIn('company', ['rbs', 'rimbun']);
+                }
+            }
         }
 
         if ($request->query('shift_id')) {

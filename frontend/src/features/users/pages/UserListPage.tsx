@@ -52,6 +52,7 @@ export const UserListPage: React.FC = () => {
   const [formSchoolUnit, setFormSchoolUnit] = useState('');
   const [formMaritalStatus, setFormMaritalStatus] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [modalGeneralError, setModalGeneralError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Delete modal state
@@ -100,6 +101,7 @@ export const UserListPage: React.FC = () => {
     setFormSchoolUnit('');
     setFormMaritalStatus('');
     setFormErrors({});
+    setModalGeneralError(null);
     setModalOpen(true);
   };
 
@@ -114,12 +116,14 @@ export const UserListPage: React.FC = () => {
     setFormSchoolUnit(user.school_unit || '');
     setFormMaritalStatus(user.marital_status || '');
     setFormErrors({});
+    setModalGeneralError(null);
     setModalOpen(true);
   };
 
   const handleModalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrors({});
+    setModalGeneralError(null);
     setIsSubmitting(true);
 
     const payload = {
@@ -151,8 +155,26 @@ export const UserListPage: React.FC = () => {
           fieldErrors[field] = Array.isArray(msgs) ? msgs[0] : String(msgs);
         });
         setFormErrors(fieldErrors);
+        if (err.response?.data?.message) {
+          setModalGeneralError(err.response.data.message);
+        }
       } else {
-        alert(err.response?.data?.message || 'Gagal menyimpan data pengguna.');
+        const rawMsg = err.response?.data?.message || err.message || '';
+        let friendlyMsg = 'Gagal menyimpan data pengguna. Silakan periksa kembali isian formulir.';
+        if (rawMsg.includes('1062') || rawMsg.includes('Duplicate entry') || rawMsg.includes('SQLSTATE')) {
+          if (rawMsg.includes('users.nik') || rawMsg.includes('users_nik_unique')) {
+            friendlyMsg = 'NIK ini sudah terdaftar pada pengguna/karyawan lain di sistem. Harap gunakan NIK yang unik.';
+            setFormErrors((prev) => ({ ...prev, nik: friendlyMsg }));
+          } else if (rawMsg.includes('users.email') || rawMsg.includes('users_email_unique')) {
+            friendlyMsg = 'Email ini sudah terdaftar pada pengguna lain di sistem. Harap gunakan email lain.';
+            setFormErrors((prev) => ({ ...prev, email: friendlyMsg }));
+          } else {
+            friendlyMsg = 'Data NIK atau Email yang Anda masukkan sudah terdaftar pada pengguna lain di sistem.';
+          }
+        } else if (rawMsg) {
+          friendlyMsg = rawMsg;
+        }
+        setModalGeneralError(friendlyMsg);
       }
     } finally {
       setIsSubmitting(false);
@@ -167,7 +189,11 @@ export const UserListPage: React.FC = () => {
       setDeleteTarget(null);
       fetchUsers();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Gagal menghapus pengguna.');
+      const rawMsg = err.response?.data?.message || err.message || '';
+      const cleanMsg = rawMsg.includes('SQLSTATE')
+        ? 'Gagal menghapus pengguna karena akun ini masih terhubung dengan data riwayat presensi atau penggajian.'
+        : (rawMsg || 'Gagal menghapus pengguna.');
+      alert(cleanMsg);
     } finally {
       setIsDeleting(false);
     }
@@ -386,6 +412,16 @@ export const UserListPage: React.FC = () => {
         description={`Kelola akses staf dan akun pengguna untuk ${tenant.companyLegalName}.`}
       >
         <form onSubmit={handleModalSubmit} className="space-y-4">
+          {modalGeneralError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-start gap-2.5 animate-fadeIn">
+              <span className="text-base leading-none mt-0.5">⚠️</span>
+              <div className="flex-1">
+                <p className="font-semibold text-red-800">Perhatian</p>
+                <p className="mt-0.5 leading-relaxed">{modalGeneralError}</p>
+              </div>
+            </div>
+          )}
+
           <Input
             label="Nama Lengkap"
             placeholder="Contoh: Siti Aisyah"

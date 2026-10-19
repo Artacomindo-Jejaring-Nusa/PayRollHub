@@ -20,6 +20,7 @@ export const payrollService = {
     start_period?: string;
     end_period?: string;
     status?: string;
+    marital_status?: string;
     company?: string;
     page?: number;
     per_page?: number;
@@ -138,8 +139,10 @@ export const payrollService = {
     link.download = `slip_gaji_${safeName}_${period}.pdf`;
     document.body.appendChild(link);
     link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    setTimeout(() => {
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    }, 2000);
   },
 
   downloadTemplate: async (format: 'xlsx' | 'csv' = 'xlsx'): Promise<void> => {

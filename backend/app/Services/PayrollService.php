@@ -80,6 +80,7 @@ class PayrollService
             ->byPeriod($request->input('period'))
             ->byPeriodRange($request->input('start_period'), $request->input('end_period'))
             ->byStatus($request->input('status'))
+            ->byMaritalStatus($request->input('marital_status'))
             ->byCompany($company);
 
         // Filter duplikat rekening bank jika diminta
@@ -183,6 +184,7 @@ class PayrollService
             ->byPeriod($request->input('period'))
             ->byPeriodRange($request->input('start_period'), $request->input('end_period'))
             ->byStatus($request->input('status'))
+            ->byMaritalStatus($request->input('marital_status'))
             ->byCompany($company);
 
         $metrics = $query->selectRaw('
@@ -320,6 +322,12 @@ class PayrollService
                 if (!empty($payroll->gender) && empty($user->gender)) {
                     $updates['gender'] = $payroll->gender;
                 }
+                if (!empty($payroll->marital_status) && $user->marital_status !== $payroll->marital_status) {
+                    $updates['marital_status'] = $payroll->marital_status;
+                }
+                if (empty($payroll->marital_status) && !empty($user->marital_status)) {
+                    $payroll->updateQuietly(['marital_status' => $user->marital_status]);
+                }
                 if (!empty($payroll->whatsapp) && empty($user->phone)) {
                     $updates['phone'] = $payroll->whatsapp;
                 }
@@ -372,6 +380,7 @@ class PayrollService
                 'status' => $payroll->status ?: 'active',
                 'birth_date' => $payroll->birth_date ?: null,
                 'gender' => $payroll->gender ?: null,
+                'marital_status' => $payroll->marital_status ?: null,
                 'phone' => $payroll->whatsapp ?: null,
                 'bank_name' => $payroll->bank_name,
                 'bank_account' => $payroll->bank_account,

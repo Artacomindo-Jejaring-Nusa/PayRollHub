@@ -61,7 +61,7 @@ export interface AttendanceRecord {
   id: number;
   user_id: number;
   date: string;
-  attendance_type?: 'masuk' | 'libur' | 'dinas_luar';
+  attendance_type?: 'masuk' | 'libur' | 'dinas_luar' | 'sakit' | 'izin';
   location_id?: number | null;
   location_name?: string | null;
   location?: AttendanceLocation | null;
@@ -79,6 +79,10 @@ export interface AttendanceRecord {
   photo_url?: string | null;
   photo_full_url?: string | null;
   status: 'present' | 'late' | 'absent' | 'holiday' | 'permit';
+  approval_status?: 'pending' | 'approved' | 'rejected';
+  approved_by?: number | null;
+  approved_at?: string | null;
+  rejection_reason?: string | null;
   notes: string | null;
   work_duration_minutes?: number | null;
   work_duration_formatted?: string | null;
@@ -92,6 +96,7 @@ export interface AttendanceRecord {
     nik?: string;
     position?: string;
     school_unit?: string;
+    company?: string;
     role: string;
     shift_id?: number | null;
     shift?: Shift | null;
@@ -101,6 +106,10 @@ export interface AttendanceRecord {
 export interface TodayAttendanceData {
   today: string;
   server_time: string;
+  timezone?: string;
+  timezone_name?: string;
+  timezone_label?: string;
+  timezone_offset?: string;
   attendance: AttendanceRecord | null;
   assigned_location: AttendanceLocation | null;
   is_location_locked?: boolean;
@@ -119,9 +128,14 @@ export interface AttendanceSummary {
   sp_period?: string | null;
   company?: string;
   total_employees: number;
+  total_registered?: number;
+  total_off?: number;
   total_present: number;
   total_business_trip?: number;
   total_holiday: number;
+  total_sick?: number;
+  total_permit?: number;
+  total_pending_verification?: number;
   total_on_time: number;
   total_late: number;
   total_not_checked_in: number;
@@ -144,6 +158,9 @@ export interface EmployeeRecapItem {
   total_late: number;
   total_business_trip: number;
   total_holiday: number;
+  total_sick?: number;
+  total_permit?: number;
+  total_pending?: number;
   eight_hours_met_count: number;
   total_work_minutes: number;
   total_work_formatted: string;

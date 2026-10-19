@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Auth;
 
 class PayrollResource extends JsonResource
 {
@@ -14,8 +16,9 @@ class PayrollResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $user = $request->user() ?: auth()->user() ?: auth('sanctum')->user();
-        $isAdmin = $user && $user->isAdmin();
+        /** @var User|null $user */
+        $user = $request->user() ?: Auth::user();
+        $isAdmin = $user instanceof User ? $user->isAdmin() : false;
 
         $userNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;
         $payrollNik = !empty($this->nik) ? trim(ltrim((string) $this->nik, "'")) : null;
@@ -32,6 +35,7 @@ class PayrollResource extends JsonResource
             'position' => $this->position,
             'birth_date' => $this->birth_date,
             'gender' => $this->gender,
+            'marital_status' => $isAdmin ? $this->marital_status : null,
             'whatsapp' => $this->whatsapp,
             'email' => $this->email,
             'join_date' => $this->formatJoinDate($this->join_date),

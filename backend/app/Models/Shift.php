@@ -97,40 +97,55 @@ class Shift extends Model
 
     /**
      * Dapatkan daftar shift yang tersedia untuk pengguna spesifik.
-     * Pilihan 5 master shift sekolah HANYA untuk karyawan PT Riama Mandiri Pratama.
-     * Entitas lain (RBS, dll.) hanya mendapatkan shift perusahaannya masing-masing.
+     * Riama dan Rimbun dipisahkan secara ketat agar karyawan tidak bingung.
      */
     public static function getAvailableForUser(User $user)
     {
-        $company = strtolower($user->company ?: 'rbs');
-        $isRiama = in_array($company, ['rimamandiri', 'riama']);
+        $rawCompany = strtolower(trim($user->company ?: 'rbs'));
+        $isRiama = in_array($rawCompany, ['rimamandiri', 'riama']) || str_contains($rawCompany, 'riama') || str_contains($rawCompany, 'rimamandiri');
 
         $query = self::where('is_active', true);
 
         if ($isRiama) {
-            // Khusus RIAMA: Karyawan Riama Mandiri dapat memilih di antara 5 master shift sekolah Riama (+ Reguler)
-            $query->where(function ($q) {
-                $q->where('code', 'LIKE', 'SHIFT_%')
-                  ->orWhereIn('code', ['REGULER', 'RIAMA-STD']);
-            });
+            // Khusus RIAMA (Security / Jasa Pengamanan):
+            // Tampilkan SELURUH shift milik Riama (company: rimamandiri/riama) + shift bersama 'all'
+            // dan singkirkan shift khusus milik RBS/Rimbun.
+            return $query->where(function ($q) {
+                $q->whereIn('company', ['rimamandiri', 'riama'])
+                  ->orWhere('company', 'all');
+            })->whereNotIn('company', ['rbs', 'rimbun'])
+              ->orderByRaw("
+                CASE 
+                    WHEN code = 'SHIFT_1_3_SHIFT' THEN 1
+                    WHEN code = 'SHIFT_2_3_SHIFT' THEN 2
+                    WHEN code = 'SHIFT_3_3_SHIFT' THEN 3
+                    WHEN code = 'SHIFT_1_2_SHIFT' THEN 4
+                    WHEN code = 'SHIFT_2_2_SHIFT' THEN 5
+                    WHEN code = '24 JAM' THEN 6
+                    WHEN code = 'RIAMA-STD' THEN 7
+                    ELSE 8 
+                END ASC, start_time ASC
+            ")->get();
         } else {
-            // Perusahaan lain (seperti RBS): TIDAK menampilkan 5 shift sekolah Riama
-            $query->where(function ($q) use ($company) {
-                $q->where('company', 'all')
-                  ->orWhere('company', $company);
-            })->where('code', 'NOT LIKE', 'SHIFT_%');
+            // Khusus RBS / Rimbun Buana Sejahtera (Sekolah Rakyat, Operasional, Juru Masak, dll):
+            // Tampilkan SELURUH shift yang dibuat untuk Rimbun (company: rbs/rimbun) + shift bersama 'all'/id 1,
+            // dan singkirkan shift khusus satpam/security Riama.
+            return $query->where(function ($q) {
+                $q->whereIn('company', ['rbs', 'rimbun'])
+                  ->orWhere('company', 'all')
+                  ->orWhere('id', 1);
+            })->whereNotIn('company', ['rimamandiri', 'riama'])
+              ->orderByRaw("
+                CASE 
+                    WHEN id = 1 THEN 1
+                    WHEN id = 2 THEN 2
+                    WHEN id = 3 THEN 3
+                    WHEN id = 4 THEN 4
+                    WHEN id = 15 THEN 5
+                    WHEN id = 16 THEN 6
+                    ELSE 7 
+                END ASC, start_time ASC
+            ")->get();
         }
-
-        return $query->orderByRaw("
-            CASE 
-                WHEN code = 'SHIFT_1_3_SHIFT' THEN 1
-                WHEN code = 'SHIFT_2_3_SHIFT' THEN 2
-                WHEN code = 'SHIFT_3_3_SHIFT' THEN 3
-                WHEN code = 'SHIFT_1_2_SHIFT' THEN 4
-                WHEN code = 'SHIFT_2_2_SHIFT' THEN 5
-                WHEN code = 'REGULER' THEN 6
-                ELSE 7 
-            END ASC, start_time ASC
-        ")->get();
     }
 }

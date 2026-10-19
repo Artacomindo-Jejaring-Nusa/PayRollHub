@@ -14,7 +14,8 @@ class UpdateUserRequest extends FormRequest
 
     public function rules(): array
     {
-        $userId = $this->route('user')?->id ?? $this->route('id');
+        $routeUser = $this->route('user');
+        $userId = $routeUser instanceof \App\Models\User ? $routeUser->id : ($routeUser ?? $this->route('id'));
 
         return [
             'name' => ['required', 'string', 'max:150'],
@@ -27,7 +28,12 @@ class UpdateUserRequest extends FormRequest
             'password' => ['nullable', 'string', 'min:6'],
             'role' => ['required', 'in:super_admin,admin,user,viewer,karyawan'],
             'company' => ['nullable', 'string', 'in:rbs,rimamandiri'],
-            'nik' => ['nullable', 'string', 'max:50'],
+            'nik' => [
+                'nullable',
+                'string',
+                'max:50',
+                Rule::unique('users', 'nik')->ignore($userId),
+            ],
             'school_unit' => ['nullable', 'string', 'max:200'],
             'marital_status' => ['nullable', 'string', 'max:50'],
         ];
@@ -42,6 +48,7 @@ class UpdateUserRequest extends FormRequest
             'password.min' => 'Kata sandi baru minimal 6 karakter.',
             'role.required' => 'Peran (role) pengguna wajib dipilih.',
             'role.in' => 'Peran harus berupa admin atau user.',
+            'nik.unique' => 'NIK ini sudah terdaftar pada pengguna/karyawan lain di sistem.',
         ];
     }
 }

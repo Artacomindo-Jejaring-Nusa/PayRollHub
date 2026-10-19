@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\AttendanceSetting;
 use App\Models\Shift;
+use App\Services\TimezoneService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,13 @@ class EmployeeAttendanceController extends Controller
     public function today(Request $request): JsonResponse
     {
         $user = $request->user();
-        $today = Carbon::today('Asia/Jakarta')->toDateString();
+        $clientTz = $request->header('X-Timezone') ?: $request->query('timezone');
+        $clientLat = $request->query('latitude') ? (float) $request->query('latitude') : null;
+        $clientLng = $request->query('longitude') ? (float) $request->query('longitude') : null;
+        $tzData = TimezoneService::getNowForUser($user, $clientLat, $clientLng, $clientTz);
+
+        $today = $tzData['today'];
+        $serverTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
         $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
         $hqLocation = \App\Models\AttendanceSetting::syncHeadquartersLocation($setting);
@@ -35,7 +42,7 @@ class EmployeeAttendanceController extends Controller
             $locations->prepend($hqLocation);
         }
 
-        $attendance = Attendance::with('location')->where('user_id', $user->id)
+        $attendance = Attendance::with(['location', 'approver'])->where('user_id', $user->id)
             ->where('date', $today)
             ->first();
 
@@ -45,13 +52,15 @@ class EmployeeAttendanceController extends Controller
         $assignedLocation = $this->resolveUserAssignedLocation($user, $targetCompany, $setting, $hqLocation);
         $isLocationLocked = true;
 
-        // Point Bang Maun: Default shift untuk karyawan sekolah / Riama
+        // Default shift untuk karyawan:
+        // Riama: SHIFT_1_3_SHIFT (Pagi 07:00-15:00)
+        // RBS: Shift ID 1 / Reguler (08:00-17:00)
         $defaultShift = null;
-        if (!empty($user->school_unit) || $targetCompany === 'rimamandiri') {
+        if ($targetCompany === 'rimamandiri') {
             $defaultShift = \App\Models\Shift::where('code', 'SHIFT_1_3_SHIFT')->first();
         }
         if (!$defaultShift) {
-            $defaultShift = \App\Models\Shift::where('code', 'REGULER')->first();
+            $defaultShift = \App\Models\Shift::find(1) ?: \App\Models\Shift::where('code', 'REGULER')->first();
         }
 
         $assignedShift = $user->shift ?: $defaultShift;
@@ -60,7 +69,11 @@ class EmployeeAttendanceController extends Controller
             'status' => 'success',
             'data' => [
                 'today' => $today,
-                'server_time' => Carbon::now('Asia/Jakarta')->format('H:i:s'),
+                'server_time' => $serverTime,
+                'timezone' => $tzData['timezone'],
+                'timezone_name' => $tzData['timezone_name'],
+                'timezone_label' => $tzData['timezone_label'],
+                'timezone_offset' => $tzData['timezone_offset'],
                 'attendance' => $attendance,
                 'assigned_location' => $assignedLocation,
                 'is_location_locked' => true,
@@ -93,9 +106,14 @@ class EmployeeAttendanceController extends Controller
         $attendanceType = strtolower($request->input('attendance_type', 'masuk'));
 
         $user = $request->user();
-        $now = Carbon::now('Asia/Jakarta');
-        $today = $now->toDateString();
-        $currentTime = $now->format('H:i:s');
+        $clientTz = $request->header('X-Timezone') ?: $request->input('timezone');
+        $lat = $request->input('latitude') ? (float) $request->input('latitude') : null;
+        $lng = $request->input('longitude') ? (float) $request->input('longitude') : null;
+        $tzData = TimezoneService::getNowForUser($user, $lat, $lng, $clientTz);
+
+        $now = $tzData['carbon'];
+        $today = $tzData['today'];
+        $currentTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
 
         // Cek apakah sudah check-in hari ini
@@ -104,11 +122,24 @@ class EmployeeAttendanceController extends Controller
             ->first();
 
         if ($existing && $existing->check_in_time) {
-            $jenis = $existing->attendance_type === 'libur' ? 'absen libur' : 'absen masuk';
-            return response()->json([
-                'status' => 'error',
-                'message' => "Anda sudah melakukan {$jenis} hari ini pada pukul {$existing->check_in_time}.",
-            ], 422);
+            $isExistingHoliday = ($existing->attendance_type === 'libur' || $existing->status === 'holiday');
+            $isRequestingWork = in_array($attendanceType, ['masuk', 'dinas_luar', 'perjalanan_dinas']);
+
+            // Jika sebelumnya hanya tercatat absen libur, dan sekarang user ingin absen masuk kerja riil (atau dinas luar),
+            // izinkan untuk memperbarui kehadiran (override holiday) daripada menolaknya dengan error!
+            if (!$isExistingHoliday || !$isRequestingWork) {
+                $jenis = match ($existing->attendance_type) {
+                    'libur' => 'absen libur',
+                    'sakit' => 'pengajuan sakit',
+                    'izin' => 'pengajuan izin',
+                    'dinas_luar' => 'absen perjalanan dinas',
+                    default => 'absen masuk',
+                };
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Anda sudah melakukan {$jenis} hari ini pada pukul {$existing->check_in_time}.",
+                ], 422);
+            }
         }
 
         // =========================================================================
@@ -128,14 +159,68 @@ class EmployeeAttendanceController extends Controller
                     'check_in_distance_meters' => null,
                     'check_in_status' => 'on_time',
                     'status' => 'holiday',
+                    'approval_status' => 'approved',
                     'notes' => $notes,
                 ]
             );
 
             return response()->json([
                 'status' => 'success',
-                'message' => "Absen Libur berhasil tercatat pada {$currentTime}. Anda tidak perlu absen pulang. Selamat beristirahat!",
+                'message' => "Absen Libur berhasil tercatat pada {$currentTime} {$tzData['timezone']}. Anda tidak perlu absen pulang. Selamat beristirahat!",
                 'data' => $attendance,
+                'timezone' => $tzData['timezone'],
+                'timezone_label' => $tzData['timezone_label'],
+            ]);
+        }
+
+        // =========================================================================
+        // POINT MAUN: ABSEN SAKIT / IZIN DENGAN UPLOAD FOTO SURAT & VERIFIKASI ADMIN
+        // =========================================================================
+        if ($attendanceType === 'sakit' || $attendanceType === 'izin') {
+            $label = $attendanceType === 'sakit' ? 'Sakit' : 'Izin';
+            $notes = $request->input('notes');
+            if (empty(trim($notes ?? ''))) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Alasan / keterangan permohonan {$label} wajib diisi.",
+                ], 422);
+            }
+
+            // Foto bukti surat dokter / permohonan izin wajib diunggah
+            if (!$request->hasFile('photo') && !$request->input('photo')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Foto bukti surat keterangan dokter atau surat permohonan izin wajib diunggah.",
+                ], 422);
+            }
+
+            $photoPath = $this->storeAttendancePhoto($request, $user->id);
+            $userShift = $user->shift ?: \App\Models\Shift::where('code', 'REGULER')->first();
+
+            $attendance = Attendance::updateOrCreate(
+                ['user_id' => $user->id, 'date' => $today],
+                [
+                    'attendance_type' => $attendanceType,
+                    'check_in_time' => $currentTime,
+                    'check_in_lat' => $request->input('latitude') ? (float) $request->input('latitude') : null,
+                    'check_in_lng' => $request->input('longitude') ? (float) $request->input('longitude') : null,
+                    'location_name' => $attendanceType === 'sakit' ? 'Sakit (Surat Dokter)' : 'Izin Resmi',
+                    'shift_id' => $userShift?->id,
+                    'check_in_distance_meters' => null,
+                    'check_in_status' => 'on_time',
+                    'status' => 'permit',
+                    'approval_status' => 'pending', // Menunggu verifikasi admin
+                    'notes' => $notes,
+                    'photo_url' => $photoPath,
+                ]
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Pengajuan Absen {$label} dengan lampiran surat berhasil dikirim pada {$currentTime} {$tzData['timezone']}. Saat ini menunggu verifikasi Admin. Anda tidak perlu absen pulang.",
+                'data' => $attendance,
+                'timezone' => $tzData['timezone'],
+                'timezone_label' => $tzData['timezone_label'],
             ]);
         }
 
@@ -173,10 +258,17 @@ class EmployeeAttendanceController extends Controller
                 ]
             );
 
+            $wasHoliday = $existing && ($existing->attendance_type === 'libur' || $existing->status === 'holiday');
+            $msg = $wasHoliday
+                ? "Absen Perjalanan Dinas berhasil dicatat! Status libur Anda hari ini telah diperbarui menjadi Dinas Luar."
+                : "Absen Perjalanan Dinas berhasil tercatat pada {$currentTime} {$tzData['timezone']}. Selamat bertugas!";
+
             return response()->json([
                 'status' => 'success',
-                'message' => "Absen Perjalanan Dinas berhasil tercatat pada {$currentTime}. Selamat bertugas!",
+                'message' => $msg,
                 'data' => $attendance,
+                'timezone' => $tzData['timezone'],
+                'timezone_label' => $tzData['timezone_label'],
             ]);
         }
 
@@ -242,7 +334,8 @@ class EmployeeAttendanceController extends Controller
 
         $userShift = null;
         if (!empty($validated['shift_id'])) {
-            $chosenShift = \App\Models\Shift::where('is_active', true)->find($validated['shift_id']);
+            $availableShifts = \App\Models\Shift::getAvailableForUser($user);
+            $chosenShift = $availableShifts->firstWhere('id', (int) $validated['shift_id']);
             if ($chosenShift) {
                 $user->update(['shift_id' => $chosenShift->id]);
                 $userShift = $chosenShift;
@@ -251,10 +344,14 @@ class EmployeeAttendanceController extends Controller
         if (!$userShift) {
             $userShift = $user->shift;
             if (!$userShift) {
-                if (!empty($user->school_unit) || $targetCompany === 'rimamandiri') {
-                    $userShift = \App\Models\Shift::where('code', 'SHIFT_1_3_SHIFT')->first();
+                $isRiama = in_array(strtolower($targetCompany), ['rimamandiri', 'riama']);
+                if ($isRiama) {
+                    $userShift = \App\Models\Shift::where('code', 'SHIFT_1_3_SHIFT')->first()
+                        ?: \App\Models\Shift::whereIn('company', ['rimamandiri', 'riama'])->first();
+                } else {
+                    $userShift = \App\Models\Shift::where('code', 'REGULER')->first()
+                        ?: (\App\Models\Shift::find(1) ?: \App\Models\Shift::whereIn('company', ['rbs', 'rimbun'])->first());
                 }
-                $userShift = $userShift ?: \App\Models\Shift::where('code', 'REGULER')->first();
             }
         }
 
@@ -292,10 +389,17 @@ class EmployeeAttendanceController extends Controller
             ? "Terlambat (melewati batas toleransi {$shiftTolerance} menit dari jadwal {$shiftName})"
             : "Tepat Waktu ({$shiftName})";
 
+        $wasHoliday = $existing && ($existing->attendance_type === 'libur' || $existing->status === 'holiday');
+        $msg = $wasHoliday
+            ? "Absen Masuk berhasil dicatat! Status libur Anda sebelumnya telah diperbarui menjadi Masuk Kerja ({$statusMsg}) di lokasi '{$locationName}'."
+            : "Absen masuk berhasil tercatat pada {$currentTime} {$tzData['timezone']} ({$statusMsg}) di lokasi '{$locationName}'. Jarak: {$distance} meter.";
+
         return response()->json([
             'status' => 'success',
-            'message' => "Absen masuk berhasil tercatat pada {$currentTime} ({$statusMsg}) di lokasi '{$locationName}'. Jarak: {$distance} meter.",
+            'message' => $msg,
             'data' => $attendance,
+            'timezone' => $tzData['timezone'],
+            'timezone_label' => $tzData['timezone_label'],
         ]);
     }
 
@@ -311,9 +415,14 @@ class EmployeeAttendanceController extends Controller
         ]);
 
         $user = $request->user();
-        $now = Carbon::now('Asia/Jakarta');
-        $today = $now->toDateString();
-        $currentTime = $now->format('H:i:s');
+        $clientTz = $request->header('X-Timezone') ?: $request->input('timezone');
+        $lat = $request->input('latitude') ? (float) $request->input('latitude') : null;
+        $lng = $request->input('longitude') ? (float) $request->input('longitude') : null;
+        $tzData = TimezoneService::getNowForUser($user, $lat, $lng, $clientTz);
+
+        $now = $tzData['carbon'];
+        $today = $tzData['today'];
+        $currentTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
 
         // Cek absensi hari ini
@@ -344,30 +453,49 @@ class EmployeeAttendanceController extends Controller
 
         // POINT 8: Absensi pulang di-los (Bebas radius geofence, yang terpenting durasi 8 jam kerja)
         $distance = null;
-        $lat = $validated['latitude'] ?? null;
-        $lng = $validated['longitude'] ?? null;
+        $lat = isset($validated['latitude']) ? (float)$validated['latitude'] : null;
+        $lng = isset($validated['longitude']) ? (float)$validated['longitude'] : null;
+
+        // Sanitasi: jika koordinat 0,0 atau hampir 0 (Null Island / GPS belum terdeteksi), set null
+        if ($lat !== null && $lng !== null) {
+            if (abs($lat) < 0.0001 && abs($lng) < 0.0001) {
+                $lat = null;
+                $lng = null;
+            }
+        }
 
         if ($lat !== null && $lng !== null && $attendance->attendance_type !== 'dinas_luar') {
             if ($attendance->location_id) {
                 $loc = \App\Models\AttendanceLocation::find($attendance->location_id);
-                if ($loc) {
+                if ($loc && $loc->latitude && $loc->longitude) {
                     $distance = \App\Models\AttendanceLocation::calculateDistanceInMeters(
-                        (float) $lat,
-                        (float) $lng,
-                        $loc->latitude,
-                        $loc->longitude
+                        $lat,
+                        $lng,
+                        (float)$loc->latitude,
+                        (float)$loc->longitude
                     );
                 }
             }
 
             if ($distance === null) {
                 $setting = \App\Models\AttendanceSetting::getActiveSetting($targetCompany);
-                $distance = \App\Models\AttendanceSetting::calculateDistanceInMeters(
-                    (float) $lat,
-                    (float) $lng,
-                    $setting->latitude,
-                    $setting->longitude
-                );
+                if ($setting && $setting->latitude && $setting->longitude) {
+                    $distance = \App\Models\AttendanceSetting::calculateDistanceInMeters(
+                        $lat,
+                        $lng,
+                        (float)$setting->latitude,
+                        (float)$setting->longitude
+                    );
+                }
+            }
+        }
+
+        // Failsafe sanitasi jarak: jangan simpan jarak anomali > 999.999 m (~1000 km)
+        if ($distance !== null) {
+            if ($distance > 999999) {
+                $distance = null;
+            } else {
+                $distance = round($distance, 2);
             }
         }
 
@@ -392,12 +520,17 @@ class EmployeeAttendanceController extends Controller
             }
         }
 
+        $notesUpdate = $attendance->notes;
+        if (!empty($validated['notes'])) {
+            $notesUpdate = $attendance->notes ? $attendance->notes . ' | ' . $validated['notes'] : $validated['notes'];
+        }
+
         $attendance->update([
             'check_out_time' => $currentTime,
             'check_out_lat' => $lat,
             'check_out_lng' => $lng,
             'check_out_distance_meters' => $distance,
-            'notes' => $validated['notes'] ? ($attendance->notes ? $attendance->notes . ' | ' . $validated['notes'] : $validated['notes']) : $attendance->notes,
+            'notes' => $notesUpdate,
         ]);
 
         $fresh = $attendance->fresh();
@@ -406,8 +539,10 @@ class EmployeeAttendanceController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => "Absen pulang berhasil tercatat pada {$currentTime}.{$durationText}{$eightHoursText} Selamat beristirahat!",
+            'message' => "Absen pulang berhasil tercatat pada {$currentTime} {$tzData['timezone']}.{$durationText}{$eightHoursText} Selamat beristirahat!",
             'data' => $fresh,
+            'timezone' => $tzData['timezone'],
+            'timezone_label' => $tzData['timezone_label'],
             'work_duration' => [
                 'minutes' => $durationMinutes,
                 'formatted' => $durationFormatted,
@@ -424,7 +559,7 @@ class EmployeeAttendanceController extends Controller
         $user = $request->user();
         $month = $request->query('month', Carbon::now()->format('Y-m'));
 
-        $query = Attendance::with('location')
+        $query = Attendance::with(['location', 'approver', 'shift'])
             ->where('user_id', $user->id)
             ->where('date', 'like', "{$month}%")
             ->orderBy('date', 'desc');
@@ -619,7 +754,15 @@ class EmployeeAttendanceController extends Controller
         ]);
 
         $user = $request->user();
-        $shift = Shift::where('is_active', true)->findOrFail($validated['shift_id']);
+        $availableShifts = Shift::getAvailableForUser($user);
+        $shift = $availableShifts->firstWhere('id', $validated['shift_id']);
+
+        if (!$shift) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Shift kerja yang dipilih tidak tersedia atau tidak berlaku untuk entitas perusahaan Anda.',
+            ], 403);
+        }
 
         $user->update(['shift_id' => $shift->id]);
 
@@ -627,6 +770,42 @@ class EmployeeAttendanceController extends Controller
             'status' => 'success',
             'message' => "Shift kerja berhasil diatur menjadi '{$shift->name}' ({$shift->formatted_time}).",
             'data' => $shift,
+        ]);
+    }
+
+    /**
+     * Batalkan status Absen Libur hari ini agar karyawan dapat melakukan Absen Masuk.
+     */
+    public function cancelHoliday(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $clientTz = $request->header('X-Timezone') ?: $request->input('timezone');
+        $lat = $request->input('latitude') ? (float) $request->input('latitude') : null;
+        $lng = $request->input('longitude') ? (float) $request->input('longitude') : null;
+        $tzData = TimezoneService::getNowForUser($user, $lat, $lng, $clientTz);
+        $today = $tzData['today'];
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('date', $today)
+            ->where(function ($q) {
+                $q->where('attendance_type', 'libur')
+                  ->orWhere('status', 'holiday');
+            })
+            ->first();
+
+        if (!$attendance) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tidak ditemukan catatan absen libur hari ini yang dapat dibatalkan.',
+            ], 404);
+        }
+
+        // Hapus catatan libur hari ini agar karyawan dapat melakukan absensi masuk
+        $attendance->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Status Absen Libur hari ini berhasil dibatalkan. Anda sekarang dapat melakukan Absen Masuk kerja.',
         ]);
     }
 }

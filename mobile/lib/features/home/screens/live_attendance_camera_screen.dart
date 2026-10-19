@@ -13,6 +13,7 @@ class LiveAttendanceCameraScreen extends StatefulWidget {
   final double? longitude;
   final String? locationName;
   final String? userName;
+  final String? timezone;
 
   const LiveAttendanceCameraScreen({
     super.key,
@@ -22,6 +23,7 @@ class LiveAttendanceCameraScreen extends StatefulWidget {
     this.longitude,
     this.locationName,
     this.userName,
+    this.timezone = 'WIB',
   });
 
   @override
@@ -429,7 +431,7 @@ class _LiveAttendanceCameraScreenState extends State<LiveAttendanceCameraScreen>
                       ],
                     ),
                     Text(
-                      '$_currentTime WIB',
+                      '$_currentTime ${widget.timezone ?? 'WIB'}',
                       style: GoogleFonts.robotoMono(
                         color: Colors.amberAccent,
                         fontSize: 12,

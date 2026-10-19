@@ -13,6 +13,7 @@ export interface PayrollItem {
   position?: string | null;
   birth_date?: string | null;
   gender?: string | null;
+  marital_status?: string | null;
   whatsapp?: string | null;
   email?: string | null;
   join_date?: string | null;
@@ -102,6 +103,7 @@ export interface PayrollFilterOptions {
   periods: string[];
   positions?: string[];
   statuses?: string[];
+  marital_statuses?: string[];
   companies?: string[];
 }
 
@@ -120,6 +122,7 @@ export interface PayrollFormData {
   province: string;
   school_unit?: string;
   position?: string;
+  marital_status?: string;
   join_date?: string;
   resign_date?: string;
   status?: 'active' | 'off';

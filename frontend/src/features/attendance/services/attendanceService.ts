@@ -17,7 +17,7 @@ export const attendanceService = {
   },
 
   checkIn: async (payload: {
-    attendance_type?: 'masuk' | 'libur' | 'dinas_luar';
+    attendance_type?: 'masuk' | 'libur' | 'dinas_luar' | 'sakit' | 'izin';
     latitude?: number;
     longitude?: number;
     location_id?: number;
@@ -54,8 +54,13 @@ export const attendanceService = {
     return response.data;
   },
 
-  checkOut: async (coords: { latitude: number; longitude: number; notes?: string }): Promise<any> => {
-    const response = await api.post('/employee/attendance/check-out', coords);
+  checkOut: async (payload?: { latitude?: number; longitude?: number; notes?: string }): Promise<any> => {
+    const response = await api.post('/employee/attendance/check-out', payload || {});
+    return response.data;
+  },
+
+  cancelHoliday: async (): Promise<any> => {
+    const response = await api.post('/employee/attendance/cancel-holiday');
     return response.data;
   },
 
@@ -283,11 +288,12 @@ export const attendanceService = {
   createAdminAttendance: async (data: {
     user_id: number;
     date: string;
-    attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+    attendance_type: 'masuk' | 'dinas_luar' | 'libur' | 'sakit' | 'izin';
     check_in_time?: string | null;
     check_out_time?: string | null;
     check_in_status?: 'on_time' | 'late';
     status?: string;
+    approval_status?: 'pending' | 'approved' | 'rejected';
     location_name?: string;
     notes?: string;
   }): Promise<AttendanceRecord> => {
@@ -299,17 +305,38 @@ export const attendanceService = {
     id: number,
     data: {
       date: string;
-      attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+      attendance_type: 'masuk' | 'dinas_luar' | 'libur' | 'sakit' | 'izin';
       check_in_time?: string | null;
       check_out_time?: string | null;
       check_in_status?: 'on_time' | 'late';
       status?: string;
+      approval_status?: 'pending' | 'approved' | 'rejected';
       location_name?: string;
       notes?: string;
     }
   ): Promise<AttendanceRecord> => {
     const response = await api.put(`/admin/attendances/${id}`, data);
     return response.data.data;
+  },
+
+  verifyAttendance: async (
+    id: number,
+    actionOrPayload: 'approve' | 'reject' | { action?: 'approve' | 'reject'; approval_status?: string; rejection_reason?: string },
+    rejection_reason?: string
+  ): Promise<any> => {
+    let act = 'approve';
+    let reason = rejection_reason;
+    if (typeof actionOrPayload === 'string') {
+      act = actionOrPayload;
+    } else if (typeof actionOrPayload === 'object' && actionOrPayload !== null) {
+      act = actionOrPayload.action || (actionOrPayload.approval_status === 'rejected' ? 'reject' : 'approve');
+      reason = actionOrPayload.rejection_reason || reason;
+    }
+    const response = await api.put(`/admin/attendances/${id}/verify`, {
+      action: act,
+      rejection_reason: reason,
+    });
+    return response.data;
   },
 
   deleteAdminAttendance: async (id: number): Promise<void> => {

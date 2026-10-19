@@ -145,9 +145,9 @@ export const DashboardLayout: React.FC = () => {
     {
       label: 'Live Chat CS',
       path: '/live-chat',
-      icon: <Headphones className="w-4 h-4 text-emerald-500" />,
+      icon: <Headphones className="w-4 h-4 text-amber-500" />,
       adminOnly: true,
-      badge: 'Live',
+      badge: 'Maintenance',
     },
     {
       label: 'Manajemen Pengguna',
@@ -364,6 +364,21 @@ export const DashboardLayout: React.FC = () => {
                 >
                   <Bell className={`w-4 h-4 shrink-0 ${isItemActive('/announcements') ? 'text-white' : 'text-text-muted'}`} />
                   <span>Pengumuman</span>
+                </Link>
+              )}
+
+              {/* 4b. Laporan Kerja (Khusus Admin & Super Admin untuk review laporan staf/karyawan) */}
+              {isAdmin && (
+                <Link
+                  to="/work-reports"
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] xl:text-[12.5px] font-medium transition-all whitespace-nowrap shrink-0 ${
+                    isItemActive('/work-reports')
+                      ? 'bg-primary text-white shadow-xs font-semibold'
+                      : 'text-text-primary hover:bg-surface-container hover:text-primary'
+                  }`}
+                >
+                  <ClipboardList className={`w-4 h-4 shrink-0 ${isItemActive('/work-reports') ? 'text-white' : 'text-text-muted'}`} />
+                  <span>Laporan Kerja</span>
                 </Link>
               )}
 

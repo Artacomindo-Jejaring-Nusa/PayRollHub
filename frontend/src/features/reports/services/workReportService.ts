@@ -1,5 +1,6 @@
 import { api } from '../../../lib/api';
 import { WorkReport } from '../../../types/auth';
+import { PayrollPaginationMeta } from '../../../types/payroll';
 
 export const workReportService = {
   async getAdminWorkReports(params?: {
@@ -7,7 +8,8 @@ export const workReportService = {
     search?: string;
     date?: string;
     page?: number;
-  }): Promise<{ data: WorkReport[]; meta: any }> {
+    per_page?: number;
+  }): Promise<{ data: WorkReport[]; meta: PayrollPaginationMeta }> {
     const res = await api.get('/admin/work-reports', { params });
     return { data: res.data.data, meta: res.data.meta };
   },

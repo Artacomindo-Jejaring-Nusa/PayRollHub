@@ -68,7 +68,7 @@ class AdminAttendanceController extends Controller
 
         $query = Attendance::with(['user' => function ($q) {
             $q->select('id', 'name', 'email', 'nik', 'company', 'phone', 'role', 'school_unit', 'shift_id')->with('shift');
-        }, 'location', 'shift']);
+        }, 'location', 'shift', 'approver']);
 
         // Strict company isolation:
         $targetCompany = $currentUser->isSuperAdmin()
@@ -96,17 +96,28 @@ class AdminAttendanceController extends Controller
             $query->where('date', 'like', "{$month}%");
         }
 
+        $approvalStatus = $request->query('approval_status');
+        if ($approvalStatus && $approvalStatus !== 'all') {
+            $query->where('approval_status', $approvalStatus);
+        }
+
         if ($status && $status !== 'all') {
             if ($status === 'late') {
-                $query->where('check_in_status', 'late')->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
+                $query->where('check_in_status', 'late')->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin']);
             } elseif ($status === 'on_time') {
-                $query->where('check_in_status', 'on_time')->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
+                $query->where('check_in_status', 'on_time')->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin']);
             } elseif ($status === 'holiday' || $status === 'libur') {
                 $query->where(function ($q) {
                     $q->where('attendance_type', 'libur')->orWhere('status', 'holiday');
                 });
             } elseif ($status === 'dinas_luar' || $status === 'business_trip') {
                 $query->where('attendance_type', 'dinas_luar');
+            } elseif ($status === 'sakit') {
+                $query->where('attendance_type', 'sakit');
+            } elseif ($status === 'izin') {
+                $query->where('attendance_type', 'izin');
+            } elseif ($status === 'pending_verification' || $status === 'pending') {
+                $query->where('approval_status', 'pending');
             } else {
                 $query->where('status', $status);
             }
@@ -163,6 +174,9 @@ class AdminAttendanceController extends Controller
             $attendanceQuery->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
         }
 
+        $totalRegistered = 0;
+        $totalOff = 0;
+
         $spRange = $this->getSpDateRange($spPeriod);
         if ($spRange && $spPeriod && strtolower(trim($spPeriod)) !== 'all') {
             $attendanceQuery->whereBetween('date', $spRange);
@@ -170,6 +184,15 @@ class AdminAttendanceController extends Controller
 
             // Filter karyawan yang terdaftar dan aktif di periode SP tersebut
             $spClean = trim($spPeriod);
+            $payrollQuery = \App\Models\Payroll::where('period', $spClean)
+                ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany));
+
+            $totalActivePayroll = (clone $payrollQuery)
+                ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'))
+                ->count();
+            $totalRegistered = (clone $payrollQuery)->count();
+            $totalOff = (clone $payrollQuery)->where('status', 'off')->count();
+
             $usersQuery->whereIn('name', function ($q) use ($targetCompany, $spClean) {
                 $q->select('employee_name')
                     ->from('payrolls')
@@ -177,26 +200,49 @@ class AdminAttendanceController extends Controller
                     ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany))
                     ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'));
             });
+
+            $totalEmployees = $totalActivePayroll > 0 ? $totalActivePayroll : $usersQuery->count();
         } else {
             $attendanceQuery->where('date', $date);
             $label = $date;
 
-            // Untuk absensi harian / global: hanya hitung karyawan yang berstatus aktif
-            $usersQuery->where(function ($q) {
-                $q->where('status', '!=', 'off')->orWhereNull('status');
-            });
+            // Untuk absensi harian / global: sinkronkan patokan dengan master data payroll resmi
+            if ($targetCompany) {
+                $payrollQuery = \App\Models\Payroll::where('company', $targetCompany);
+                $totalActivePayroll = (clone $payrollQuery)
+                    ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'))
+                    ->count();
+                $totalRegistered = (clone $payrollQuery)->count();
+                $totalOff = (clone $payrollQuery)->where('status', 'off')->count();
+
+                if ($totalActivePayroll > 0) {
+                    $totalEmployees = $totalActivePayroll;
+                } else {
+                    $usersQuery->where(function ($q) {
+                        $q->where('status', '!=', 'off')->orWhereNull('status');
+                    });
+                    $totalEmployees = $usersQuery->count();
+                }
+            } else {
+                $usersQuery->where(function ($q) {
+                    $q->where('status', '!=', 'off')->orWhereNull('status');
+                });
+                $totalEmployees = $usersQuery->count();
+            }
         }
 
-        $totalEmployees = $usersQuery->count();
         $attendances = $attendanceQuery->get();
 
         $totalHoliday = $attendances->where('attendance_type', 'libur')->count();
         $totalBusinessTrip = $attendances->where('attendance_type', 'dinas_luar')->count();
-        $presentAttendances = $attendances->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
+        $totalSick = $attendances->where('attendance_type', 'sakit')->count();
+        $totalPermit = $attendances->where('attendance_type', 'izin')->count();
+        $totalPendingVerification = $attendances->where('approval_status', 'pending')->count();
+        $presentAttendances = $attendances->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin']);
         $totalPresent = $presentAttendances->count();
         $totalOnTime = $presentAttendances->where('check_in_status', 'on_time')->count();
         $totalLate = $presentAttendances->where('check_in_status', 'late')->count();
-        $totalNotCheckedIn = max(0, $totalEmployees - ($totalPresent + $totalHoliday + $totalBusinessTrip));
+        $totalNotCheckedIn = max(0, $totalEmployees - ($totalPresent + $totalHoliday + $totalBusinessTrip + $totalSick + $totalPermit));
 
         $eightHoursMetCount = 0;
         foreach ($attendances as $att) {
@@ -216,9 +262,14 @@ class AdminAttendanceController extends Controller
                 'sp_period' => $spPeriod,
                 'company' => $targetCompany ?: 'all',
                 'total_employees' => $totalEmployees,
+                'total_registered' => $totalRegistered,
+                'total_off' => $totalOff,
                 'total_present' => $totalPresent,
                 'total_business_trip' => $totalBusinessTrip,
                 'total_holiday' => $totalHoliday,
+                'total_sick' => $totalSick,
+                'total_permit' => $totalPermit,
+                'total_pending_verification' => $totalPendingVerification,
                 'total_on_time' => $totalOnTime,
                 'total_late' => $totalLate,
                 'total_not_checked_in' => $totalNotCheckedIn,
@@ -302,11 +353,14 @@ class AdminAttendanceController extends Controller
 
         $recap = $users->map(function ($user) use ($attendances) {
             $userLogs = $attendances->get($user->id, collect());
-            $totalPresent = $userLogs->whereNotIn('attendance_type', ['libur', 'dinas_luar'])->count();
-            $totalOnTime = $userLogs->whereNotIn('attendance_type', ['libur', 'dinas_luar'])->where('check_in_status', 'on_time')->count();
-            $totalLate = $userLogs->whereNotIn('attendance_type', ['libur', 'dinas_luar'])->where('check_in_status', 'late')->count();
+            $totalPresent = $userLogs->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin'])->count();
+            $totalOnTime = $userLogs->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin'])->where('check_in_status', 'on_time')->count();
+            $totalLate = $userLogs->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin'])->where('check_in_status', 'late')->count();
             $totalBusinessTrip = $userLogs->where('attendance_type', 'dinas_luar')->count();
             $totalHoliday = $userLogs->where('attendance_type', 'libur')->count();
+            $totalSick = $userLogs->where('attendance_type', 'sakit')->count();
+            $totalPermit = $userLogs->where('attendance_type', 'izin')->count();
+            $totalPending = $userLogs->where('approval_status', 'pending')->count();
 
             $totalWorkMinutes = 0;
             $eightHoursMetCount = 0;
@@ -339,6 +393,9 @@ class AdminAttendanceController extends Controller
                 'total_late' => $totalLate,
                 'total_business_trip' => $totalBusinessTrip,
                 'total_holiday' => $totalHoliday,
+                'total_sick' => $totalSick,
+                'total_permit' => $totalPermit,
+                'total_pending' => $totalPending,
                 'eight_hours_met_count' => $eightHoursMetCount,
                 'total_work_minutes' => $totalWorkMinutes,
                 'total_work_formatted' => $formattedDuration,
@@ -364,11 +421,12 @@ class AdminAttendanceController extends Controller
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'date' => 'required|date_format:Y-m-d',
-            'attendance_type' => 'required|in:masuk,dinas_luar,libur',
+            'attendance_type' => 'required|in:masuk,dinas_luar,libur,sakit,izin',
             'check_in_time' => 'nullable|string',
             'check_out_time' => 'nullable|string',
             'check_in_status' => 'nullable|in:on_time,late',
             'status' => 'nullable|in:present,late,holiday,absent,permit',
+            'approval_status' => 'nullable|in:pending,approved,rejected',
             'location_name' => 'nullable|string|max:150',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -393,7 +451,12 @@ class AdminAttendanceController extends Controller
 
         $type = $validated['attendance_type'];
         $checkInStatus = $validated['check_in_status'] ?? ($type === 'masuk' ? 'on_time' : null);
-        $status = $validated['status'] ?? ($type === 'libur' ? 'holiday' : 'present');
+        $status = $validated['status'] ?? (match($type) {
+            'libur' => 'holiday',
+            'sakit', 'izin' => 'permit',
+            default => 'present',
+        });
+        $approvalStatus = $validated['approval_status'] ?? 'approved';
 
         $attendance = Attendance::create([
             'user_id' => $targetUser->id,
@@ -403,7 +466,8 @@ class AdminAttendanceController extends Controller
             'check_out_time' => $validated['check_out_time'] ?: null,
             'check_in_status' => $checkInStatus,
             'status' => $status,
-            'location_name' => $validated['location_name'] ?: ($type === 'dinas_luar' ? 'Perjalanan Dinas' : 'Input Manual Admin'),
+            'approval_status' => $approvalStatus,
+            'location_name' => $validated['location_name'] ?: ($type === 'dinas_luar' ? 'Perjalanan Dinas' : ($type === 'sakit' ? 'Sakit (Surat Dokter)' : ($type === 'izin' ? 'Izin Resmi' : 'Input Manual Admin'))),
             'shift_id' => $validated['shift_id'] ?? ($targetUser->shift_id ?: null),
             'notes' => $validated['notes'] ? '[Input Admin] ' . $validated['notes'] : '[Input Admin Manual]',
         ]);
@@ -419,7 +483,7 @@ class AdminAttendanceController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => "Presensi karyawan {$targetUser->name} berhasil ditambahkan secara manual.",
-            'data' => $attendance->fresh(['user', 'location', 'shift']),
+            'data' => $attendance->fresh(['user', 'location', 'shift', 'approver']),
         ]);
     }
 
@@ -430,11 +494,12 @@ class AdminAttendanceController extends Controller
     {
         $validated = $request->validate([
             'date' => 'required|date_format:Y-m-d',
-            'attendance_type' => 'required|in:masuk,dinas_luar,libur',
+            'attendance_type' => 'required|in:masuk,dinas_luar,libur,sakit,izin',
             'check_in_time' => 'nullable|string',
             'check_out_time' => 'nullable|string',
             'check_in_status' => 'nullable|in:on_time,late',
             'status' => 'nullable|in:present,late,holiday,absent,permit',
+            'approval_status' => 'nullable|in:pending,approved,rejected',
             'location_name' => 'nullable|string|max:150',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -458,6 +523,7 @@ class AdminAttendanceController extends Controller
             'check_out_time' => $validated['check_out_time'] ?: null,
             'check_in_status' => $validated['check_in_status'] ?? $attendance->check_in_status,
             'status' => $validated['status'] ?? $attendance->status,
+            'approval_status' => $validated['approval_status'] ?? $attendance->approval_status,
             'location_name' => $validated['location_name'] ?? $attendance->location_name,
             'shift_id' => array_key_exists('shift_id', $validated) ? $validated['shift_id'] : $attendance->shift_id,
             'notes' => $validated['notes'],
@@ -477,8 +543,80 @@ class AdminAttendanceController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Data presensi karyawan berhasil diperbarui.',
-            'data' => $attendance->fresh(['user', 'location', 'shift']),
+            'data' => $attendance->fresh(['user', 'location', 'shift', 'approver']),
         ]);
+    }
+
+    /**
+     * POINT MAUN: Verifikasi Permohonan Absen Sakit / Izin oleh Admin.
+     */
+    public function verify(Request $request, Attendance $attendance): JsonResponse
+    {
+        $currentUser = $request->user();
+        $targetUser = $attendance->user;
+
+        // Validasi tenant
+        if (!$currentUser->isSuperAdmin() && $currentUser->company && $targetUser && $targetUser->company !== $currentUser->company) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anda tidak berhak memverifikasi presensi karyawan dari perusahaan lain.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'action' => 'required|in:approve,reject',
+            'rejection_reason' => 'nullable|string|max:500',
+        ]);
+
+        $action = $validated['action'];
+        $typeLabel = $attendance->attendance_type === 'sakit' ? 'Sakit' : ($attendance->attendance_type === 'izin' ? 'Izin' : 'Presensi');
+
+        if ($action === 'approve') {
+            $attendance->update([
+                'approval_status' => 'approved',
+                'approved_by' => $currentUser->id,
+                'approved_at' => now(),
+                'status' => 'permit',
+                'rejection_reason' => null,
+            ]);
+
+            ActivityLog::record(
+                action: 'ADMIN_APPROVE_ATTENDANCE',
+                module: 'attendance',
+                description: "Admin menyetujui permohonan {$typeLabel} untuk " . ($targetUser->name ?? 'Karyawan') . " pada {$attendance->date}",
+                details: ['attendance_id' => $attendance->id, 'type' => $attendance->attendance_type],
+                company: $targetUser->company ?? null
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Permohonan {$typeLabel} untuk " . ($targetUser->name ?? 'Karyawan') . " berhasil disetujui.",
+                'data' => $attendance->fresh(['user', 'location', 'shift', 'approver']),
+            ]);
+        } else {
+            $reason = trim($validated['rejection_reason'] ?? '') ?: 'Dokumen/Surat keterangan tidak valid atau tidak lengkap.';
+            $attendance->update([
+                'approval_status' => 'rejected',
+                'approved_by' => $currentUser->id,
+                'approved_at' => now(),
+                'status' => 'absent',
+                'rejection_reason' => $reason,
+            ]);
+
+            ActivityLog::record(
+                action: 'ADMIN_REJECT_ATTENDANCE',
+                module: 'attendance',
+                description: "Admin menolak permohonan {$typeLabel} untuk " . ($targetUser->name ?? 'Karyawan') . " pada {$attendance->date}. Alasan: {$reason}",
+                details: ['attendance_id' => $attendance->id, 'reason' => $reason],
+                company: $targetUser->company ?? null
+            );
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Permohonan {$typeLabel} untuk " . ($targetUser->name ?? 'Karyawan') . " telah ditolak. Status kehadiran diubah menjadi Tidak Hadir (Alpa).",
+                'data' => $attendance->fresh(['user', 'location', 'shift', 'approver']),
+            ]);
+        }
     }
 
     /**
@@ -977,15 +1115,21 @@ class AdminAttendanceController extends Controller
 
         if ($status && $status !== 'all') {
             if ($status === 'late') {
-                $query->where('check_in_status', 'late')->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
+                $query->where('check_in_status', 'late')->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin']);
             } elseif ($status === 'on_time') {
-                $query->where('check_in_status', 'on_time')->whereNotIn('attendance_type', ['libur', 'dinas_luar']);
+                $query->where('check_in_status', 'on_time')->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin']);
             } elseif ($status === 'holiday' || $status === 'libur') {
                 $query->where(function ($q) {
                     $q->where('attendance_type', 'libur')->orWhere('status', 'holiday');
                 });
             } elseif ($status === 'dinas_luar' || $status === 'business_trip') {
                 $query->where('attendance_type', 'dinas_luar');
+            } elseif ($status === 'sakit') {
+                $query->where('attendance_type', 'sakit');
+            } elseif ($status === 'izin') {
+                $query->where('attendance_type', 'izin');
+            } elseif ($status === 'pending_verification' || $status === 'pending') {
+                $query->where('approval_status', 'pending');
             } else {
                 $query->where('status', $status);
             }

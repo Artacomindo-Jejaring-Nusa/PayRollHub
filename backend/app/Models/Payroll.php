@@ -31,6 +31,7 @@ class Payroll extends Model
         'position',
         'birth_date',
         'gender',
+        'marital_status',
         'whatsapp',
         'email',
         'join_date',
@@ -178,9 +179,22 @@ class Payroll extends Model
               ->orWhere('province', 'like', "%{$term}%")
               ->orWhere('school_unit', 'like', "%{$term}%")
               ->orWhere('position', 'like', "%{$term}%")
+              ->orWhere('marital_status', 'like', "%{$term}%")
               ->orWhere('bank_account', 'like', "%{$term}%")
               ->orWhere('bank_name', 'like', "%{$term}%");
         });
+    }
+
+    /**
+     * Scope a query to filter by marital status.
+     */
+    public function scopeByMaritalStatus(Builder $query, ?string $maritalStatus): Builder
+    {
+        if (blank($maritalStatus) || $maritalStatus === 'all') {
+            return $query;
+        }
+
+        return $query->where('marital_status', $maritalStatus);
     }
 
     /**

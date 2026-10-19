@@ -115,6 +115,9 @@ class AttendanceRecordModel {
 class TodayAttendanceDataModel {
   final String today;
   final String serverTime;
+  final String timezone;
+  final String? timezoneName;
+  final String? timezoneLabel;
   final AttendanceRecordModel? attendance;
   final AttendanceLocationModel? assignedLocation;
   final ShiftModel? assignedShift;
@@ -124,6 +127,9 @@ class TodayAttendanceDataModel {
   TodayAttendanceDataModel({
     required this.today,
     required this.serverTime,
+    this.timezone = 'WIB',
+    this.timezoneName,
+    this.timezoneLabel,
     this.attendance,
     this.assignedLocation,
     this.assignedShift,
@@ -144,6 +150,9 @@ class TodayAttendanceDataModel {
     return TodayAttendanceDataModel(
       today: json['today']?.toString() ?? '',
       serverTime: json['server_time']?.toString() ?? '',
+      timezone: json['timezone']?.toString() ?? 'WIB',
+      timezoneName: json['timezone_name']?.toString(),
+      timezoneLabel: json['timezone_label']?.toString(),
       attendance: json['attendance'] != null
           ? AttendanceRecordModel.fromJson(json['attendance'])
           : null,
@@ -163,6 +172,9 @@ class TodayAttendanceDataModel {
   TodayAttendanceDataModel copyWith({
     String? today,
     String? serverTime,
+    String? timezone,
+    String? timezoneName,
+    String? timezoneLabel,
     AttendanceRecordModel? attendance,
     AttendanceLocationModel? assignedLocation,
     ShiftModel? assignedShift,
@@ -172,6 +184,9 @@ class TodayAttendanceDataModel {
     return TodayAttendanceDataModel(
       today: today ?? this.today,
       serverTime: serverTime ?? this.serverTime,
+      timezone: timezone ?? this.timezone,
+      timezoneName: timezoneName ?? this.timezoneName,
+      timezoneLabel: timezoneLabel ?? this.timezoneLabel,
       attendance: attendance ?? this.attendance,
       assignedLocation: assignedLocation ?? this.assignedLocation,
       assignedShift: assignedShift ?? this.assignedShift,

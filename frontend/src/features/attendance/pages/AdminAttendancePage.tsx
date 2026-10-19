@@ -136,7 +136,7 @@ export const AdminAttendancePage: React.FC = () => {
   const [editingAttendance, setEditingAttendance] = useState<AttendanceRecord | null>(null);
   const [editForm, setEditForm] = useState<{
     date: string;
-    attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+    attendance_type: 'masuk' | 'dinas_luar' | 'libur' | 'sakit' | 'izin';
     location_name: string;
     check_in_time: string;
     check_in_status: 'on_time' | 'late';
@@ -155,13 +155,19 @@ export const AdminAttendancePage: React.FC = () => {
   });
   const [editSaving, setEditSaving] = useState<boolean>(false);
 
+  // Point 15: Verifikasi Pengajuan Sakit / Izin (Upload Surat Dokter / Izin)
+  const [verifyModalOpen, setVerifyModalOpen] = useState<boolean>(false);
+  const [verifyingAttendance, setVerifyingAttendance] = useState<AttendanceRecord | null>(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState<string>('');
+  const [verifyLoading, setVerifyLoading] = useState<boolean>(false);
+
   // Point 7: Input Presensi Manual Karyawan
   const [createAttendanceModalOpen, setCreateAttendanceModalOpen] = useState<boolean>(false);
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
   const [createForm, setCreateForm] = useState<{
     user_id: number | '';
     date: string;
-    attendance_type: 'masuk' | 'dinas_luar' | 'libur';
+    attendance_type: 'masuk' | 'dinas_luar' | 'libur' | 'sakit' | 'izin';
     location_name: string;
     check_in_time: string;
     check_in_status: 'on_time' | 'late';
@@ -541,6 +547,43 @@ export const AdminAttendancePage: React.FC = () => {
     }
   };
 
+  // Point 15: Handlers Verifikasi Surat Sakit / Izin
+  const handleOpenVerifyModal = (att: AttendanceRecord) => {
+    setVerifyingAttendance(att);
+    setRejectionReasonInput(att.rejection_reason || '');
+    setVerifyModalOpen(true);
+  };
+
+  const handleExecuteVerification = async (action: 'approved' | 'rejected') => {
+    if (!verifyingAttendance) return;
+    if (action === 'rejected' && !rejectionReasonInput.trim()) {
+      alert('Harap isi alasan penolakan surat keterangan ini.');
+      return;
+    }
+    try {
+      setVerifyLoading(true);
+      const res = await attendanceService.verifyAttendance(verifyingAttendance.id, {
+        approval_status: action,
+        rejection_reason: action === 'rejected' ? rejectionReasonInput.trim() : undefined,
+      });
+      setNotification({
+        text: res.message || (action === 'approved' ? 'Surat berhasil disetujui.' : 'Surat berhasil ditolak.'),
+        type: 'success',
+      });
+      setVerifyModalOpen(false);
+      setVerifyingAttendance(null);
+      fetchRecap();
+      if (recapViewMode === 'employee_recap') fetchEmployeeRecap();
+    } catch (err: any) {
+      setNotification({
+        text: err.response?.data?.message || 'Gagal memproses verifikasi surat.',
+        type: 'error',
+      });
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
   // Fetch Locations (100+ Lokasi) with Pagination
   const fetchLocations = useCallback(async () => {
     try {
@@ -657,8 +700,10 @@ export const AdminAttendancePage: React.FC = () => {
   // Handlers untuk Master Shift
   const handleOpenCreateShift = () => {
     setEditingShift(null);
+    const userComp = (currentUser?.company || 'rbs').toLowerCase();
+    const defaultComp = (userComp.includes('riama') || userComp.includes('rimamandiri')) ? 'rimamandiri' : 'rbs';
     setShiftForm({
-      company: isSuperAdmin ? (shiftFilterCompany === 'all' ? 'all' : (shiftFilterCompany as any)) : (currentUser?.company as any || 'rbs'),
+      company: isSuperAdmin ? (shiftFilterCompany === 'all' ? defaultComp : (shiftFilterCompany as any)) : (defaultComp as any),
       name: '',
       code: '',
       start_time: '08:00',
@@ -1295,77 +1340,133 @@ export const AdminAttendancePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Summary KPI Cards (Termasuk 8 Jam Kerja Terpenuhi) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-text-muted uppercase tracking-wider">
-                Total Karyawan
+          {/* ALERT PENDING VERIFIKASI SURAT SAKIT / IZIN */}
+          {Number(summary?.total_pending_verification ?? 0) > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-amber-900 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-amber-950 flex items-center gap-2">
+                    <span>Pengajuan Surat Sakit / Izin Menunggu Verifikasi</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse">
+                      {summary?.total_pending_verification} Menunggu
+                    </span>
+                  </div>
+                  <p className="text-[11.5px] text-amber-800/90 mt-0.5">
+                    Terdapat {summary?.total_pending_verification} presensi dengan lampiran surat dokter/izin yang memerlukan persetujuan Admin.
+                  </p>
+                </div>
               </div>
-              <div className="text-xl font-bold text-text-primary mt-1">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('pending_verification')}
+                className="px-3.5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Lihat Pengajuan Pending ({summary?.total_pending_verification})</span>
+              </button>
+            </div>
+          )}
+
+          {/* Summary KPI Cards (Termasuk 8 Jam Kerja Terpenuhi & Sakit/Izin) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-2.5">
+            <div
+              className="bg-surface-panel border border-border-subtle rounded-xl p-3 shadow-2xs"
+              title={`Karyawan Aktif: ${summary?.total_employees ?? 0} | Total Terdaftar: ${summary?.total_registered ?? summary?.total_employees ?? 0} | Off: ${summary?.total_off ?? 0}`}
+            >
+              <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider flex items-center justify-between">
+                <span>Karyawan</span>
+                {summary?.total_registered && summary.total_registered > (summary.total_employees ?? 0) ? (
+                  <span className="text-[9px] text-emerald-800 font-bold bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                    Aktif
+                  </span>
+                ) : null}
+              </div>
+              <div className="text-lg font-bold text-text-primary mt-1">
                 {summary?.total_employees ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-emerald-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
                 Hadir Masuk
               </div>
-              <div className="text-xl font-bold text-emerald-700 mt-1">
+              <div className="text-lg font-bold text-emerald-700 mt-1">
                 {summary?.total_present ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-indigo-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-indigo-800 uppercase tracking-wider">
                 Dinas Luar
               </div>
-              <div className="text-xl font-bold text-indigo-700 mt-1">
+              <div className="text-lg font-bold text-indigo-700 mt-1">
                 {summary?.total_business_trip ?? 0}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-amber-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-amber-800 uppercase tracking-wider">
                 Libur / Off
               </div>
-              <div className="text-xl font-bold text-amber-700 mt-1">
+              <div className="text-lg font-bold text-amber-700 mt-1">
                 {summary?.total_holiday ?? 0}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-blue-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-rose-200/80 bg-rose-50/20 rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-rose-800 uppercase tracking-wider">
+                Sakit (Surat)
+              </div>
+              <div className="text-lg font-bold text-rose-700 mt-1">
+                {summary?.total_sick ?? 0}
+              </div>
+            </div>
+
+            <div className="bg-surface-panel border border-amber-200/80 bg-amber-50/20 rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-amber-900 uppercase tracking-wider">
+                Izin Resmi
+              </div>
+              <div className="text-lg font-bold text-amber-800 mt-1">
+                {summary?.total_permit ?? 0}
+              </div>
+            </div>
+
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-blue-800 uppercase tracking-wider">
                 Tepat Waktu
               </div>
-              <div className="text-xl font-bold text-blue-700 mt-1">
+              <div className="text-lg font-bold text-blue-700 mt-1">
                 {summary?.total_on_time ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-rose-800 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-rose-800 uppercase tracking-wider">
                 Terlambat
               </div>
-              <div className="text-xl font-bold text-rose-700 mt-1">
+              <div className="text-lg font-bold text-rose-700 mt-1">
                 {summary?.total_late ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-gray-600 uppercase tracking-wider">
+            <div className="bg-surface-panel border border-border-subtle rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">
                 Belum Absen
               </div>
-              <div className="text-xl font-bold text-gray-700 mt-1">
+              <div className="text-lg font-bold text-gray-700 mt-1">
                 {summary?.total_not_checked_in ?? '-'}
               </div>
             </div>
 
-            <div className="bg-surface-panel border border-emerald-200/80 bg-emerald-50/30 rounded-xl p-3.5 shadow-2xs">
-              <div className="text-[10.5px] font-semibold text-emerald-900 uppercase tracking-wider flex items-center gap-1">
+            <div className="bg-surface-panel border border-emerald-200/80 bg-emerald-50/30 rounded-xl p-3 shadow-2xs">
+              <div className="text-[10px] font-semibold text-emerald-900 uppercase tracking-wider flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                <span>8 Jam Kerja</span>
+                <span>8 Jam OK</span>
               </div>
-              <div className="text-xl font-bold text-emerald-800 mt-1">
+              <div className="text-lg font-bold text-emerald-800 mt-1">
                 {summary?.total_eight_hours_met ?? 0}
               </div>
             </div>
@@ -1437,9 +1538,12 @@ export const AdminAttendancePage: React.FC = () => {
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer font-medium"
                   >
                     <option value="all">Semua Status</option>
+                    <option value="pending_verification">⏳ Menunggu Verifikasi (Sakit/Izin)</option>
+                    <option value="sakit">🏥 Sakit (Surat Dokter)</option>
+                    <option value="izin">📋 Izin Resmi</option>
                     <option value="on_time">Tepat Waktu</option>
                     <option value="late">Terlambat</option>
                     <option value="dinas_luar">Perjalanan Dinas</option>
@@ -1612,6 +1716,9 @@ export const AdminAttendancePage: React.FC = () => {
                       attendances.map((row) => {
                         const isLibur = row.attendance_type === 'libur' || row.status === 'holiday';
                         const isDinas = row.attendance_type === 'dinas_luar';
+                        const isSakit = row.attendance_type === 'sakit';
+                        const isIzin = row.attendance_type === 'izin';
+                        const isPendingVerification = row.approval_status === 'pending';
                         const rawPhoto = row.photo_url || row.photo_full_url;
                         const photoSrc = rawPhoto ? getStorageUrl(rawPhoto) : null;
                         const isRowSelected = row.user_id ? selectedEmployeeIds.includes(row.user_id) : false;
@@ -1671,14 +1778,28 @@ export const AdminAttendancePage: React.FC = () => {
                             <td className="py-3 px-3">
                               <span
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  isLibur
+                                  isSakit
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    : isIzin
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                    : isLibur
                                     ? 'bg-amber-100 text-amber-800'
                                     : isDinas
                                     ? 'bg-indigo-100 text-indigo-800'
                                     : 'bg-emerald-100 text-emerald-800'
                                 }`}
                               >
-                                {isLibur ? (
+                                {isSakit ? (
+                                  <>
+                                    <FileText className="w-3 h-3 text-rose-600" />
+                                    <span>Sakit (Surat)</span>
+                                  </>
+                                ) : isIzin ? (
+                                  <>
+                                    <FileText className="w-3 h-3 text-amber-600" />
+                                    <span>Izin Resmi</span>
+                                  </>
+                                ) : isLibur ? (
                                   <>
                                     <SunMedium className="w-3 h-3 text-amber-600" />
                                     <span>Libur / Off</span>
@@ -1740,25 +1861,43 @@ export const AdminAttendancePage: React.FC = () => {
                               )}
                             </td>
                             <td className="py-3 px-3">
-                              <span
-                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                  isLibur
-                                    ? 'bg-amber-100 text-amber-800'
+                              {isPendingVerification ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                                  <span>⏳ Menunggu Verifikasi</span>
+                                </span>
+                              ) : row.approval_status === 'rejected' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200" title={row.rejection_reason ? `Ditolak: ${row.rejection_reason}` : 'Ditolak'}>
+                                  <span>✕ Ditolak</span>
+                                </span>
+                              ) : (
+                                <span
+                                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    isSakit
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : isIzin
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : isLibur
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : isDinas
+                                      ? 'bg-indigo-100 text-indigo-800'
+                                      : row.check_in_status === 'late'
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-emerald-100 text-emerald-800'
+                                  }`}
+                                >
+                                  {isSakit
+                                    ? '✓ Sakit (Disetujui)'
+                                    : isIzin
+                                    ? '✓ Izin (Disetujui)'
+                                    : isLibur
+                                    ? 'Libur'
                                     : isDinas
-                                    ? 'bg-indigo-100 text-indigo-800'
+                                    ? 'Dinas Luar'
                                     : row.check_in_status === 'late'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : 'bg-emerald-100 text-emerald-800'
-                                }`}
-                              >
-                                {isLibur
-                                  ? 'Libur'
-                                  : isDinas
-                                  ? 'Dinas Luar'
-                                  : row.check_in_status === 'late'
-                                  ? 'Terlambat'
-                                  : 'Tepat Waktu'}
-                              </span>
+                                    ? 'Terlambat'
+                                    : 'Tepat Waktu'}
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 px-3 text-text-muted max-w-[140px] truncate" title={row.notes || '-'}>
                               {row.notes || '-'}
@@ -1779,9 +1918,24 @@ export const AdminAttendancePage: React.FC = () => {
                                 '-'
                               )}
                             </td>
-                            {/* Point 7: Kolom Aksi Edit & Hapus */}
+                            {/* Point 7 & 15: Kolom Aksi Verifikasi, Edit & Hapus */}
                             <td className="py-3 px-4 text-center">
                               <div className="flex items-center justify-center gap-1">
+                                {(isPendingVerification || isSakit || isIzin) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenVerifyModal(row)}
+                                    className={`px-2 py-1 text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-2xs transition-all cursor-pointer ${
+                                      isPendingVerification
+                                        ? 'bg-amber-500 hover:bg-amber-600 text-white animate-pulse'
+                                        : 'bg-surface-container hover:bg-surface-container/80 text-text-primary border border-border-subtle'
+                                    }`}
+                                    title={isPendingVerification ? 'Verifikasi Surat Sakit/Izin' : 'Tinjau / Ubah Status Verifikasi'}
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5" />
+                                    <span>{isPendingVerification ? 'Verifikasi' : 'Tinjau'}</span>
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => handleOpenEditAttendance(row)}
@@ -3630,12 +3784,17 @@ export const AdminAttendancePage: React.FC = () => {
                     value={shiftForm.company}
                     disabled={!isSuperAdmin}
                     onChange={(e) => setShiftForm({ ...shiftForm, company: e.target.value as any })}
-                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer disabled:opacity-70"
+                    className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer disabled:opacity-75 disabled:bg-surface-container/60"
                   >
-                    <option value="all">Semua Entitas (Bersama)</option>
-                    <option value="rbs">PT RBS (Rimbun)</option>
-                    <option value="rimamandiri">PT Riama Mandiri</option>
+                    {isSuperAdmin && <option value="all">Semua Entitas (Bersama)</option>}
+                    <option value="rbs">PT RBS (Rimbun Buana Sejahtera)</option>
+                    <option value="rimamandiri">PT Riama Mandiri Pratama</option>
                   </select>
+                  {!isSuperAdmin && (
+                    <p className="text-[10px] text-text-muted mt-1">
+                      Otomatis terkunci untuk entitas Anda ({shiftForm.company === 'rbs' ? 'Rimbun Buana Sejahtera' : 'Riama Mandiri Pratama'}).
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -4344,6 +4503,8 @@ export const AdminAttendancePage: React.FC = () => {
                     <option value="masuk">Masuk Kerja (Kantor / Sekolah)</option>
                     <option value="dinas_luar">Perjalanan Dinas</option>
                     <option value="libur">Libur / Hari Off</option>
+                    <option value="sakit">Sakit (Surat Dokter)</option>
+                    <option value="izin">Izin Resmi</option>
                   </select>
                 </div>
               </div>
@@ -4362,7 +4523,7 @@ export const AdminAttendancePage: React.FC = () => {
                 />
               </div>
 
-              {editForm.attendance_type !== 'libur' && (
+              {editForm.attendance_type !== 'libur' && editForm.attendance_type !== 'sakit' && editForm.attendance_type !== 'izin' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-surface-container/50 rounded-xl border border-border-subtle">
                   {/* Jam Masuk */}
                   <div>
@@ -4528,6 +4689,8 @@ export const AdminAttendancePage: React.FC = () => {
                     <option value="masuk">Masuk Kerja (Kantor / Sekolah)</option>
                     <option value="dinas_luar">Perjalanan Dinas</option>
                     <option value="libur">Libur / Hari Off</option>
+                    <option value="sakit">Sakit (Surat Dokter)</option>
+                    <option value="izin">Izin Resmi</option>
                   </select>
                 </div>
               </div>
@@ -4546,7 +4709,7 @@ export const AdminAttendancePage: React.FC = () => {
                 />
               </div>
 
-              {createForm.attendance_type !== 'libur' && (
+              {createForm.attendance_type !== 'libur' && createForm.attendance_type !== 'sakit' && createForm.attendance_type !== 'izin' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-surface-container/50 rounded-xl border border-border-subtle">
                   {/* Jam Masuk */}
                   <div>
@@ -4689,6 +4852,140 @@ export const AdminAttendancePage: React.FC = () => {
               >
                 {deleteLoading ? 'Menghapus...' : 'Ya, Hapus Data'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POINT 15: MODAL VERIFIKASI SURAT SAKIT / IZIN */}
+      {verifyModalOpen && verifyingAttendance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-amber-500" />
+                <h3 className="text-base font-bold text-text-primary">
+                  Verifikasi Surat {verifyingAttendance.attendance_type === 'sakit' ? 'Keterangan Sakit (Dokter)' : 'Izin Resmi'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVerifyModalOpen(false)}
+                className="text-text-muted hover:text-text-primary p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Info Karyawan */}
+            <div className="p-3.5 bg-surface-container/60 rounded-xl border border-border-subtle space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-text-primary">
+                  {verifyingAttendance.user?.name || 'Karyawan'}
+                </span>
+                <span className={`text-[10px] uppercase font-bold font-mono px-2 py-0.5 rounded-full ${
+                  verifyingAttendance.approval_status === 'pending'
+                    ? 'bg-amber-100 text-amber-800'
+                    : verifyingAttendance.approval_status === 'approved'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-rose-100 text-rose-800'
+                }`}>
+                  Status: {verifyingAttendance.approval_status}
+                </span>
+              </div>
+              <div className="text-xs text-text-muted font-mono">
+                NIK: {verifyingAttendance.user?.nik || '-'} • Unit: {verifyingAttendance.user?.school_unit || '-'} • Perusahaan: {verifyingAttendance.user?.company || '-'}
+              </div>
+              <div className="text-xs text-text-secondary pt-1">
+                Tanggal: <strong className="font-semibold text-text-primary">{verifyingAttendance.date ? String(verifyingAttendance.date).slice(0, 10) : '-'}</strong>
+              </div>
+            </div>
+
+            {/* Alasan / Catatan Karyawan */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-text-secondary">
+                Alasan / Keterangan dari Karyawan:
+              </label>
+              <div className="p-3 bg-surface-panel border border-border-subtle rounded-xl text-xs text-text-primary whitespace-pre-wrap">
+                {verifyingAttendance.notes || 'Tidak ada catatan tambahan.'}
+              </div>
+            </div>
+
+            {/* Foto Surat Keterangan Sakit / Izin */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-text-secondary flex items-center justify-between">
+                <span>Foto Surat Dokter / Surat Izin Resmi:</span>
+                <span className="text-[11px] text-text-muted">Klik foto untuk melihat ukuran penuh</span>
+              </label>
+              {(verifyingAttendance.photo_url || verifyingAttendance.photo_full_url) ? (
+                <div
+                  onClick={() => {
+                    const raw = verifyingAttendance.photo_url || verifyingAttendance.photo_full_url;
+                    setPreviewPhotoModal(getStorageUrl(raw!));
+                  }}
+                  className="relative group border border-border-subtle rounded-xl overflow-hidden bg-black/5 aspect-4/3 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-all shadow-xs"
+                >
+                  <img
+                    src={getStorageUrl((verifyingAttendance.photo_url || verifyingAttendance.photo_full_url)!)}
+                    alt="Surat Dokter / Izin"
+                    className="w-full h-full object-contain group-hover:scale-102 transition-transform"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 text-white text-xs font-medium transition-opacity">
+                    <Eye className="w-4 h-4" />
+                    <span>Perbesar Foto</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-surface-container rounded-xl text-center text-xs text-text-muted border border-border-subtle">
+                  Foto surat tidak tersedia atau belum diunggah.
+                </div>
+              )}
+            </div>
+
+            {/* Input Alasan Penolakan (Jika Menolak) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-text-secondary">
+                Alasan Penolakan (Wajib diisi bila menolak surat):
+              </label>
+              <textarea
+                rows={2}
+                value={rejectionReasonInput}
+                onChange={(e) => setRejectionReasonInput(e.target.value)}
+                placeholder="Contoh: Foto surat dokter buram/tidak terbaca, mohon ajukan ulang..."
+                className="w-full px-3 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border-subtle">
+              <button
+                type="button"
+                onClick={() => setVerifyModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-border-subtle text-text-secondary hover:bg-surface-container transition-all cursor-pointer"
+              >
+                Tutup
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExecuteVerification('rejected')}
+                  disabled={verifyLoading}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>{verifyLoading ? 'Memproses...' : 'Tolak Surat'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteVerification('approved')}
+                  disabled={verifyLoading}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{verifyLoading ? 'Memproses...' : 'Setujui & Sahkan'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

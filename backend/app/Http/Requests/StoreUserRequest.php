@@ -19,7 +19,7 @@ class StoreUserRequest extends FormRequest
             'password' => ['required', 'string', 'min:6'],
             'role' => ['required', 'in:super_admin,admin,user,viewer,karyawan'],
             'company' => ['nullable', 'string', 'in:rbs,rimamandiri'],
-            'nik' => ['nullable', 'string', 'max:50'],
+            'nik' => ['nullable', 'string', 'max:50', 'unique:users,nik'],
             'school_unit' => ['nullable', 'string', 'max:200'],
             'marital_status' => ['nullable', 'string', 'max:50'],
         ];
@@ -35,6 +35,7 @@ class StoreUserRequest extends FormRequest
             'password.min' => 'Kata sandi minimal 6 karakter.',
             'role.required' => 'Peran (role) pengguna wajib dipilih.',
             'role.in' => 'Peran harus berupa admin atau user.',
+            'nik.unique' => 'NIK ini sudah terdaftar pada pengguna/karyawan lain di sistem.',
         ];
     }
 }

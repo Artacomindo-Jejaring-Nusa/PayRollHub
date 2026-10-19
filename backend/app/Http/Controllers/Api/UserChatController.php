@@ -36,8 +36,10 @@ class UserChatController extends Controller
 
         if (!$session) {
             $isNewSession = true;
-            $company = $user->company_name ?? ($request->header('X-Tenant-Id') ?: 'riama');
-            if (empty($company)) {
+            $rawCompany = $user->company ?? $user->company_name ?? ($request->header('X-Tenant-Id') ?: 'riama');
+            if (str_contains(strtolower($rawCompany), 'rimbun') || str_contains(strtolower($rawCompany), 'rbs')) {
+                $company = 'rimbun';
+            } else {
                 $company = 'riama';
             }
 

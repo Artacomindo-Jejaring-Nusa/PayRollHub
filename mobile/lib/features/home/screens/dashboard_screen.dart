@@ -100,8 +100,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _loadAllRealtimeData();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
+        final tz = _todayAttendance?.timezone ?? 'WIB';
+        final int tzOffsetHours = tz == 'WIT' ? 9 : (tz == 'WITA' ? 8 : 7);
+        final nowUtc = DateTime.now().toUtc();
         setState(() {
-          _currentTime = DateTime.now();
+          _currentTime = nowUtc.add(Duration(hours: tzOffsetHours));
         });
       }
     });
@@ -383,19 +386,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   // Format Helper: Time Display
   String _formatTimeDisplay(String? timeStr) {
+    final tz = _todayAttendance?.timezone ?? 'WIB';
     if (timeStr == null || timeStr.isEmpty || timeStr == 'null') {
-      return '--:-- WIB';
+      return '--:-- $tz';
     }
     final clean = timeStr.trim();
     final parts = clean.split(':');
     if (parts.length >= 2) {
-      return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')} WIB';
+      return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')} $tz';
     }
     try {
       final dt = DateTime.parse(clean).toLocal();
-      return '${DateFormat('HH:mm').format(dt)} WIB';
+      return '${DateFormat('HH:mm').format(dt)} $tz';
     } catch (_) {
-      return '$clean WIB';
+      return '$clean $tz';
     }
   }
 
@@ -626,6 +630,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             longitude: position.longitude,
             locationName: _todayAttendance?.assignedLocation?.name ?? 'Lokasi Penugasan',
             userName: widget.user.name,
+            timezone: _todayAttendance?.timezone ?? 'WIB',
           ),
         ),
       );
@@ -828,7 +833,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return;
     }
 
-    final nowStr = DateFormat('HH:mm').format(DateTime.now());
+    final tz = _todayAttendance?.timezone ?? 'WIB';
+    final nowStr = DateFormat('HH:mm').format(_currentTime);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -837,7 +843,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'Apakah Anda yakin ingin melakukan Absen Keluar sekarang ($nowStr WIB)?',
+          'Apakah Anda yakin ingin melakukan Absen Keluar sekarang ($nowStr $tz)?',
           style: GoogleFonts.plusJakartaSans(fontSize: 13),
         ),
         actions: [
@@ -1126,7 +1132,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                             Icon(Icons.access_time_filled_rounded, size: 13, color: isSelected ? secondaryDarkColor : AppColors.neutral500),
                                             const SizedBox(width: 4),
                                             Text(
-                                              '${shift.formattedTime ?? '${shift.startTime} - ${shift.endTime}'} WIB',
+                                              '${shift.formattedTime ?? '${shift.startTime} - ${shift.endTime}'} ${_todayAttendance?.timezone ?? 'WIB'}',
                                               style: GoogleFonts.plusJakartaSans(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,
@@ -1729,10 +1735,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Dynamic Shift Info from Real API
     final shiftName = _todayAttendance?.assignedShift?.name ?? 'Normal';
+    final shiftTz = _todayAttendance?.timezone ?? 'WIB';
     final shiftTime = _todayAttendance?.assignedShift?.formattedTime ??
         (_todayAttendance?.assignedShift?.startTime != null
-            ? '${_todayAttendance!.assignedShift!.startTime} - ${_todayAttendance!.assignedShift!.endTime} WIB'
-            : '08:00 - 17:00 WIB');
+            ? '${_todayAttendance!.assignedShift!.startTime} - ${_todayAttendance!.assignedShift!.endTime} $shiftTz'
+            : '08:00 - 17:00 $shiftTz');
 
     // Dynamic Assigned Location from Real API
     final assignedLocationName = _todayAttendance?.assignedLocation?.name ??
@@ -1742,6 +1749,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Real Attendance Records
     final attendance = _todayAttendance?.attendance;
+    final isHoliday = attendance != null && (attendance.attendanceType == 'libur' || attendance.status == 'holiday');
     final hasCheckedIn = attendance != null && attendance.checkInTime != null;
     final hasCheckedOut = attendance != null && attendance.checkOutTime != null;
 
@@ -2104,7 +2112,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '$shiftTime WIB',
+                                      shiftTime,
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
@@ -2184,7 +2192,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Zona Waktu Indonesia Barat (WIB)',
+                        _todayAttendance?.timezoneLabel ?? 'Zona Waktu Indonesia Barat (WIB)',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           color: AppColors.neutral400,
@@ -2194,16 +2202,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       const SizedBox(height: 22),
 
                       // Action Button 1: Absen Masuk (Check-In)
-                      if (!hasCheckedIn)
+                      if (!hasCheckedIn || isHoliday)
                         ElevatedButton(
                           onPressed: _openCheckInModal,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: secondaryAccentColor,
+                            backgroundColor: isHoliday ? const Color(0xFFD97706) : secondaryAccentColor,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 4,
-                            shadowColor: secondaryAccentColor.withValues(alpha: 0.4),
+                            shadowColor: (isHoliday ? const Color(0xFFD97706) : secondaryAccentColor).withValues(alpha: 0.4),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -2211,7 +2219,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               const Icon(Icons.fingerprint_rounded, size: 22),
                               const SizedBox(width: 8),
                               Text(
-                                'Absen Masuk (Check In)',
+                                isHoliday ? 'Ganti ke Absen Masuk (Masuk Kerja)' : 'Absen Masuk (Check In)',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
@@ -2341,7 +2349,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    hasCheckedIn ? _formatTimeDisplay(attendance.checkInTime) : '--:-- WIB',
+                                    hasCheckedIn ? _formatTimeDisplay(attendance.checkInTime) : '--:-- ${_todayAttendance?.timezone ?? 'WIB'}',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w800,
@@ -2391,7 +2399,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      hasCheckedOut ? _formatTimeDisplay(attendance.checkOutTime) : '--:-- WIB',
+                                      hasCheckedOut ? _formatTimeDisplay(attendance.checkOutTime) : '--:-- ${_todayAttendance?.timezone ?? 'WIB'}',
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,
@@ -3510,7 +3518,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ],
                 ),
                 Text(
-                  'WIB (GMT+7)',
+                  _todayAttendance?.timezoneLabel ?? 'WIB (GMT+7)',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
@@ -6573,7 +6581,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 iconBgColor: const Color(0xFFEEF2FF),
                 iconColor: const Color(0xFF4648D4),
                 title: 'Pengingat Masuk & Pulang',
-                subtitle: 'Aktif pukul 08:00 & 17:00 WIB',
+                subtitle: 'Aktif pukul 08:00 & 17:00 (${_todayAttendance?.timezone ?? 'WIB'})',
                 value: _reminderAttendance,
                 onChanged: (val) {
                   setState(() => _reminderAttendance = val);

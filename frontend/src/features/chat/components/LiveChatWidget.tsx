@@ -15,7 +15,16 @@ import {
   Sparkles,
   ExternalLink,
   ChevronDown,
+  Lock,
+  Wrench,
 } from 'lucide-react';
+
+// ============================================================================
+// FEATURE LOCK FLAG (Under Maintenance by Developer)
+// Sesuai instruksi: fitur ini di-lock / ditutup sementara tanpa menghapus kode.
+// Set ke `false` untuk membuka kembali fitur secara penuh kapan saja.
+// ============================================================================
+export const IS_LIVE_CHAT_LOCKED = true;
 
 export const LiveChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,8 +53,13 @@ export const LiveChatWidget: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollIntervalRef = useRef<any>(null);
 
-  // Load active session when widget is opened
+  // Load active session when widget is opened (disabled when locked)
   useEffect(() => {
+    if (IS_LIVE_CHAT_LOCKED) {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      return;
+    }
+
     if (isOpen) {
       loadSession();
       setUnreadCount(0);
@@ -62,8 +76,10 @@ export const LiveChatWidget: React.FC = () => {
     };
   }, [isOpen]);
 
-  // Start polling when session is loaded & widget is open
+  // Start polling when session is loaded & widget is open (disabled when locked)
   useEffect(() => {
+    if (IS_LIVE_CHAT_LOCKED) return;
+
     if (isOpen && session && session.status !== 'closed') {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
@@ -91,9 +107,9 @@ export const LiveChatWidget: React.FC = () => {
     };
   }, [isOpen, session, messages.length]);
 
-  // Real-time messages via WebSocket
+  // Real-time messages via WebSocket (disabled when locked)
   useEffect(() => {
-    if (!isOpen || !session?.id) return;
+    if (IS_LIVE_CHAT_LOCKED || !isOpen || !session?.id) return;
 
     chatWs.connect();
     const channel = `session_${session.id}`;
@@ -226,9 +242,9 @@ export const LiveChatWidget: React.FC = () => {
 
   return (
     <>
-      {/* 1A. MINIMIZED STATE (Tiny subtle tab at bottom right) */}
+      {/* 1A. MINIMIZED STATE (Tiny subtle tab at bottom right, elevated above mobile bottom nav) */}
       {!isOpen && isMinimized && (
-        <div className="fixed bottom-3 right-4 sm:right-6 z-50">
+        <div className="fixed bottom-20 right-4 sm:bottom-4 sm:right-6 z-50">
           <button
             type="button"
             onClick={() => {
@@ -247,21 +263,25 @@ export const LiveChatWidget: React.FC = () => {
         </div>
       )}
 
-      {/* 1B. FLOATING LAUNCHER BUTTON (Compact circular FAB - won't block pagination) */}
+      {/* 1B. FLOATING LAUNCHER BUTTON (Elevated above mobile bottom nav bar - bottom-20 on mobile, bottom-6 on desktop) */}
       {!isOpen && !isMinimized && (
-        <div className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2 group">
+        <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2 group">
           {/* Tooltip on hover */}
           <div className="hidden lg:group-hover:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/90 text-white text-[12px] font-medium shadow-lg pointer-events-none transition-all duration-200 opacity-0 group-hover:opacity-100 -translate-x-1 group-hover:translate-x-0 whitespace-nowrap">
             <span>Live Chat & Bantuan</span>
-            <span className="text-[10px] text-emerald-400 font-mono">• Online</span>
+            {IS_LIVE_CHAT_LOCKED ? (
+              <span className="text-[10px] text-amber-400 font-mono">• Maintenance</span>
+            ) : (
+              <span className="text-[10px] text-emerald-400 font-mono">• Online</span>
+            )}
           </div>
 
           <div className="relative">
-            {/* Quick minimize button (x icon) */}
+            {/* Quick minimize button (x icon) - visible on mobile touchscreens */}
             <button
               type="button"
               onClick={toggleMinimize}
-              className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-900 shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+              className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-900 shadow-md flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
               title="Sembunyikan Widget Chat (Minimize)"
             >
               <X className="w-3 h-3" />
@@ -271,15 +291,27 @@ export const LiveChatWidget: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsOpen(true)}
-              className="relative w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-105 active:scale-95 cursor-pointer border border-emerald-400/40 flex items-center justify-center"
-              title="Buka Live Chat & Bantuan AI"
+              className={`relative w-12 h-12 sm:w-13 sm:h-13 rounded-full text-white shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center ${
+                IS_LIVE_CHAT_LOCKED
+                  ? 'bg-gradient-to-tr from-amber-600 via-orange-600 to-amber-500 border border-amber-300/50'
+                  : 'bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/40'
+              }`}
+              title={IS_LIVE_CHAT_LOCKED ? 'Live Chat (Under Maintenance by Developer)' : 'Buka Live Chat & Bantuan AI'}
               aria-label="Live Chat & Bantuan"
             >
               <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-300 rounded-full border-2 border-emerald-800" />
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping opacity-75" />
+              {IS_LIVE_CHAT_LOCKED ? (
+                <span className="absolute -bottom-1 -right-1 p-1 bg-amber-500 text-slate-950 rounded-full border border-surface shadow-xs">
+                  <Lock className="w-3 h-3 stroke-[2.5]" />
+                </span>
+              ) : (
+                <>
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-300 rounded-full border-2 border-emerald-800" />
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping opacity-75" />
+                </>
+              )}
 
-              {unreadCount > 0 && (
+              {!IS_LIVE_CHAT_LOCKED && unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 px-1.5 py-0.2 text-[10px] font-bold bg-rose-500 text-white rounded-full shadow-md min-w-[18px] text-center">
                   {unreadCount}
                 </span>
@@ -293,30 +325,52 @@ export const LiveChatWidget: React.FC = () => {
       {isOpen && (
         <div className="fixed inset-x-0 bottom-0 sm:inset-auto sm:bottom-6 sm:right-6 z-50 w-full sm:w-[410px] h-[92vh] sm:h-[620px] max-h-[850px] bg-surface-panel rounded-t-2xl sm:rounded-2xl border border-border-subtle shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
           {/* Header Bar */}
-          <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white p-3.5 sm:p-4 flex items-center justify-between shadow-md shrink-0">
+          <div
+            className={`text-white p-3.5 sm:p-4 flex items-center justify-between shadow-md shrink-0 ${
+              IS_LIVE_CHAT_LOCKED
+                ? 'bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-white/10'
+                : 'bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800'
+            }`}
+          >
             <div className="flex items-center gap-3">
               <div className="relative w-10 h-10 rounded-full bg-white/10 backdrop-blur-xs border border-white/20 flex items-center justify-center shrink-0">
-                {session?.status === 'active_agent' ? (
+                {IS_LIVE_CHAT_LOCKED ? (
+                  <Lock className="w-5 h-5 text-amber-400" />
+                ) : session?.status === 'active_agent' ? (
                   <Headphones className="w-5 h-5 text-emerald-200" />
                 ) : (
                   <Bot className="w-5 h-5 text-emerald-200" />
                 )}
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-emerald-800 rounded-full" />
+                {!IS_LIVE_CHAT_LOCKED && (
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-emerald-800 rounded-full" />
+                )}
               </div>
 
               <div>
                 <div className="flex items-center gap-1.5">
                   <h3 className="font-bold text-[14px] leading-tight">
-                    {session?.status === 'active_agent'
+                    {IS_LIVE_CHAT_LOCKED
+                      ? 'Live Chat Bantuan'
+                      : session?.status === 'active_agent'
                       ? `CS Agent: ${session.assigned_agent?.name || 'Customer Service'}`
                       : 'AI Virtual Assistant & CS'}
                   </h3>
-                  <span className="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-white/20 text-white uppercase">
-                    Live
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[9.5px] font-bold uppercase ${
+                      IS_LIVE_CHAT_LOCKED
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'bg-white/20 text-white'
+                    }`}
+                  >
+                    {IS_LIVE_CHAT_LOCKED ? 'Maintenance' : 'Live'}
                   </span>
                 </div>
-                <p className="text-[11px] text-emerald-100 mt-0.5 flex items-center gap-1">
-                  {session?.status === 'waiting_agent' ? (
+                <p className="text-[11px] text-slate-300 mt-0.5 flex items-center gap-1">
+                  {IS_LIVE_CHAT_LOCKED ? (
+                    <span className="text-amber-300 font-medium flex items-center gap-1">
+                      <Wrench className="w-3 h-3" /> Fitur Sedang Dikunci Sementara
+                    </span>
+                  ) : session?.status === 'waiting_agent' ? (
                     <span className="text-amber-200 font-medium flex items-center gap-1">
                       <Clock className="w-3 h-3 animate-spin" /> Menghubungkan ke Agent...
                     </span>
@@ -336,7 +390,7 @@ export const LiveChatWidget: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1">
-              {session && session.status !== 'closed' && (
+              {!IS_LIVE_CHAT_LOCKED && session && session.status !== 'closed' && (
                 <button
                   type="button"
                   onClick={handleCloseSession}
@@ -357,7 +411,61 @@ export const LiveChatWidget: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick FAQ Chips Row */}
+          {/* 3. DRAWER BODY */}
+          {IS_LIVE_CHAT_LOCKED ? (
+            /* LOCKED / MAINTENANCE VIEW */
+            <div className="flex-1 p-5 flex flex-col items-center justify-center text-center bg-surface overflow-y-auto">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-600 dark:text-amber-400 mb-4 shadow-xs relative">
+                <Wrench className="w-8 h-8 animate-bounce" />
+                <span className="absolute -top-1 -right-1 p-1 bg-amber-500 text-white rounded-full shadow-xs">
+                  <Lock className="w-3.5 h-3.5" />
+                </span>
+              </div>
+
+              <span className="px-3 py-1 rounded-full text-[11px] font-extrabold uppercase bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 mb-2">
+                Under Maintenance by Developer
+              </span>
+
+              <h4 className="text-base font-bold text-text-primary mb-2">
+                Fitur Live Chat Sedang Dalam Pemeliharaan
+              </h4>
+
+              <p className="text-xs text-text-muted leading-relaxed max-w-[320px] mb-5">
+                Layanan obrolan langsung & AI Virtual Assistant sedang dinonaktifkan sementara oleh tim pengembang untuk peningkatan performa jaringan dan sinkronisasi sistem.
+              </p>
+
+              {/* Box Pengalihan ke Pengaduan */}
+              <div className="w-full bg-surface-container/70 border border-border-subtle rounded-xl p-4 text-left mb-5">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+                    <MessageSquare className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-text-primary">
+                      Punya Kendala atau Keluhan Gaji?
+                    </h5>
+                    <p className="text-[11px] text-text-muted mt-1 leading-relaxed">
+                      Anda tetap dapat mengajukan kendala absensi, slip gaji, atau pertanyaan resmi langsung ke tim HRD melalui menu <strong className="text-text-primary">Pengaduan / Feedback</strong>.
+                    </p>
+                    <a
+                      href="/complaints"
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-[11.5px] font-semibold hover:bg-primary/90 transition-colors shadow-2xs"
+                    >
+                      <span>Buka Form Pengaduan</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-text-muted/80 flex items-center justify-center gap-1.5 mt-auto pt-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Riwayat percakapan Anda sebelumnya tetap tersimpan aman</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Quick FAQ Chips Row */}
           <div className="px-3 py-2 bg-surface-container border-b border-border-subtle flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
             {[
               { label: '💰 Jadwal Gaji', action: 'ask_payroll_schedule' },
@@ -607,8 +715,10 @@ export const LiveChatWidget: React.FC = () => {
               </form>
             )}
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )}
     </>
   );
 };

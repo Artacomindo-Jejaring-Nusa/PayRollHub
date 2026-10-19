@@ -105,27 +105,53 @@ class UserController extends Controller
 
         $data['password'] = Hash::make($data['password']);
 
-        $user = User::create($data);
+        try {
+            $user = User::create($data);
 
-        \App\Models\ActivityLog::record(
-            action: 'CREATE_USER',
-            module: 'user',
-            description: "Membuat akun pengguna baru: {$user->name} ({$user->email}, Role: {$user->role}) - Perusahaan: " . ($user->company ?: 'Umum'),
-            details: [
-                'target_user_id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'company' => $user->company,
-            ],
-            company: $user->company
-        );
+            \App\Models\ActivityLog::record(
+                action: 'CREATE_USER',
+                module: 'user',
+                description: "Membuat akun pengguna baru: {$user->name} ({$user->email}, Role: {$user->role}) - Perusahaan: " . ($user->company ?: 'Umum'),
+                details: [
+                    'target_user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'company' => $user->company,
+                ],
+                company: $user->company
+            );
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Pengguna baru berhasil ditambahkan.',
-            'data' => new UserResource($user),
-        ], 201);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pengguna baru berhasil ditambahkan.',
+                'data' => new UserResource($user),
+            ], 201);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if (isset($e->errorInfo[1]) && $e->errorInfo[1] === 1062) {
+                $rawMsg = $e->getMessage();
+                $isNik = str_contains($rawMsg, 'users.nik') || str_contains($rawMsg, 'users_nik_unique') || str_contains($rawMsg, 'key \'users.nik\'');
+                $isEmail = str_contains($rawMsg, 'users.email') || str_contains($rawMsg, 'users_email_unique') || str_contains($rawMsg, 'key \'users.email\'');
+
+                $field = $isNik ? 'nik' : ($isEmail ? 'email' : 'nik');
+                $message = $isNik
+                    ? 'NIK ini sudah terdaftar pada pengguna/karyawan lain di sistem.'
+                    : ($isEmail ? 'Email ini sudah digunakan oleh akun lain di sistem.' : 'Data NIK atau Email ini sudah terdaftar pada akun lain.');
+
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $message,
+                    'errors' => [
+                        $field => [$message],
+                    ],
+                ], 422);
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan basis data saat menambahkan pengguna.',
+            ], 500);
+        }
     }
 
     /**
@@ -155,27 +181,53 @@ class UserController extends Controller
             unset($data['password']);
         }
 
-        $user->update($data);
+        try {
+            $user->update($data);
 
-        \App\Models\ActivityLog::record(
-            action: 'UPDATE_USER',
-            module: 'user',
-            description: "Mengubah data akun pengguna: {$user->name} ({$user->email}, Role: {$user->role}) - Perusahaan: " . ($user->company ?: 'Umum'),
-            details: [
-                'target_user_id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'company' => $user->company,
-            ],
-            company: $user->company
-        );
+            \App\Models\ActivityLog::record(
+                action: 'UPDATE_USER',
+                module: 'user',
+                description: "Mengubah data akun pengguna: {$user->name} ({$user->email}, Role: {$user->role}) - Perusahaan: " . ($user->company ?: 'Umum'),
+                details: [
+                    'target_user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'company' => $user->company,
+                ],
+                company: $user->company
+            );
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Data pengguna berhasil diperbarui.',
-            'data' => new UserResource($user->fresh()),
-        ]);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Data pengguna berhasil diperbarui.',
+                'data' => new UserResource($user->fresh()),
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if (isset($e->errorInfo[1]) && $e->errorInfo[1] === 1062) {
+                $rawMsg = $e->getMessage();
+                $isNik = str_contains($rawMsg, 'users.nik') || str_contains($rawMsg, 'users_nik_unique') || str_contains($rawMsg, 'key \'users.nik\'');
+                $isEmail = str_contains($rawMsg, 'users.email') || str_contains($rawMsg, 'users_email_unique') || str_contains($rawMsg, 'key \'users.email\'');
+
+                $field = $isNik ? 'nik' : ($isEmail ? 'email' : 'nik');
+                $message = $isNik
+                    ? 'NIK ini sudah terdaftar pada pengguna/karyawan lain di sistem.'
+                    : ($isEmail ? 'Email ini sudah digunakan oleh akun lain di sistem.' : 'Data NIK atau Email ini sudah terdaftar pada akun lain.');
+
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $message,
+                    'errors' => [
+                        $field => [$message],
+                    ],
+                ], 422);
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan basis data saat memperbarui data pengguna.',
+            ], 500);
+        }
     }
 
     /**

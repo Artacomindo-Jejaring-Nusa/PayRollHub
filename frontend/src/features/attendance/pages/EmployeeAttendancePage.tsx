@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   ShieldAlert,
   ChevronRight,
+  Upload,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuthStore } from '../../../store/authStore';
 import {
@@ -48,11 +50,13 @@ export const EmployeeAttendancePage: React.FC = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  // Mode: 'masuk' (radius 100+ lokasi + foto selfie) | 'dinas_luar' (bebas radius + catatan & foto) | 'libur' (bebas radius)
-  const [attendanceMode, setAttendanceMode] = useState<'masuk' | 'dinas_luar' | 'libur'>('masuk');
+  // Mode: 'masuk' (radius 100+ lokasi + foto selfie) | 'dinas_luar' (bebas radius + catatan & foto) | 'libur' (bebas radius) | 'sakit_izin' (upload surat)
+  const [attendanceMode, setAttendanceMode] = useState<'masuk' | 'dinas_luar' | 'libur' | 'sakit_izin'>('masuk');
   const [holidayNotes, setHolidayNotes] = useState<string>('Hari Libur Terjadwal / Off Rutin');
   const [dinasNotes, setDinasNotes] = useState<string>('');
   const [checkInNotes, setCheckInNotes] = useState<string>('');
+  const [leaveSubtype, setLeaveSubtype] = useState<'sakit' | 'izin'>('sakit');
+  const [leaveNotes, setLeaveNotes] = useState<string>('');
 
   // Camera & Photo State (Live Camera Sensor Only)
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -72,7 +76,7 @@ export const EmployeeAttendancePage: React.FC = () => {
     showFaceGuide: true,
   });
 
-  const handleOpenLiveCamera = (mode: 'selfie' | 'dinas') => {
+  const handleOpenLiveCamera = (mode: 'selfie' | 'dinas' | 'surat') => {
     if (mode === 'selfie') {
       setLiveCameraConfig({
         title: 'Ambil Foto Selfie Kehadiran (Live Sensor)',
@@ -80,10 +84,17 @@ export const EmployeeAttendancePage: React.FC = () => {
         facingMode: 'user',
         showFaceGuide: true,
       });
-    } else {
+    } else if (mode === 'dinas') {
       setLiveCameraConfig({
         title: 'Ambil Foto Dokumentasi Dinas Lapangan',
         description: 'Arahkan kamera ke lokasi kegiatan dinas atau bukti surat tugas lapangan.',
+        facingMode: 'environment',
+        showFaceGuide: false,
+      });
+    } else {
+      setLiveCameraConfig({
+        title: 'Foto Surat Keterangan Sakit / Izin',
+        description: 'Posisikan surat dokter atau surat izin Anda agar terbaca jelas oleh Admin.',
         facingMode: 'environment',
         showFaceGuide: false,
       });
@@ -121,19 +132,37 @@ export const EmployeeAttendancePage: React.FC = () => {
   const [currentTime, setCurrentTime] = useState<string>('');
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(
-        now.toLocaleTimeString('id-ID', {
+    const tzName = todayData?.timezone_name || 'Asia/Jakarta';
+    const tzCode = todayData?.timezone || 'WIB';
+
+    const updateClock = () => {
+      try {
+        const now = new Date();
+        const formatted = now.toLocaleTimeString('id-ID', {
+          timeZone: tzName,
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
           hour12: false,
-        }) + ' WIB'
-      );
-    }, 1000);
+        });
+        setCurrentTime(`${formatted} ${tzCode}`);
+      } catch {
+        const now = new Date();
+        setCurrentTime(
+          now.toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          }) + ` ${tzCode}`
+        );
+      }
+    };
+
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [todayData?.timezone_name, todayData?.timezone]);
 
   // Fetch Attendance Data
   const fetchData = useCallback(async () => {
@@ -142,11 +171,15 @@ export const EmployeeAttendancePage: React.FC = () => {
       const data = await attendanceService.getTodayAttendance();
       setTodayData(data);
 
-      // Jika user sudah absen libur atau dinas hari ini, sesuaikan tab
-      if (data.attendance?.attendance_type === 'libur' || data.attendance?.status === 'holiday') {
+      // Jika user sudah absen libur, sakit/izin, atau dinas hari ini, sesuaikan tab
+      if (data.attendance?.attendance_type === 'sakit' || data.attendance?.attendance_type === 'izin') {
+        setAttendanceMode('sakit_izin');
+      } else if (data.attendance?.attendance_type === 'libur' || data.attendance?.status === 'holiday') {
         setAttendanceMode('libur');
       } else if (data.attendance?.attendance_type === 'dinas_luar') {
         setAttendanceMode('dinas_luar');
+      } else {
+        setAttendanceMode('masuk');
       }
 
       // Default selected location ke assigned_location jika belum dipilih
@@ -310,7 +343,9 @@ export const EmployeeAttendancePage: React.FC = () => {
   const hasCheckedIn = !!todayData?.attendance?.check_in_time;
   const hasCheckedOut = !!todayData?.attendance?.check_out_time;
   const isHolidayCheckedIn = todayData?.attendance?.attendance_type === 'libur' || todayData?.attendance?.status === 'holiday';
+  const hasRealWorkCheckedIn = hasCheckedIn && !isHolidayCheckedIn;
   const isDinasCheckedIn = todayData?.attendance?.attendance_type === 'dinas_luar';
+  const isSakitIzinCheckedIn = todayData?.attendance?.attendance_type === 'sakit' || todayData?.attendance?.attendance_type === 'izin';
 
   // Handle Absen Masuk (Validasi Radius 100+ Lokasi + Wajib Foto Selfie)
   const handleCheckInMasuk = async () => {
@@ -406,6 +441,70 @@ export const EmployeeAttendancePage: React.FC = () => {
     }
   };
 
+  // Handle Batalkan Absen Libur agar bisa Absen Masuk
+  const handleCancelHoliday = async () => {
+    if (!window.confirm('Apakah Anda yakin ingin membatalkan status Absen Libur hari ini untuk melakukan Absen Masuk?')) return;
+    try {
+      setActionLoading(true);
+      setMessage(null);
+      const res = await attendanceService.cancelHoliday();
+      setMessage({ text: res.message || 'Status libur berhasil dibatalkan. Silakan lakukan Absen Masuk.', type: 'success' });
+      setAttendanceMode('masuk');
+      await fetchData();
+    } catch (err: any) {
+      setMessage({
+        text: err.response?.data?.message || 'Gagal membatalkan status libur.',
+        type: 'error',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Absen Sakit / Izin (Point Maun: Upload Surat & Menunggu Verifikasi Admin)
+  const handleCheckInSakitIzin = async () => {
+    if (!leaveNotes.trim()) {
+      setMessage({
+        text: `Keterangan / alasan ${leaveSubtype === 'sakit' ? 'sakit' : 'izin'} wajib diisi.`,
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!photoFile) {
+      setMessage({
+        text: 'Foto bukti surat keterangan dokter / surat permohonan izin wajib dilampirkan.',
+        type: 'error',
+      });
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setMessage(null);
+      const res = await attendanceService.checkIn({
+        attendance_type: leaveSubtype,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
+        notes: leaveNotes.trim(),
+        photo: photoFile,
+      });
+      setMessage({
+        text: res.message || 'Pengajuan Sakit/Izin berhasil dikirim dan menunggu verifikasi Admin.',
+        type: 'success',
+      });
+      handleResetPhoto();
+      fetchData();
+    } catch (err: any) {
+      setMessage({
+        text: err.response?.data?.message || 'Gagal mengirim pengajuan sakit/izin.',
+        type: 'error',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // POINT 8: Kalkulasi Durasi Kerja Berjalan & Jam Kerja 8 Jam
   const elapsedWorkMinutes = useMemo(() => {
     if (!todayData?.attendance?.check_in_time) return null;
@@ -450,7 +549,20 @@ export const EmployeeAttendancePage: React.FC = () => {
 
   // POINT 8: Absensi Pulang Di-Los (Bebas Radius, Terpenting 8 Jam Kerja)
   const handleCheckOutClick = () => {
-    if (hasCheckedOut) return;
+    if (hasCheckedOut) {
+      setMessage({
+        text: `Anda sudah melakukan absen pulang hari ini pada pukul ${todayData?.attendance?.check_out_time?.substring(0, 5) || ''} ${todayData?.timezone || 'WIB'}. Selamat beristirahat!`,
+        type: 'success',
+      });
+      return;
+    }
+    if (!hasCheckedIn) {
+      setMessage({
+        text: 'Anda belum melakukan absen masuk hari ini. Silakan ambil foto selfie kehadiran dan klik tombol "Absen Masuk" terlebih dahulu.',
+        type: 'error',
+      });
+      return;
+    }
     // Jika durasi kerja < 8 jam (480 menit), tampilkan konfirmasi
     if (elapsedWorkMinutes !== null && elapsedWorkMinutes < 480) {
       setEarlyCheckOutModalOpen(true);
@@ -464,11 +576,13 @@ export const EmployeeAttendancePage: React.FC = () => {
     try {
       setActionLoading(true);
       setMessage(null);
-      // Pulang di-los: kirim koordinat jika ada, fallback 0 jika belum terdeteksi
-      const res = await attendanceService.checkOut({
-        latitude: coords?.lat ?? 0,
-        longitude: coords?.lng ?? 0,
-      });
+      // Pulang di-los: kirim koordinat jika ada & valid (jangan kirim 0,0 fallback)
+      const payload: { latitude?: number; longitude?: number } = {};
+      if (coords && coords.lat !== 0 && coords.lng !== 0) {
+        payload.latitude = coords.lat;
+        payload.longitude = coords.lng;
+      }
+      const res = await attendanceService.checkOut(payload);
       setMessage({ text: res.message || 'Absen pulang berhasil tercatat!', type: 'success' });
       fetchData();
     } catch (err: any) {
@@ -504,11 +618,14 @@ export const EmployeeAttendancePage: React.FC = () => {
             </span>
           </div>
           <div>
-            <div className="hidden sm:block text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-              Waktu Server (WIB)
+            <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <span>Waktu Server</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                {todayData?.timezone || 'WIB'}
+              </span>
             </div>
             <div className="text-base sm:text-lg font-mono font-bold text-text-primary leading-tight">
-              {currentTime || '--:--:-- WIB'}
+              {currentTime || `--:--:-- ${todayData?.timezone || 'WIB'}`}
             </div>
           </div>
         </div>
@@ -532,9 +649,9 @@ export const EmployeeAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* Navigation Switch Mode: Absen Masuk vs Perjalanan Dinas vs Absen Libur */}
-      {!hasCheckedIn && (
-        <div className="bg-surface-panel border border-border-subtle p-1 sm:p-1.5 rounded-2xl grid grid-cols-3 gap-1 sm:gap-2 shadow-2xs">
+      {/* Navigation Switch Mode: Absen Masuk vs Perjalanan Dinas vs Absen Libur vs Sakit/Izin */}
+      {(!hasCheckedIn || isHolidayCheckedIn) && (
+        <div className="bg-surface-panel border border-border-subtle p-1 sm:p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1 sm:gap-2 shadow-2xs">
           <button
             type="button"
             onClick={() => {
@@ -548,7 +665,7 @@ export const EmployeeAttendancePage: React.FC = () => {
             }`}
           >
             <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="truncate hidden sm:inline">Absen Masuk (Radius + Foto)</span>
+            <span className="truncate hidden sm:inline">Absen Masuk (Radius)</span>
             <span className="truncate sm:hidden font-medium">Masuk</span>
           </button>
 
@@ -565,7 +682,7 @@ export const EmployeeAttendancePage: React.FC = () => {
             }`}
           >
             <Car className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="truncate hidden sm:inline">Perjalanan Dinas (Bebas Radius)</span>
+            <span className="truncate hidden sm:inline">Perjalanan Dinas</span>
             <span className="truncate sm:hidden font-medium">Dinas</span>
           </button>
 
@@ -582,8 +699,25 @@ export const EmployeeAttendancePage: React.FC = () => {
             }`}
           >
             <SunMedium className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="truncate hidden sm:inline">Absen Libur / Off (Bebas Radius)</span>
+            <span className="truncate hidden sm:inline">Absen Libur / Off</span>
             <span className="truncate sm:hidden font-medium">Libur/Off</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAttendanceMode('sakit_izin');
+              handleResetPhoto();
+            }}
+            className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1 sm:gap-2 transition-all cursor-pointer ${
+              attendanceMode === 'sakit_izin'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-container'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate hidden sm:inline">Sakit / Izin (Surat)</span>
+            <span className="truncate sm:hidden font-medium">Sakit/Izin</span>
           </button>
         </div>
       )}
@@ -593,7 +727,7 @@ export const EmployeeAttendancePage: React.FC = () => {
         {/* Left Column (7 cols) */}
         <div className="lg:col-span-7 space-y-5">
           {/* TAB 1: ABSEN MASUK DENGAN RADIUS 100+ LOKASI & FOTO SELFIE */}
-          {attendanceMode === 'masuk' && !isHolidayCheckedIn && !isDinasCheckedIn && (
+          {attendanceMode === 'masuk' && !isDinasCheckedIn && !isSakitIzinCheckedIn && (
             <div className="bg-surface-panel border border-border-subtle rounded-2xl p-5 shadow-xs relative overflow-hidden">
               <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
                 <div className="flex items-center gap-2 text-text-primary font-semibold text-[14.5px]">
@@ -613,6 +747,15 @@ export const EmployeeAttendancePage: React.FC = () => {
               </div>
 
               <div className="py-4 space-y-4">
+                {/* Notice jika sebelumnya sudah absen libur tapi ingin masuk kerja */}
+                {isHolidayCheckedIn && (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5 shadow-2xs">
+                    <SunMedium className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="leading-relaxed">
+                      Status Anda saat ini <strong>Absen Libur</strong>. Mengambil foto selfie dan klik tombol absen masuk di bawah akan langsung memperbarui status Anda menjadi <strong>Masuk Kerja</strong>.
+                    </span>
+                  </div>
+                )}
                 {/* POINT 9: Info Jadwal Shift Aktif Karyawan Hari Ini */}
                 {todayData?.assigned_shift && (
                   <div className="bg-gradient-to-r from-sky-50 to-indigo-50/70 border border-sky-200/90 rounded-2xl p-4 shadow-2xs">
@@ -855,7 +998,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                 )}
 
                 {/* Point 4: Foto Selfie Bukti Kehadiran (Wajib untuk Absen Masuk) */}
-                {!hasCheckedIn && (
+                {!hasRealWorkCheckedIn && (
                   <div className="space-y-2 pt-2 border-t border-border-subtle">
                     <label className="text-[12px] font-semibold text-text-secondary flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
@@ -927,7 +1070,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                 )}
 
                 {/* Input Catatan Opsional saat Masuk */}
-                {!hasCheckedIn && (
+                {!hasRealWorkCheckedIn && (
                   <div>
                     <label className="text-[11.5px] font-medium text-text-muted block mb-1">
                       Catatan Masuk (Opsional):
@@ -944,7 +1087,7 @@ export const EmployeeAttendancePage: React.FC = () => {
               </div>
 
               {/* POINT 8: Live Duration & 8-Hour Tracker */}
-              {hasCheckedIn && !hasCheckedOut && (
+              {hasRealWorkCheckedIn && !hasCheckedOut && (
                 <div
                   className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${
                     isEightHoursMet
@@ -1011,29 +1154,31 @@ export const EmployeeAttendancePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleCheckInMasuk}
-                    disabled={actionLoading || isDetectingGps || !isWithinRadius || !photoFile || hasCheckedIn}
+                    disabled={actionLoading || isDetectingGps || !isWithinRadius || !photoFile || hasRealWorkCheckedIn}
                     className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
-                      hasCheckedIn
+                      hasRealWorkCheckedIn
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-not-allowed opacity-90'
+                        : isHolidayCheckedIn && isWithinRadius && photoFile
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white active:scale-98'
                         : isWithinRadius && photoFile
                         ? 'bg-emerald-700 hover:bg-emerald-800 text-white active:scale-98'
                         : 'bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed opacity-60'
                     }`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{hasCheckedIn ? '✓ Sudah Absen Masuk' : 'Absen Masuk (Foto + Radius)'}</span>
+                    <span>{hasRealWorkCheckedIn ? '✓ Sudah Absen Masuk' : isHolidayCheckedIn ? 'Konfirmasi Ganti ke Absen Masuk' : 'Absen Masuk (Foto + Radius)'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleCheckOutClick}
-                    disabled={actionLoading || !hasCheckedIn || hasCheckedOut}
+                    disabled={actionLoading}
                     className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
                       hasCheckedOut
                         ? 'bg-blue-100 text-blue-800 border border-blue-200 cursor-not-allowed opacity-90'
-                        : hasCheckedIn
+                        : hasRealWorkCheckedIn
                         ? 'bg-rose-600 hover:bg-rose-700 text-white active:scale-98'
-                        : 'bg-surface-container text-text-muted border border-border-subtle cursor-not-allowed opacity-60'
+                        : 'bg-surface-container text-text-muted border border-border-subtle hover:bg-surface-container-high'
                     }`}
                   >
                     <LogOut className="w-4 h-4" />
@@ -1041,9 +1186,9 @@ export const EmployeeAttendancePage: React.FC = () => {
                   </button>
                 </div>
 
-                {!hasCheckedIn && isWithinRadius && !photoFile && (
+                {!hasRealWorkCheckedIn && isWithinRadius && !photoFile && (
                   <p className="text-[11.5px] text-amber-600 font-medium mt-2 text-center">
-                    ⚠️ Ambil foto selfie kehadiran di atas terlebih dahulu untuk mengaktifkan tombol Absen Masuk.
+                    ⚠️ Ambil foto selfie kehadiran di atas terlebih dahulu untuk mengaktifkan tombol {isHolidayCheckedIn ? 'Ganti ke Absen Masuk' : 'Absen Masuk'}.
                   </p>
                 )}
               </div>
@@ -1051,7 +1196,7 @@ export const EmployeeAttendancePage: React.FC = () => {
           )}
 
           {/* TAB 2: PERJALANAN DINAS (POINT 5: BEBAS RADIUS GPS) */}
-          {(attendanceMode === 'dinas_luar' || isDinasCheckedIn) && !isHolidayCheckedIn && (
+          {(attendanceMode === 'dinas_luar' || isDinasCheckedIn) && !isHolidayCheckedIn && !isSakitIzinCheckedIn && (
             <div className="bg-surface-panel border border-indigo-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden">
               <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
                 <div className="flex items-center gap-2.5 text-indigo-900 font-semibold text-[15px]">
@@ -1174,7 +1319,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                           ✓ Absen Perjalanan Dinas Tercatat Hari Ini
                         </strong>
                         <span className="text-xs text-indigo-800 mt-0.5 block">
-                          Tercatat pada pukul {todayData?.attendance?.check_in_time?.substring(0, 5)} WIB. Catatan: &quot;{todayData?.attendance?.notes}&quot;
+                          Tercatat pada pukul {todayData?.attendance?.check_in_time?.substring(0, 5)} {todayData?.timezone || 'WIB'}. Catatan: &quot;{todayData?.attendance?.notes}&quot;
                         </span>
                       </div>
                     </div>
@@ -1198,7 +1343,7 @@ export const EmployeeAttendancePage: React.FC = () => {
           )}
 
           {/* TAB 3: ABSEN LIBUR / OFF (POINT 3: BEBAS RADIUS GPS) */}
-          {(attendanceMode === 'libur' || isHolidayCheckedIn) && (
+          {(attendanceMode === 'libur' || isHolidayCheckedIn) && !isSakitIzinCheckedIn && (
             <div className="bg-surface-panel border border-amber-200/80 rounded-2xl p-5 shadow-xs relative overflow-hidden">
               <div className="flex items-center gap-2.5 pb-3 border-b border-border-subtle text-amber-900 font-semibold text-[15px]">
                 <SunMedium className="w-5 h-5 text-amber-600" />
@@ -1250,15 +1395,282 @@ export const EmployeeAttendancePage: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex flex-col gap-3">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-sm font-semibold">
+                          ✓ Anda Telah Melakukan Absen Libur Hari Ini
+                        </strong>
+                        <span className="text-xs text-emerald-800 mt-0.5 block">
+                          Tercatat pada pukul {todayData?.attendance?.check_in_time?.substring(0, 5)} {todayData?.timezone || 'WIB'}. Anda tidak perlu melakukan absen pulang. Selamat beristirahat!
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-emerald-200/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                      <div className="text-xs text-emerald-950 font-medium">
+                        Ada tugas mendadak atau ingin masuk kerja hari ini?
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttendanceMode('masuk');
+                          handleResetPhoto();
+                        }}
+                        className="w-full sm:w-auto px-4 py-2.5 text-xs font-semibold text-white bg-primary hover:bg-primary/90 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center gap-1.5"
+                      >
+                        <span>Masuk Kerja Hari Ini (Absen Masuk)</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: ABSEN SAKIT / IZIN RESMI (POINT MAUN: UPLOAD SURAT & VERIFIKASI ADMIN) */}
+          {(attendanceMode === 'sakit_izin' || isSakitIzinCheckedIn) && (
+            <div className="bg-surface-panel border border-purple-200/90 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-border-subtle text-purple-900 font-semibold text-[15px]">
+                <FileText className="w-5 h-5 text-purple-600" />
+                <span>Pengajuan Absen Sakit / Izin Resmi (Upload Surat)</span>
+              </div>
+
+              <div className="py-4 space-y-4">
+                <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-4 text-xs text-purple-900 leading-relaxed space-y-2">
+                  <div className="font-semibold text-sm flex items-center gap-1.5 text-purple-950">
+                    <Info className="w-4 h-4 text-purple-600" />
+                    <span>Ketentuan Absen Sakit & Izin:</span>
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 text-purple-800">
+                    <li>
+                      <strong>Wajib melampirkan foto surat resmi</strong>: Surat Keterangan Dokter (SKD) untuk sakit, atau surat permohonan tertulis untuk izin penting.
+                    </li>
+                    <li>
+                      <strong>Bebas radius lokasi GPS</strong>: Anda dapat mengajukan permohonan dari rumah, klinik, atau rumah sakit.
+                    </li>
+                    <li>
+                      <strong>Proses Verifikasi Admin</strong>: Permohonan akan diverifikasi langsung oleh Admin HRD sebelum disahkan di rekapitulasi gaji.
+                    </li>
+                    <li>
+                      <strong>Tidak perlu absen pulang</strong>: Setelah pengajuan dikirim, Anda tidak perlu melakukan check-out.
+                    </li>
+                  </ul>
+                </div>
+
+                {!hasCheckedIn ? (
+                  <div className="space-y-4">
+                    {/* Pemilihan Jenis: Sakit vs Izin */}
                     <div>
-                      <strong className="block text-sm font-semibold">
-                        ✓ Anda Telah Melakukan Absen Libur Hari Ini
-                      </strong>
-                      <span className="text-xs text-emerald-800 mt-0.5 block">
-                        Tercatat pada pukul {todayData?.attendance?.check_in_time?.substring(0, 5)} WIB. Anda tidak perlu melakukan absen pulang. Selamat beristirahat!
-                      </span>
+                      <label className="text-xs font-semibold text-text-secondary block mb-1.5">
+                        Pilih Kategori Permohonan:
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLeaveSubtype('sakit')}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                            leaveSubtype === 'sakit'
+                              ? 'bg-rose-50/80 border-rose-300 text-rose-900 font-semibold shadow-2xs'
+                              : 'bg-surface-container border-border-subtle text-text-secondary hover:bg-surface-container-high'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${leaveSubtype === 'sakit' ? 'bg-rose-600 text-white' : 'bg-surface-panel text-text-muted'}`}>
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold truncate">Sakit (SKD Dokter)</div>
+                            <div className="text-[10px] text-text-muted truncate">Surat Dokter</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setLeaveSubtype('izin')}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                            leaveSubtype === 'izin'
+                              ? 'bg-purple-50/80 border-purple-300 text-purple-900 font-semibold shadow-2xs'
+                              : 'bg-surface-container border-border-subtle text-text-secondary hover:bg-surface-container-high'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${leaveSubtype === 'izin' ? 'bg-purple-600 text-white' : 'bg-surface-panel text-text-muted'}`}>
+                            <Briefcase className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold truncate">Izin Resmi</div>
+                            <div className="text-[10px] text-text-muted truncate">Keperluan Khusus</div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Alasan / Keterangan */}
+                    <div>
+                      <label className="text-xs font-semibold text-text-secondary block mb-1">
+                        Alasan / Keterangan <span className="text-rose-500 font-bold">*Wajib</span>:
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={leaveNotes}
+                        onChange={(e) => setLeaveNotes(e.target.value)}
+                        placeholder={
+                          leaveSubtype === 'sakit'
+                            ? 'Contoh: Sakit demam tinggi / rawat jalan, istirahat dokter 2 hari...'
+                            : 'Contoh: Mengurus keperluan keluarga mendesak / acara penting resmi...'
+                        }
+                        className="w-full px-3.5 py-2 text-xs bg-surface-container border border-border-subtle rounded-xl text-text-primary focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      />
+                    </div>
+
+                    {/* Lampiran Foto Surat Bukti (Wajib) */}
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-semibold text-text-secondary flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Foto Surat Bukti Sakit / Izin <strong className="text-rose-500">*Wajib</strong>:</span>
+                        </span>
+                        {photoPreview && (
+                          <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Surat Terlampir
+                          </span>
+                        )}
+                      </label>
+
+                      {!photoPreview ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenLiveCamera('surat')}
+                            className="py-3 px-3 rounded-xl border border-dashed border-purple-300 hover:border-purple-500 bg-purple-50/50 hover:bg-purple-50 transition-all flex items-center justify-center gap-2 text-purple-700 font-semibold text-xs cursor-pointer shadow-2xs group"
+                          >
+                            <Camera className="w-4 h-4 text-purple-600 group-hover:scale-110 transition-transform" />
+                            <span>Buka Kamera & Foto Surat</span>
+                          </button>
+
+                          <label className="py-3 px-3 rounded-xl border border-dashed border-border-subtle hover:border-purple-400 bg-surface-container hover:bg-surface-container-high transition-all flex items-center justify-center gap-2 text-text-secondary hover:text-purple-700 font-semibold text-xs cursor-pointer shadow-2xs">
+                            <Upload className="w-4 h-4 text-purple-600" />
+                            <span>Pilih dari Galeri / File</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) {
+                                  const url = URL.createObjectURL(f);
+                                  handleCameraCaptured(f, url);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3.5 p-3 bg-surface-container rounded-xl border border-border-subtle">
+                          <img
+                            src={photoPreview}
+                            alt="Foto Surat Bukti"
+                            className="w-16 h-16 object-cover rounded-xl border border-border-subtle shadow-xs cursor-pointer"
+                            onClick={() => setPreviewModalUrl(photoPreview)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-semibold text-text-primary truncate">
+                              {photoFile?.name || 'Foto Surat Keterangan'}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLiveCamera('surat')}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-600 hover:underline cursor-pointer"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Foto Ulang</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleResetPhoto}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-600 hover:underline cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                                <span>Hapus</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tombol Kirim */}
+                    <button
+                      type="button"
+                      onClick={handleCheckInSakitIzin}
+                      disabled={actionLoading || !leaveNotes.trim() || !photoFile}
+                      className="w-full h-12 bg-purple-600 hover:bg-purple-700 active:scale-98 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>{actionLoading ? 'Mengirim Pengajuan...' : `Kirim Permohonan Absen ${leaveSubtype === 'sakit' ? 'Sakit' : 'Izin'}`}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Status Box */}
+                    {todayData?.attendance?.approval_status === 'pending' ? (
+                      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block text-sm font-semibold text-amber-900">
+                            ⏳ Pengajuan Sedang Menunggu Verifikasi Admin
+                          </strong>
+                          <span className="text-xs text-amber-800 mt-0.5 block leading-relaxed">
+                            Permohonan {todayData?.attendance?.attendance_type === 'sakit' ? 'Sakit (Surat Dokter)' : 'Izin Resmi'} Anda tercatat pada pukul {todayData?.attendance?.check_in_time?.substring(0, 5)} {todayData?.timezone || 'WIB'}. Admin sedang meninjau kelengkapan foto surat Anda. Anda tidak perlu absen pulang.
+                          </span>
+                        </div>
+                      </div>
+                    ) : todayData?.attendance?.approval_status === 'approved' ? (
+                      <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block text-sm font-semibold text-emerald-900">
+                            ✓ Pengajuan Telah Disetujui Admin
+                          </strong>
+                          <span className="text-xs text-emerald-800 mt-0.5 block leading-relaxed">
+                            Dokumen surat Anda telah diverifikasi oleh Admin. Status presensi hari ini tercatat sah sebagai {todayData?.attendance?.attendance_type === 'sakit' ? 'Sakit Resmi' : 'Izin Resmi'}.
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-950 flex items-start gap-3">
+                        <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block text-sm font-semibold text-rose-900">
+                            ✕ Pengajuan Ditolak oleh Admin
+                          </strong>
+                          <span className="text-xs text-rose-800 mt-0.5 block leading-relaxed">
+                            Alasan: &quot;{todayData?.attendance?.rejection_reason || 'Dokumen surat tidak memenuhi syarat.'}&quot;. Status kehadiran tercatat sebagai Tidak Hadir (Alpa).
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preview Rincian Pengajuan */}
+                    <div className="bg-surface-container/60 rounded-xl p-3 border border-border-subtle flex items-start gap-3">
+                      {todayData?.attendance?.photo_full_url && (
+                        <img
+                          src={todayData.attendance.photo_full_url}
+                          alt="Foto Surat"
+                          className="w-16 h-16 object-cover rounded-lg border border-border-subtle shrink-0 cursor-pointer shadow-xs"
+                          onClick={() => setPreviewModalUrl(todayData.attendance?.photo_full_url || null)}
+                        />
+                      )}
+                      <div className="min-w-0 text-xs space-y-1">
+                        <div className="font-semibold text-text-primary">
+                          Keterangan Alasan:
+                        </div>
+                        <div className="text-text-secondary italic">
+                          &quot;{todayData?.attendance?.notes || '-'}&quot;
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1338,7 +1750,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                 <div className="mt-1 flex items-baseline justify-between">
                   <div className="text-xl font-bold font-mono text-text-primary">
                     {todayData?.attendance?.check_in_time
-                      ? todayData.attendance.check_in_time.substring(0, 5) + ' WIB'
+                      ? todayData.attendance.check_in_time.substring(0, 5) + ' ' + (todayData?.timezone || 'WIB')
                       : '--:--'}
                   </div>
                   {todayData?.attendance?.check_in_time && (
@@ -1422,7 +1834,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                   <div className="mt-1 flex items-baseline justify-between">
                     <div className="text-xl font-bold font-mono text-text-primary">
                       {todayData?.attendance?.check_out_time
-                        ? todayData.attendance.check_out_time.substring(0, 5) + ' WIB'
+                        ? todayData.attendance.check_out_time.substring(0, 5) + ' ' + (todayData?.timezone || 'WIB')
                         : '--:--'}
                     </div>
                     {todayData?.attendance?.check_out_time && (
@@ -1725,7 +2137,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                         </div>
 
                         <div className="text-xs text-text-secondary font-mono font-semibold mt-1">
-                          Jam Kerja: {shift.formatted_time || `${shift.start_time.substring(0, 5)} - ${shift.end_time.substring(0, 5)}`} WIB
+                          Jam Kerja: {shift.formatted_time || `${shift.start_time.substring(0, 5)} - ${shift.end_time.substring(0, 5)}`} {todayData?.timezone || 'WIB'}
                         </div>
 
                         <div className="text-[11px] text-text-muted mt-0.5 flex items-center gap-3 flex-wrap">

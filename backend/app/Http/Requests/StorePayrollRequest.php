@@ -30,6 +30,7 @@ class StorePayrollRequest extends FormRequest
             'position' => ['nullable', 'string', 'max:100'],
             'birth_date' => ['nullable', 'string', 'max:50'],
             'gender' => ['nullable', 'string', 'max:30'],
+            'marital_status' => ['nullable', 'string', 'max:50'],
             'whatsapp' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'string', 'email', 'max:100'],
             'join_date' => ['nullable', 'string', 'max:50'],

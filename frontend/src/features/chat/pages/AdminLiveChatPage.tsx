@@ -29,7 +29,16 @@ import {
   Check,
   RotateCw,
   Trash2,
+  Lock,
+  Wrench,
 } from 'lucide-react';
+
+// ============================================================================
+// FEATURE LOCK FLAG (Under Maintenance by Developer)
+// Sesuai instruksi: fitur ini di-lock / ditutup sementara tanpa menghapus kode.
+// Set ke `false` untuk membuka kembali fitur secara penuh kapan saja.
+// ============================================================================
+export const IS_LIVE_CHAT_LOCKED = true;
 
 export const AdminLiveChatPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -148,6 +157,11 @@ export const AdminLiveChatPage: React.FC = () => {
   useEffect(() => {
     fetchSessions();
 
+    if (IS_LIVE_CHAT_LOCKED) {
+      if (pollListIntervalRef.current) clearInterval(pollListIntervalRef.current);
+      return;
+    }
+
     if (pollListIntervalRef.current) clearInterval(pollListIntervalRef.current);
     pollListIntervalRef.current = setInterval(() => {
       fetchSessions(true);
@@ -162,6 +176,11 @@ export const AdminLiveChatPage: React.FC = () => {
   useEffect(() => {
     if (selectedSessionId) {
       loadSessionDetail(selectedSessionId);
+
+      if (IS_LIVE_CHAT_LOCKED) {
+        if (pollChatIntervalRef.current) clearInterval(pollChatIntervalRef.current);
+        return;
+      }
 
       if (pollChatIntervalRef.current) clearInterval(pollChatIntervalRef.current);
       pollChatIntervalRef.current = setInterval(() => {
@@ -390,6 +409,30 @@ export const AdminLiveChatPage: React.FC = () => {
         </div>
       </div>
 
+      {/* MAINTENANCE NOTICE BANNER */}
+      {IS_LIVE_CHAT_LOCKED && (
+        <div className="mb-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start sm:items-center justify-between gap-4 text-amber-900 dark:text-amber-200">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold">
+                  Fitur Live Chat Sedang Dikunci (Under Maintenance)
+                </h4>
+                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-500 text-white">
+                  Maintenance
+                </span>
+              </div>
+              <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                Widget chat pada sisi karyawan sedang dinonaktifkan sementara oleh developer untuk pemeliharaan & sinkronisasi data. Riwayat percakapan sebelumnya tetap dapat ditinjau dan dikelola di sini.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ============================================================== */}
       {/* 2. THREE-COLUMN WORKSTATION LAYOUT                             */}
       {/* ============================================================== */}
@@ -409,7 +452,7 @@ export const AdminLiveChatPage: React.FC = () => {
               >
                 <option value="all">Semua Perusahaan (Riama & Rimbun)</option>
                 <option value="riama">Riama Mandiri Pratama</option>
-                <option value="rimbun">Rimbun Berkah Sentosa</option>
+                <option value="rimbun">Rimbun Buana Sejahtera</option>
               </select>
               <button
                 type="button"

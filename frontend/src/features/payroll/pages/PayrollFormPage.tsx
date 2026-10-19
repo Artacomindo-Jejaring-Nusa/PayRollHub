@@ -53,6 +53,7 @@ export const PayrollFormPage: React.FC = () => {
   const [province, setProvince] = useState('DKI JAKARTA');
   const [schoolUnit, setSchoolUnit] = useState('');
   const [position, setPosition] = useState('Wali Asuh');
+  const [maritalStatus, setMaritalStatus] = useState('');
   const [joinDate, setJoinDate] = useState('');
   const [company, setCompany] = useState<'rbs' | 'rimamandiri'>(
     tenant.id === 'rimamandiri' ? 'rimamandiri' : 'rbs'
@@ -243,6 +244,7 @@ export const PayrollFormPage: React.FC = () => {
           setProvince(data.province);
           setSchoolUnit(data.school_unit || '');
           setPosition(data.position || 'Wali Asuh');
+          setMaritalStatus(data.marital_status || '');
           setJoinDate(data.join_date || '');
           setPeriod(normalizePeriodToSP(data.period));
           setIsVisibleToUser(data.is_visible_to_user ?? true);
@@ -333,6 +335,7 @@ export const PayrollFormPage: React.FC = () => {
       province,
       school_unit: schoolUnit.trim() || undefined,
       position: position.trim() || undefined,
+      marital_status: maritalStatus.trim() || undefined,
       join_date: joinDate.trim() || undefined,
       period: period.trim(),
       is_visible_to_user: isVisibleToUser,
@@ -554,15 +557,36 @@ export const PayrollFormPage: React.FC = () => {
                   />
                 </div>
 
-                <Select
-                  label="Entitas Perusahaan (Tenant)"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value as 'rbs' | 'rimamandiri')}
-                  options={[
-                    { label: 'PT. Rimbun Buana Sejahtera (rimbunbuanasejahtera.com)', value: 'rbs' },
-                    { label: 'PT. Riama Mandiri Pratama (riamamandiripratama.com)', value: 'rimamandiri' },
-                  ]}
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <Select
+                    label="Status Perkawinan"
+                    value={maritalStatus}
+                    onChange={(e) => setMaritalStatus(e.target.value)}
+                    error={errors.marital_status}
+                    options={[
+                      { label: '-- Pilih Status Perkawinan --', value: '' },
+                      { label: 'Kawin', value: 'Kawin' },
+                      { label: 'Belum Kawin', value: 'Belum Kawin' },
+                      { label: 'Nikah Anak 1', value: 'Nikah Anak 1' },
+                      { label: 'Nikah Anak 2', value: 'Nikah Anak 2' },
+                      { label: 'Nikah Anak 3', value: 'Nikah Anak 3' },
+                      { label: 'Duda Anak 1', value: 'Duda Anak 1' },
+                      { label: 'Duda Anak 2', value: 'Duda Anak 2' },
+                      { label: 'Duda Anak 3', value: 'Duda Anak 3' },
+                      { label: 'Tidak Kawin', value: 'Tidak Kawin' },
+                    ]}
+                  />
+
+                  <Select
+                    label="Entitas Perusahaan (Tenant)"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value as 'rbs' | 'rimamandiri')}
+                    options={[
+                      { label: 'PT. Rimbun Buana Sejahtera (rimbunbuanasejahtera.com)', value: 'rbs' },
+                      { label: 'PT. Riama Mandiri Pratama (riamamandiripratama.com)', value: 'rimamandiri' },
+                    ]}
+                  />
+                </div>
               </div>
             </div>
           </Card>

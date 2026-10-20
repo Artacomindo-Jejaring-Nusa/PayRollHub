@@ -428,6 +428,7 @@ class AdminAttendanceController extends Controller
             'status' => 'nullable|in:present,late,holiday,absent,permit',
             'approval_status' => 'nullable|in:pending,approved,rejected',
             'location_name' => 'nullable|string|max:150',
+            'shift_id' => 'nullable|integer|exists:shifts,id',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -501,6 +502,7 @@ class AdminAttendanceController extends Controller
             'status' => 'nullable|in:present,late,holiday,absent,permit',
             'approval_status' => 'nullable|in:pending,approved,rejected',
             'location_name' => 'nullable|string|max:150',
+            'shift_id' => 'nullable|integer|exists:shifts,id',
             'notes' => 'nullable|string|max:500',
         ]);
 

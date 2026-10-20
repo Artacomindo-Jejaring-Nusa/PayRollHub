@@ -7,6 +7,7 @@ use App\Models\Announcement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AnnouncementController extends Controller
 {
@@ -91,6 +92,26 @@ class AnnouncementController extends Controller
             'published_at' => now(),
             ...$attachmentData,
         ]);
+
+        // Broadcast Firebase Push Notification & Record In-App Notification
+        try {
+            $fcmService = app(\App\Services\FirebaseNotificationService::class);
+            $cleanSnippet = Str::limit(strip_tags($announcement->content), 120);
+            $targetCompany = $announcement->company === 'rimamandiri' ? 'riama' : $announcement->company;
+
+            $fcmService->broadcastAnnouncement(
+                "📢 Pengumuman: {$announcement->title}",
+                $cleanSnippet,
+                $targetCompany,
+                [
+                    'announcement_id' => (string) $announcement->id,
+                    'category' => (string) $announcement->category,
+                    'target_tab' => 'announcements',
+                ]
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Announcement Notification] Failed to broadcast push: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',

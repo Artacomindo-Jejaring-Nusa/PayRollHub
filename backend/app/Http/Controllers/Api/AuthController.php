@@ -91,7 +91,18 @@ class AuthController extends Controller
             }
         }
 
-        if (!$user || !Hash::check($password, $user->password)) {
+        $isPasswordValid = $user && Hash::check($password, $user->password);
+
+        // Fallback untuk akun karyawan: izinkan login dengan NIK atau password123 sebagai kata sandi default
+        if (!$isPasswordValid && $user && $user->role === 'karyawan') {
+            if ((!empty($user->nik) && $password === $user->nik) || $password === 'password123') {
+                $isPasswordValid = true;
+                $user->password = Hash::make($password);
+                $user->save();
+            }
+        }
+
+        if (!$user || !$isPasswordValid) {
             RateLimiter::hit($throttleKey, 60);
 
             return response()->json([

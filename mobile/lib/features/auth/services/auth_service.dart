@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../models/user_model.dart';
 
@@ -27,6 +29,30 @@ class AuthService {
     String? company, // 'auto', 'rbs', 'rimamandiri'
     bool rememberMe = false,
   }) async {
+    // 0. Coba server lokal (Development / Debug Mode di localhost atau LAN)
+    if (kDebugMode) {
+      final localCandidates = [
+        'http://127.0.0.1:8000/api',
+        AppConstants.localLanBaseUrl,
+        AppConstants.emulatorBaseUrl,
+      ];
+
+      for (final localUrl in localCandidates) {
+        try {
+          final localAttempt = await _attemptLoginAtUrl(
+            apiUrl: localUrl,
+            identifier: identifier,
+            password: password,
+            company: company == AppConstants.tenantAuto ? null : company,
+            rememberMe: rememberMe,
+          );
+          if (localAttempt.success) {
+            return localAttempt;
+          }
+        } catch (_) {}
+      }
+    }
+
     // 1. Tentukan target endpoint domain berdasarkan pilihan tenant
     if (company == AppConstants.tenantRbs) {
       return await _attemptLoginAtUrl(
@@ -86,11 +112,16 @@ class AuthService {
     required bool rememberMe,
   }) async {
     try {
+      final isLocal = apiUrl.contains('localhost') ||
+          apiUrl.contains('127.0.0.1') ||
+          apiUrl.contains('10.0.2.2') ||
+          apiUrl.contains('192.168.');
+
       final dio = Dio(
         BaseOptions(
           baseUrl: apiUrl,
-          connectTimeout: const Duration(seconds: 12),
-          receiveTimeout: const Duration(seconds: 12),
+          connectTimeout: Duration(seconds: isLocal ? 4 : 12),
+          receiveTimeout: Duration(seconds: isLocal ? 4 : 12),
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
@@ -117,8 +148,11 @@ class AuthService {
         final userJson = data['user'] as Map<String, dynamic>;
         final user = UserModel.fromJson(userJson);
 
-        // Simpan URL API aktif sesuai tenant yang berhasil login
-        final activeUrl = user.isRiama ? AppConstants.riamaApiUrl : AppConstants.rbsApiUrl;
+        // Simpan URL API aktif: jika endpoint adalah lokal development, pertahankan lokal
+        final activeUrl = isLocal
+            ? apiUrl
+            : (user.isRiama ? AppConstants.riamaApiUrl : AppConstants.rbsApiUrl);
+
         await TokenStorage.setBaseUrl(activeUrl);
         await TokenStorage.saveToken(token);
         await TokenStorage.saveUser(userJson);
@@ -126,6 +160,11 @@ class AuthService {
 
         // Reset singleton dio agar memakai base URL baru
         ApiClient.resetClient();
+
+        // Mendaftarkan token FCM ke backend setelah autentikasi sukses
+        try {
+          await NotificationService.syncTokenWithBackend();
+        } catch (_) {}
 
         return AuthResponse(
           success: true,
@@ -175,6 +214,10 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    try {
+      // Hapus token perangkat FCM dari database backend
+      await NotificationService.deleteTokenFromBackend();
+    } catch (_) {}
     try {
       final dio = await ApiClient.getInstance();
       await dio.post('/logout');

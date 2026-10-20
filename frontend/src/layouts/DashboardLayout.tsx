@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { authService } from '../features/auth/services/authService';
 import { useTenantTheme, isValidationSubdomain } from '../lib/theme';
 import { TenantSwitcher } from '../components/shared/TenantSwitcher';
+import { NotificationBell } from '../components/shared/NotificationBell';
 import { Badge } from '../components/ui/Badge';
 import {
   Wallet,
@@ -513,6 +514,7 @@ export const DashboardLayout: React.FC = () => {
             {/* Right Controls */}
             <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto">
               <TenantSwitcher variant="compact" />
+              <NotificationBell />
 
               <div className="hidden sm:block h-5 w-px bg-border-subtle" />
 
@@ -801,6 +803,7 @@ export const DashboardLayout: React.FC = () => {
 
           <div className="flex items-center gap-3">
             <TenantSwitcher />
+            <NotificationBell />
             <div className="h-6 w-px bg-border-subtle" />
             
             {/* User Profile Dropdown */}

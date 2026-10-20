@@ -141,6 +141,38 @@ class AdminComplaintController extends Controller
             company: $complaint->company
         );
 
+        // Send Firebase Push Notification & In-App Notification to the employee
+        try {
+            $fcmService = app(\App\Services\FirebaseNotificationService::class);
+            $statusLabel = match ($validated['status']) {
+                'resolved' => 'Disetujui / Selesai ✅',
+                'rejected' => 'Ditolak ❌',
+                'in_progress' => 'Sedang Diproses ⏳',
+                'pending' => 'Menunggu Respon 📝',
+                default => ucfirst($validated['status']),
+            };
+
+            $title = "Pengaduan {$statusLabel}";
+            $body = "Pengaduan Anda ({$complaint->ticket_number}) telah diperbarui menjadi {$statusLabel} oleh Admin."
+                . (!empty($complaint->admin_notes) ? " Catatan: {$complaint->admin_notes}" : "");
+
+            $fcmService->sendToUser(
+                $complaint->user_id,
+                $title,
+                $body,
+                'complaint_' . $validated['status'],
+                [
+                    'complaint_id' => (string) $complaint->id,
+                    'ticket_number' => (string) $complaint->ticket_number,
+                    'status' => (string) $validated['status'],
+                    'admin_notes' => (string) ($complaint->admin_notes ?? ''),
+                    'target_tab' => 'complaints',
+                ]
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[AdminComplaint Notification] Failed to send push: ' . $e->getMessage());
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Status keluhan dan tanggapan berhasil diperbarui.',

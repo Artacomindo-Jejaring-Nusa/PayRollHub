@@ -69,6 +69,14 @@ class Shift extends Model
         $lateThreshold = (clone $start)->addMinutes($tolerance);
 
         $checkIn = Carbon::createFromTimeString($currentTime);
+        $isCrossDay = $this->cross_day || $this->start_time > $this->end_time;
+
+        // Jika shift malam lintas hari dan waktu check-in di dini hari (00:00 - 12:00),
+        // tambahkan 1 hari pada check-in agar perbandingan dengan jam mulai malam hari (misal 23:00) akurat
+        if ($isCrossDay && $checkIn->lessThan($start) && (int) $checkIn->format('H') < 12) {
+            $checkIn->addDay();
+        }
+
         $isLate = $checkIn->greaterThan($lateThreshold);
         $lateMinutes = $isLate ? (int) $lateThreshold->diffInMinutes($checkIn) : 0;
 

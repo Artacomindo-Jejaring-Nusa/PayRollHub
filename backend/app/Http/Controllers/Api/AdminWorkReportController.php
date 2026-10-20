@@ -105,6 +105,35 @@ class AdminWorkReportController extends Controller
             'reviewed_at' => now(),
         ]);
 
+        // Send Firebase Push Notification & In-App Notification to employee
+        try {
+            $fcmService = app(\App\Services\FirebaseNotificationService::class);
+            $statusLabel = match ($validated['status']) {
+                'approved' => 'Disetujui ✅',
+                'rejected' => 'Ditolak ❌',
+                default => 'Ditinjau 📝',
+            };
+            $reportDate = $workReport->report_date ? date('d M Y', strtotime($workReport->report_date)) : 'Hari ini';
+            $title = "Laporan Kerja {$statusLabel}";
+            $body = "Laporan kerja Anda tanggal {$reportDate} telah {$statusLabel} oleh {$currentUser->name}."
+                . (!empty($validated['feedback']) ? " Catatan: {$validated['feedback']}" : '');
+
+            $fcmService->sendToUser(
+                $workReport->user_id,
+                $title,
+                $body,
+                'work_report_' . $validated['status'],
+                [
+                    'report_id' => (string) $workReport->id,
+                    'status' => $validated['status'],
+                    'feedback' => $validated['feedback'] ?? '',
+                    'target_tab' => 'reports',
+                ]
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[WorkReport Notification] Failed to send push: ' . $e->getMessage());
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Status laporan kerja berhasil diperbarui.',

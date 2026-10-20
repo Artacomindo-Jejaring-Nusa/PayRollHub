@@ -6,6 +6,8 @@ contoh(1).xlsx
 *.xls
 57814.jpg
 .agents/
+*firebase*.json
+google-services.json
 
 # Environment Files
 .env
@@ -54,3 +56,5 @@ scratch/
 *.zip
 *.sql
 *.pdf
+Screenshot*.png
+backend/database/seeders/DummyDataSeeder.php

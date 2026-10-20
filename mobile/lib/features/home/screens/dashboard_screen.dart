@@ -16,6 +16,7 @@ import '../models/attendance_today_model.dart';
 import '../services/announcement_service.dart';
 import '../services/attendance_service.dart';
 import '../services/employee_portal_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../widgets/onboarding_tutorial_dialog.dart';
 import 'complaints_screen.dart';
@@ -110,7 +111,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowTutorial();
+      _setupNotificationListeners();
     });
+  }
+
+  void _setupNotificationListeners() {
+    NotificationService.syncTokenWithBackend();
+    NotificationService.onNotificationTapped = (data) {
+      if (!mounted) return;
+      final targetTab = data['target_tab']?.toString().toLowerCase();
+      final type = data['type']?.toString().toLowerCase() ?? '';
+
+      if (targetTab == 'complaints' || type.contains('complaint') || type.contains('feedback')) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ComplaintsScreen(user: widget.user)),
+        );
+      } else if (targetTab == 'announcements' || type.contains('announcement')) {
+        setState(() => _currentTabIndex = 0);
+      } else if (targetTab == 'reports' || type.contains('work_report')) {
+        setState(() => _currentTabIndex = 3);
+      }
+    };
   }
 
   Future<void> _checkAndShowTutorial({bool force = false}) async {

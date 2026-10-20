@@ -59,6 +59,89 @@ class AttendanceFeatureTest extends TestCase
         ]);
     }
 
+    public function test_employee_who_already_checked_in_holiday_can_override_and_check_in_masuk(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $employee = User::factory()->create([
+            'role' => 'user',
+            'company' => 'rbs',
+            'school_unit' => 'SRP-005',
+        ]);
+
+        AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'Sekolah Rakyat Jakarta 05',
+            'code' => 'SRP-005',
+            'latitude' => -6.2087634,
+            'longitude' => 106.8455990,
+            'radius_meters' => 150,
+            'is_active' => true,
+        ]);
+
+        // 1. Employee initially performs Absen Libur
+        $liburRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'libur',
+            'notes' => 'Tadinya libur',
+        ]);
+        $liburRes->assertStatus(200);
+
+        // 2. Employee then comes to work and checks in masuk with selfie
+        $fakePhoto = \Illuminate\Http\UploadedFile::fake()->image('selfie.jpg');
+        $masukRes = $this->actingAs($employee, 'sanctum')->post('/api/employee/attendance/check-in', [
+            'attendance_type' => 'masuk',
+            'latitude' => -6.2088000,
+            'longitude' => 106.8456000,
+            'photo' => $fakePhoto,
+        ]);
+
+        $masukRes->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+            ]);
+
+        $today = Carbon::today('Asia/Jakarta')->toDateString();
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => $today,
+            'attendance_type' => 'masuk',
+        ]);
+        $att = Attendance::where('user_id', $employee->id)->where('date', $today)->first();
+        $this->assertContains($att->status, ['present', 'late']);
+    }
+
+    public function test_employee_can_cancel_holiday_attendance(): void
+    {
+        $employee = User::factory()->create([
+            'role' => 'user',
+            'company' => 'rbs',
+        ]);
+
+        // Check in as holiday
+        $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'libur',
+        ])->assertStatus(200);
+
+        $today = Carbon::today('Asia/Jakarta')->toDateString();
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => $today,
+            'attendance_type' => 'libur',
+        ]);
+
+        // Cancel holiday
+        $cancelRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/cancel-holiday');
+        $cancelRes->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+            ]);
+
+        $this->assertDatabaseMissing('attendances', [
+            'user_id' => $employee->id,
+            'date' => $today,
+        ]);
+    }
+
     public function test_employee_check_in_masuk_fails_when_outside_radius_of_100_locations(): void
     {
         $employee = User::factory()->create([
@@ -535,5 +618,139 @@ class AttendanceFeatureTest extends TestCase
         $resSp = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/attendances/summary?sp_period=SP 8');
         $resSp->assertStatus(200)
             ->assertJsonPath('data.total_employees', 1); // Only Budi Active in SP 8
+    }
+
+    public function test_cross_day_shift_check_in_at_night_and_check_out_in_morning(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-19 23:01:00', 'Asia/Jakarta'));
+
+        $shift = \App\Models\Shift::create([
+            'company' => 'rbs',
+            'name' => 'Shift 3 / Malam (Operasional)',
+            'code' => 'SHIFT-10',
+            'start_time' => '23:00:00',
+            'end_time' => '07:00:00',
+            'late_tolerance_minutes' => 15,
+            'work_hours' => 8.0,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'shift_id' => $shift->id,
+        ]);
+
+        // 1. Employee checks in at 23:01 on 2026-10-19
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Shift malam blora',
+        ]);
+        $checkInRes->assertStatus(200);
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-19',
+            'check_in_time' => '23:01:00',
+            'check_out_time' => null,
+            'shift_id' => $shift->id,
+        ]);
+
+        // 2. Morning arrives on next day: 2026-10-20 at 07:15
+        Carbon::setTestNow(Carbon::parse('2026-10-20 07:15:00', 'Asia/Jakarta'));
+
+        // Calling /today should return the active unclosed attendance from yesterday
+        $todayRes = $this->actingAs($employee, 'sanctum')->getJson('/api/employee/attendance/today');
+        $todayRes->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.attendance.date', '2026-10-19')
+            ->assertJsonPath('data.attendance.check_in_time', '23:01:00')
+            ->assertJsonPath('data.attendance.check_out_time', null);
+
+        // 3. Employee checks out at 07:15
+        $checkOutRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', [
+            'notes' => 'Pulang shift malam',
+        ]);
+        $checkOutRes->assertStatus(200)
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-19',
+            'check_in_time' => '23:01:00',
+            'check_out_time' => '07:15:00',
+        ]);
+
+        // 4. Employee opens dashboard again at 08:00
+        Carbon::setTestNow(Carbon::parse('2026-10-20 08:00:00', 'Asia/Jakarta'));
+        $todayResAfter = $this->actingAs($employee, 'sanctum')->getJson('/api/employee/attendance/today');
+        $todayResAfter->assertStatus(200)
+            ->assertJsonPath('data.attendance.date', '2026-10-19')
+            ->assertJsonPath('data.attendance.check_out_time', '07:15:00');
+
+        Carbon::setTestNow(); // reset
+    }
+
+    public function test_cross_day_shift_check_in_past_midnight_and_check_out_in_morning(): void
+    {
+        $shift = \App\Models\Shift::create([
+            'company' => 'rbs',
+            'name' => 'Shift 3 / Malam (Operasional)',
+            'code' => 'SHIFT-10',
+            'start_time' => '23:00:00',
+            'end_time' => '07:00:00',
+            'late_tolerance_minutes' => 15,
+            'work_hours' => 8.0,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'shift_id' => $shift->id,
+        ]);
+
+        // 1. Employee arrives late past midnight at 00:30 on 2026-10-20
+        Carbon::setTestNow(Carbon::parse('2026-10-20 00:30:00', 'Asia/Jakarta'));
+
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Masuk subuh dinas luar',
+        ]);
+        $checkInRes->assertStatus(200);
+
+        // Attendance date must be anchored to shift start day (2026-10-19)
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-19',
+            'check_in_time' => '00:30:00',
+            'check_out_time' => null,
+            'shift_id' => $shift->id,
+        ]);
+
+        // 2. In the morning at 07:05 on 2026-10-20, check-out
+        Carbon::setTestNow(Carbon::parse('2026-10-20 07:05:00', 'Asia/Jakarta'));
+
+        $todayRes = $this->actingAs($employee, 'sanctum')->getJson('/api/employee/attendance/today');
+        $todayRes->assertStatus(200)
+            ->assertJsonPath('data.attendance.date', '2026-10-19')
+            ->assertJsonPath('data.attendance.check_in_time', '00:30:00')
+            ->assertJsonPath('data.attendance.check_out_time', null);
+
+        $checkOutRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', [
+            'notes' => 'Selesai shift',
+        ]);
+        $checkOutRes->assertStatus(200);
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-19',
+            'check_in_time' => '00:30:00',
+            'check_out_time' => '07:05:00',
+        ]);
+
+        Carbon::setTestNow();
     }
 }

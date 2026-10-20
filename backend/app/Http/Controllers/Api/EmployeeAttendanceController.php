@@ -42,9 +42,7 @@ class EmployeeAttendanceController extends Controller
             $locations->prepend($hqLocation);
         }
 
-        $attendance = Attendance::with(['location', 'approver'])->where('user_id', $user->id)
-            ->where('date', $today)
-            ->first();
+        $attendance = $this->resolveActiveAttendance($user, $today, $tzData['carbon']);
 
         // POINT 10 & Note Bang Maun: Karyawan tidak perlu memilih lokasi karena sudah terdaftar dan terkunci
         // sesuai penugasannya (Admin wajib di Kantor Pusat, Karyawan di unit sekolah / kantor).
@@ -63,7 +61,9 @@ class EmployeeAttendanceController extends Controller
             $defaultShift = \App\Models\Shift::find(1) ?: \App\Models\Shift::where('code', 'REGULER')->first();
         }
 
-        $assignedShift = $user->shift ?: $defaultShift;
+        $assignedShift = ($attendance && $attendance->shift)
+            ? $attendance->shift
+            : ($user->shift ?: $defaultShift);
 
         return response()->json([
             'status' => 'success',
@@ -116,9 +116,55 @@ class EmployeeAttendanceController extends Controller
         $currentTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
 
-        // Cek apakah sudah check-in hari ini
+        // 1. Cek apakah ada shift malam aktif dari kemarin yang BELUM ditutup (belum absen pulang)
+        $yesterday = Carbon::parse($today)->subDay()->toDateString();
+        $unclosedYesterday = Attendance::with('shift')->where('user_id', $user->id)
+            ->where('date', $yesterday)
+            ->whereNotNull('check_in_time')
+            ->whereNull('check_out_time')
+            ->whereNotIn('attendance_type', ['libur', 'sakit', 'izin'])
+            ->where('status', '!=', 'holiday')
+            ->first();
+
+        if ($unclosedYesterday && in_array($attendanceType, ['masuk', 'dinas_luar'])) {
+            $shift = $unclosedYesterday->shift ?: $user->shift;
+            $isCrossDay = $shift && ($shift->cross_day || $shift->start_time > $shift->end_time);
+            $checkInDateTime = Carbon::parse($yesterday . ' ' . $unclosedYesterday->check_in_time);
+            $hoursSinceCheckIn = $now->diffInHours($checkInDateTime);
+
+            // Jika dalam rentang kerja shift malam kemarin (masuk malam kemarin dan sekarang masih pagi sebelum jam 14:00):
+            if (($isCrossDay || $unclosedYesterday->check_in_time >= '17:00:00') && $hoursSinceCheckIn <= 18 && $now->format('H:i:s') < '14:00:00') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Anda masih memiliki sesi shift malam yang aktif dari kemarin (Masuk pada pukul {$unclosedYesterday->check_in_time}). Silakan lakukan Absen Pulang (Check Out) terlebih dahulu sebelum melakukan absensi masuk baru.",
+                ], 422);
+            }
+        }
+
+        // Tentukan tanggal shift yang sesuai (mendukung check-in dini hari untuk shift lintas hari)
+        $attendanceDate = $today;
+        $activeShift = null;
+        if (!empty($request->input('shift_id'))) {
+            $activeShift = Shift::find((int) $request->input('shift_id'));
+        }
+        if (!$activeShift) {
+            $activeShift = $user->shift;
+        }
+
+        if ($activeShift && ($activeShift->cross_day || $activeShift->start_time > $activeShift->end_time)) {
+            $currentTimeStr = $now->format('H:i:s');
+            // Jika check-in subuh / dini hari (00:00 - 08:00) dan kemarin belum ada catatan absensi:
+            if ($currentTimeStr < $activeShift->end_time && $currentTimeStr < '08:00:00') {
+                $yesterdayRec = Attendance::where('user_id', $user->id)->where('date', $yesterday)->first();
+                if (!$yesterdayRec) {
+                    $attendanceDate = $yesterday;
+                }
+            }
+        }
+
+        // Cek apakah sudah check-in hari ini (pada tanggal shift yang ditentukan)
         $existing = Attendance::where('user_id', $user->id)
-            ->where('date', $today)
+            ->where('date', $attendanceDate)
             ->first();
 
         if ($existing && $existing->check_in_time) {
@@ -241,7 +287,7 @@ class EmployeeAttendanceController extends Controller
             $photoPath = $this->storeAttendancePhoto($request, $user->id);
 
             $attendance = Attendance::updateOrCreate(
-                ['user_id' => $user->id, 'date' => $today],
+                ['user_id' => $user->id, 'date' => $attendanceDate],
                 [
                     'attendance_type' => 'dinas_luar',
                     'check_in_time' => $currentTime,
@@ -363,12 +409,17 @@ class EmployeeAttendanceController extends Controller
         $lateThreshold = (clone $workStart)->addMinutes($shiftTolerance);
 
         $currentCheckInTime = Carbon::createFromTimeString($currentTime);
+        $isCrossDay = $userShift && ($userShift->cross_day || $userShift->start_time > $userShift->end_time);
+        if ($isCrossDay && $currentCheckInTime->lessThan($workStart) && (int) $currentCheckInTime->format('H') < 12) {
+            $currentCheckInTime->addDay();
+        }
+
         $isLate = $currentCheckInTime->greaterThan($lateThreshold);
         $checkInStatus = $isLate ? 'late' : 'on_time';
         $overallStatus = $isLate ? 'late' : 'present';
 
         $attendance = Attendance::updateOrCreate(
-            ['user_id' => $user->id, 'date' => $today],
+            ['user_id' => $user->id, 'date' => $attendanceDate],
             [
                 'attendance_type' => 'masuk',
                 'check_in_time' => $currentTime,
@@ -425,10 +476,8 @@ class EmployeeAttendanceController extends Controller
         $currentTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
 
-        // Cek absensi hari ini
-        $attendance = Attendance::where('user_id', $user->id)
-            ->where('date', $today)
-            ->first();
+        // Cek absensi aktif (mendukung shift malam lintas hari)
+        $attendance = $this->resolveActiveAttendance($user, $today, $now);
 
         if (!$attendance || !$attendance->check_in_time) {
             return response()->json([
@@ -745,6 +794,76 @@ class EmployeeAttendanceController extends Controller
     }
 
     /**
+     * Resolusi absensi aktif untuk karyawan.
+     * Mendukung shift malam lintas hari (cross-day shift / overnight, misal 23:00 - 07:00),
+     * di mana karyawan check-in di malam hari (kemarin) dan check-out di pagi hari (hari ini).
+     */
+    protected function resolveActiveAttendance($user, string $today, Carbon $now): ?Attendance
+    {
+        // 1. Ambil absensi hari ini ($today) jika sudah ada
+        $todayAttendance = Attendance::with(['location', 'approver', 'shift'])
+            ->where('user_id', $user->id)
+            ->where('date', $today)
+            ->first();
+
+        // 2. Ambil absensi kemarin ($yesterday)
+        $yesterday = Carbon::parse($today)->subDay()->toDateString();
+        $yesterdayAttendance = Attendance::with(['location', 'approver', 'shift'])
+            ->where('user_id', $user->id)
+            ->where('date', $yesterday)
+            ->first();
+
+        $hasYesterdayCheckIn = $yesterdayAttendance &&
+            $yesterdayAttendance->check_in_time &&
+            !in_array($yesterdayAttendance->attendance_type, ['libur', 'sakit', 'izin']) &&
+            $yesterdayAttendance->status !== 'holiday';
+
+        if ($hasYesterdayCheckIn) {
+            $shift = $yesterdayAttendance->shift ?: $user->shift;
+            $isCrossDayShift = $shift && ($shift->cross_day || $shift->start_time > $shift->end_time);
+            $checkInTimeStr = $yesterdayAttendance->check_in_time;
+            $isNightCheckIn = $checkInTimeStr >= '17:00:00';
+
+            // KASUS A: Catatan kemarin BELUM checkout (masih terbuka / menunggu absen pulang)
+            if (empty($yesterdayAttendance->check_out_time)) {
+                $checkInDateTime = Carbon::parse($yesterday . ' ' . $checkInTimeStr);
+                $hoursSinceCheckIn = $now->diffInHours($checkInDateTime);
+
+                // Sesi kemarin valid sebagai sesi aktif jika:
+                // 1) Merupakan shift lintas hari atau check-in malam kemarin (>= 17:00), DAN
+                // 2) Masih berada di jam pagi/siang (sebelum jam 15:00) dan belum lebih dari 18 jam sejak check-in.
+                $isWithinActiveWindow = ($isCrossDayShift || $isNightCheckIn)
+                    && $hoursSinceCheckIn <= 18
+                    && $now->format('H:i:s') < '15:00:00';
+
+                if ($isWithinActiveWindow) {
+                    // Jika hari ini belum ada check-in baru, utamakan sesi shift kemarin yang belum selesai!
+                    if (!$todayAttendance || empty($todayAttendance->check_in_time)) {
+                        return $yesterdayAttendance;
+                    }
+                }
+            } else {
+                // KASUS B: Catatan kemarin SUDAH checkout (misal baru saja absen pulang jam 07:00 pagi ini)
+                // Jika hari ini belum ada check-in baru ($todayAttendance kosong),
+                // dan sekarang masih jam pagi/siang sebelum shift berikutnya dimulai (sebelum jam 16:00 sore):
+                // Tampilkan catatan kemarin agar dasbor mobile karyawan tetap menampilkan status
+                // "Sudah Absen Masuk" dan "Sudah Absen Pulang".
+                if (!$todayAttendance && $isCrossDayShift) {
+                    $currentTimeStr = $now->format('H:i:s');
+                    $shiftStart = $shift ? $shift->start_time : '18:00:00';
+                    $nextShiftThreshold = Carbon::createFromTimeString($shiftStart)->subHours(3)->format('H:i:s');
+
+                    if ($currentTimeStr < $nextShiftThreshold || $currentTimeStr < '16:00:00') {
+                        return $yesterdayAttendance;
+                    }
+                }
+            }
+        }
+
+        return $todayAttendance;
+    }
+
+    /**
      * Karyawan memilih shift kerja aktif (misal dari 5 pilihan shift sekolah).
      */
     public function selectShift(Request $request): JsonResponse
@@ -765,6 +884,17 @@ class EmployeeAttendanceController extends Controller
         }
 
         $user->update(['shift_id' => $shift->id]);
+
+        // Sinkronkan juga pada sesi absensi aktif yang sedang berjalan jika belum check-out
+        try {
+            $clientTz = $request->header('X-Timezone') ?: $request->input('timezone');
+            $tzData = TimezoneService::getNowForUser($user, null, null, $clientTz);
+            $activeAttendance = $this->resolveActiveAttendance($user, $tzData['today'], $tzData['carbon']);
+            if ($activeAttendance && empty($activeAttendance->check_out_time)) {
+                $activeAttendance->update(['shift_id' => $shift->id]);
+            }
+        } catch (\Throwable) {
+        }
 
         return response()->json([
             'status' => 'success',

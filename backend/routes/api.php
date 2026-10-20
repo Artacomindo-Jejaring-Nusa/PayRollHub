@@ -41,6 +41,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
+    // FCM Device Tokens & Notifications (Mobile & Web Dashboard)
+    Route::post('/fcm-token', [\App\Http\Controllers\Api\NotificationController::class, 'registerToken']);
+    Route::delete('/fcm-token', [\App\Http\Controllers\Api\NotificationController::class, 'removeToken']);
+    Route::get('/notifications', [\App\Http\Controllers\Api\NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [\App\Http\Controllers\Api\NotificationController::class, 'markAllAsRead']);
+    Route::post('/notifications/{id}/read', [\App\Http\Controllers\Api\NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/test-push', [\App\Http\Controllers\Api\NotificationController::class, 'testPush']);
+
     // Payroll Read & Export (Accessible by Admin and Viewer)
     Route::get('/payrolls', [PayrollController::class, 'index']);
     Route::get('/payrolls/export', [PayrollController::class, 'export']);

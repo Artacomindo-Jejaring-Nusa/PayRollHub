@@ -12,6 +12,7 @@ class AppConstants {
   // Local development fallbacks
   static const String emulatorBaseUrl = 'http://10.0.2.2:8000/api';
   static const String localWebBaseUrl = 'http://127.0.0.1:8000/api';
+  static const String localLanBaseUrl = 'http://2.2.2.11:8000/api';
 
   // Storage Keys
   static const String tokenKey = 'hc_auth_token';
@@ -27,7 +28,8 @@ class AppConstants {
   static const String tenantAuto = 'auto';
 
   static String getBaseUrlForTenant(String tenant) {
-    if (tenant.toLowerCase() == tenantRiama || tenant.toLowerCase() == 'riama') {
+    if (tenant.toLowerCase() == tenantRiama ||
+        tenant.toLowerCase() == 'riama') {
       return riamaApiUrl;
     }
     return rbsApiUrl;

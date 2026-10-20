@@ -86,9 +86,36 @@ class EmployeeComplaintController extends Controller
             'status' => 'pending',
         ]);
 
-        $message = ($user->role === 'user' || $user->role === 'viewer')
+        $isFeedback = ($user->role === 'user' || $user->role === 'viewer' || $prefix === 'FDB');
+        $message = $isFeedback
             ? 'Feedback berhasil dikirimkan ke Admin & Super Admin. Terima kasih atas masukan Anda.'
             : 'Keluhan berhasil dikirimkan ke HRD. Kami akan segera meninjau laporan Anda.';
+
+        // Push notification & In-app notification to Admin & Super Admin
+        try {
+            $fcmService = app(\App\Services\FirebaseNotificationService::class);
+            $title = $isFeedback
+                ? "💬 Feedback Baru Masuk ({$complaint->ticket_number})"
+                : "🚨 Pengaduan Baru ({$complaint->ticket_number})";
+            $schoolUnit = $user->school_unit ? " [{$user->school_unit}]" : "";
+            $body = "Dari {$user->name}{$schoolUnit}: {$complaint->title}";
+
+            $fcmService->notifyAdmins(
+                $title,
+                $body,
+                $complaint->company ?: 'all',
+                $isFeedback ? 'admin_new_feedback' : 'admin_new_complaint',
+                [
+                    'ticket_number' => (string) $complaint->ticket_number,
+                    'complaint_id' => (string) $complaint->id,
+                    'category' => (string) $complaint->category,
+                    'company' => (string) ($complaint->company ?: 'rbs'),
+                    'target_tab' => 'complaints',
+                ]
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Complaint Notification] Failed to notify admins: ' . $e->getMessage());
+        }
 
         return response()->json([
             'status' => 'success',

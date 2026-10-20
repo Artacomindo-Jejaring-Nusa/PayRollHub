@@ -25,28 +25,10 @@ class EmployeePortalController extends Controller
     {
         $user = $request->user();
 
-        // 1. Latest Payroll strictly scoped to employee's company
-        $latestPayroll = null;
-        if (!empty($user->nik)) {
-            $cleanNik = trim(ltrim((string) $user->nik, "'"));
-            $latestPayroll = Payroll::where(function ($q) use ($cleanNik) {
-                    $q->where('nik', $cleanNik)
-                      ->orWhere('nik', "'{$cleanNik}");
-                })
-                ->where('company', $user->company ?: 'rbs')
-                ->where('is_visible_to_user', true)
-                ->latest('period')
-                ->first();
-        }
-
-        // Fallback: cari berdasarkan nama jika NIK kosong atau belum tersinkron
-        if (!$latestPayroll && !empty($user->name)) {
-            $latestPayroll = Payroll::where('employee_name', $user->name)
-                ->where('company', $user->company ?: 'rbs')
-                ->where('is_visible_to_user', true)
-                ->latest('period')
-                ->first();
-        }
+        // 1. Latest Payroll strictly scoped via multi-tier identity resolver
+        $latestPayroll = $this->resolvePayrollQuery($user, true)
+            ->latest('period')
+            ->first();
 
         // 2. Announcements
         $announcements = Announcement::forCompany($user->company ?? 'all')
@@ -61,23 +43,7 @@ class EmployeePortalController extends Controller
         $approvedReports = WorkReport::where('user_id', $user->id)->where('status', 'approved')->count();
 
         // 4. Total Payroll periods strictly scoped
-        $totalPayrolls = 0;
-        if (!empty($user->nik)) {
-            $cleanNik = trim(ltrim((string) $user->nik, "'"));
-            $totalPayrolls = Payroll::where(function ($q) use ($cleanNik, $user) {
-                    $q->where('nik', $cleanNik)
-                      ->orWhere('nik', "'{$cleanNik}")
-                      ->orWhere('employee_name', $user->name);
-                })
-                ->where('company', $user->company ?: 'rbs')
-                ->where('is_visible_to_user', true)
-                ->count();
-        } elseif (!empty($user->name)) {
-            $totalPayrolls = Payroll::where('employee_name', $user->name)
-                ->where('company', $user->company ?: 'rbs')
-                ->where('is_visible_to_user', true)
-                ->count();
-        }
+        $totalPayrolls = $this->resolvePayrollQuery($user, true)->count();
 
         // 5. Complaints stats for current employee
         $totalComplaints = Complaint::where('user_id', $user->id)->count();
@@ -118,28 +84,8 @@ class EmployeePortalController extends Controller
     public function payrolls(Request $request): JsonResponse
     {
         $user = $request->user();
-        $cleanNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;
 
-        if (!$cleanNik && empty($user->name)) {
-            return response()->json([
-                'status' => 'success',
-                'data' => [],
-                'message' => 'Akun belum terhubung dengan data penggajian.',
-            ]);
-        }
-
-        $query = Payroll::where('company', $user->company ?: 'rbs')
-            ->where('is_visible_to_user', true);
-
-        if ($cleanNik) {
-            $query->where(function ($q) use ($cleanNik, $user) {
-                $q->where('nik', $cleanNik)
-                  ->orWhere('nik', "'{$cleanNik}")
-                  ->orWhere('employee_name', $user->name);
-            });
-        } else {
-            $query->where('employee_name', $user->name);
-        }
+        $query = $this->resolvePayrollQuery($user, true);
 
         if ($request->filled('period') && $request->input('period') !== 'all') {
             $query->byPeriod($request->input('period'));
@@ -151,9 +97,22 @@ class EmployeePortalController extends Controller
 
         $payrolls = $query->latest('period')->get();
 
+        $message = null;
+        if ($payrolls->isEmpty() && empty($user->nik)) {
+            $hasDuplicates = Payroll::where('company', $user->company ?: 'rbs')
+                ->where('employee_name', $user->name)
+                ->distinct()
+                ->count('school_unit') > 1;
+
+            if ($hasDuplicates) {
+                $message = 'Terdapat lebih dari satu data dengan nama yang sama di sistem. Demi keamanan & privasi slip gaji Anda, silakan lengkapi NIK pada menu profil atau hubungi admin/HRD.';
+            }
+        }
+
         return response()->json([
             'status' => 'success',
             'data' => PayrollResource::collection($payrolls),
+            'message' => $message,
         ]);
     }
 
@@ -163,20 +122,9 @@ class EmployeePortalController extends Controller
     public function showPayroll(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $cleanNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;
 
-        $payroll = Payroll::where('id', $id)
-            ->where('company', $user->company ?: 'rbs')
-            ->where('is_visible_to_user', true)
-            ->where(function ($q) use ($cleanNik, $user) {
-                if ($cleanNik) {
-                    $q->where('nik', $cleanNik)
-                      ->orWhere('nik', "'{$cleanNik}")
-                      ->orWhere('employee_name', $user->name);
-                } else {
-                    $q->where('employee_name', $user->name);
-                }
-            })
+        $payroll = $this->resolvePayrollQuery($user, true)
+            ->where('id', $id)
             ->first();
 
         if (!$payroll) {
@@ -198,26 +146,15 @@ class EmployeePortalController extends Controller
     public function downloadSlipPdf(Request $request, int $id)
     {
         $user = $request->user();
-        $cleanNik = !empty($user->nik) ? trim(ltrim((string) $user->nik, "'")) : null;
 
-        $payroll = Payroll::where('id', $id)
-            ->where('company', $user->company ?: 'rbs')
-            ->where('is_visible_to_user', true)
-            ->where(function ($q) use ($cleanNik, $user) {
-                if ($cleanNik) {
-                    $q->where('nik', $cleanNik)
-                      ->orWhere('nik', "'{$cleanNik}")
-                      ->orWhere('employee_name', $user->name);
-                } else {
-                    $q->where('employee_name', $user->name);
-                }
-            })
+        $payroll = $this->resolvePayrollQuery($user, true)
+            ->where('id', $id)
             ->first();
 
         if (!$payroll) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Slip gaji tidak ditemukan.',
+                'message' => 'Slip gaji tidak ditemukan atau Anda tidak memiliki akses.',
             ], 404);
         }
 
@@ -236,23 +173,10 @@ class EmployeePortalController extends Controller
     public function profile(Request $request): JsonResponse
     {
         $user = $request->user();
-        $latestPayroll = null;
-        if (!empty($user->nik)) {
-            $cleanNik = trim(ltrim((string) $user->nik, "'"));
-            $latestPayroll = Payroll::where(function ($q) use ($cleanNik) {
-                    $q->where('nik', $cleanNik)
-                      ->orWhere('nik', "'{$cleanNik}");
-                })
-                ->latest('period')
-                ->first();
-        }
 
-        if (!$latestPayroll && !empty($user->name)) {
-            $latestPayroll = Payroll::where('employee_name', $user->name)
-                ->where('company', $user->company ?: 'rbs')
-                ->latest('period')
-                ->first();
-        }
+        $latestPayroll = $this->resolvePayrollQuery($user, false)
+            ->latest('period')
+            ->first();
 
         return response()->json([
             'status' => 'success',
@@ -301,9 +225,11 @@ class EmployeePortalController extends Controller
             $user->password = Hash::make($validated['new_password']);
         }
 
-        if (array_key_exists('nik', $validated)) {
+        if (empty($user->nik) && array_key_exists('nik', $validated)) {
             $cleanedNik = trim((string) $validated['nik']);
-            $user->nik = $cleanedNik !== '' ? $cleanedNik : null;
+            if ($cleanedNik !== '') {
+                $user->nik = $cleanedNik;
+            }
         }
 
         if (array_key_exists('phone', $validated)) {
@@ -331,7 +257,12 @@ class EmployeePortalController extends Controller
 
         // Also update latest payroll record if relevant so slip gaji matches updated info
         if (!empty($user->nik)) {
-            Payroll::where('nik', $user->nik)
+            $cleanNik = trim(ltrim((string) $user->nik, "'"));
+            Payroll::where(function ($q) use ($cleanNik) {
+                    $q->where('nik', $cleanNik)
+                      ->orWhere('nik', "'{$cleanNik}");
+                })
+                ->where('company', $user->company ?: 'rbs')
                 ->latest('period')
                 ->first()
                 ?->update(array_filter([
@@ -499,5 +430,150 @@ class EmployeePortalController extends Controller
                 'total' => $announcements->total(),
             ],
         ]);
+    }
+
+    /**
+     * Resolves the secure, scoped Payroll query for an authenticated employee.
+     * Prevents cross-employee data leaks by strictly verifying identity:
+     * 1. NIK Match (Gold standard): When user has NIK, match ONLY by NIK (never orWhere name).
+     * 2. Bank Account + Name Match: When user has no NIK but has bank_account, match both.
+     * 3. School Unit + Name Match: When user has school_unit, match employee_name + school_unit.
+     * 4. Unambiguous Name Guard: If only name is known, check if there are multiple people
+     *    in the company with this name (different school_unit / bank_account).
+     *    - If unique: allow match, and auto-link NIK to user profile so future requests use Tier 1.
+     *    - If ambiguous: FAIL CLOSED (1 = 0) to prevent leaking one employee's salary to another.
+     */
+    protected function resolvePayrollQuery($user, bool $onlyVisible = true)
+    {
+        $company = $user->company ?: 'rbs';
+        $query = Payroll::where('company', $company);
+        if ($onlyVisible) {
+            $query->where('is_visible_to_user', true);
+        }
+
+        // Tier 1: NIK Match (100% Unique & Reliable)
+        if (!empty($user->nik)) {
+            $cleanNik = trim(ltrim((string) $user->nik, "'"));
+            if ($cleanNik !== '') {
+                return $query->where(function ($q) use ($cleanNik) {
+                    $q->where('nik', $cleanNik)
+                      ->orWhere('nik', "'{$cleanNik}");
+                });
+            }
+        }
+
+        $cleanName = trim((string) $user->name);
+        if ($cleanName === '') {
+            return $query->whereRaw('1 = 0');
+        }
+
+        // Tier 2: Bank Account Match + Name Match
+        $rawAccount = !empty($user->bank_account) ? preg_replace('/[^0-9]/', '', (string) $user->bank_account) : '';
+        if (strlen($rawAccount) >= 5) {
+            $payrollByBank = Payroll::where('company', $company)
+                ->where('employee_name', $cleanName)
+                ->where(function ($q) use ($rawAccount) {
+                    $q->where('bank_account', $rawAccount)
+                      ->orWhere('bank_account', 'like', "%{$rawAccount}%");
+                })
+                ->first();
+
+            if ($payrollByBank) {
+                // Auto-sync NIK if available in payroll
+                if (!empty($payrollByBank->nik) && empty($user->nik)) {
+                    $foundNik = trim(ltrim((string) $payrollByBank->nik, "'"));
+                    if ($foundNik !== '') {
+                        $user->updateQuietly(['nik' => $foundNik]);
+                    }
+                }
+                if (!empty($payrollByBank->school_unit) && empty($user->school_unit)) {
+                    $user->updateQuietly(['school_unit' => $payrollByBank->school_unit]);
+                }
+
+                return $query->where('employee_name', $cleanName)
+                    ->where(function ($q) use ($rawAccount) {
+                        $q->where('bank_account', $rawAccount)
+                          ->orWhere('bank_account', 'like', "%{$rawAccount}%");
+                    });
+            }
+        }
+
+        // Tier 3: School Unit + Name Match
+        $userUnit = !empty($user->school_unit) ? trim((string) $user->school_unit) : '';
+        if ($userUnit !== '') {
+            $payrollByUnit = Payroll::where('company', $company)
+                ->where('employee_name', $cleanName)
+                ->where('school_unit', $userUnit)
+                ->first();
+
+            if ($payrollByUnit) {
+                if (!empty($payrollByUnit->nik) && empty($user->nik)) {
+                    $foundNik = trim(ltrim((string) $payrollByUnit->nik, "'"));
+                    if ($foundNik !== '') {
+                        $user->updateQuietly(['nik' => $foundNik]);
+                    }
+                }
+                if (!empty($payrollByUnit->bank_account) && empty($user->bank_account)) {
+                    $user->updateQuietly([
+                        'bank_account' => $payrollByUnit->bank_account,
+                        'bank_name' => $payrollByUnit->bank_name,
+                    ]);
+                }
+
+                return $query->where('employee_name', $cleanName)
+                    ->where('school_unit', $userUnit);
+            }
+        }
+
+        // Tier 4: Check if Name is completely Unambiguous in the company
+        $distinctUnits = Payroll::where('company', $company)
+            ->where('employee_name', $cleanName)
+            ->whereNotNull('school_unit')
+            ->where('school_unit', '!=', '')
+            ->distinct()
+            ->pluck('school_unit');
+
+        $distinctAccounts = Payroll::where('company', $company)
+            ->where('employee_name', $cleanName)
+            ->whereNotNull('bank_account')
+            ->where('bank_account', '!=', '')
+            ->distinct()
+            ->pluck('bank_account');
+
+        // If there are multiple distinct school units or accounts for this name, FAIL CLOSED!
+        if ($distinctUnits->count() > 1 || $distinctAccounts->count() > 1) {
+            // Ambiguity detected! Do not guess; lock query to protect user privacy.
+            return $query->whereRaw('1 = 0');
+        }
+
+        // Single unique employee found in the company: auto-link NIK and school_unit to permanent profile
+        $singlePayroll = Payroll::where('company', $company)
+            ->where('employee_name', $cleanName)
+            ->first();
+
+        if ($singlePayroll) {
+            $updates = [];
+            if (!empty($singlePayroll->nik) && empty($user->nik)) {
+                $foundNik = trim(ltrim((string) $singlePayroll->nik, "'"));
+                if ($foundNik !== '') {
+                    $updates['nik'] = $foundNik;
+                }
+            }
+            if (!empty($singlePayroll->school_unit) && empty($user->school_unit)) {
+                $updates['school_unit'] = $singlePayroll->school_unit;
+            }
+            if (!empty($singlePayroll->bank_account) && empty($user->bank_account)) {
+                $updates['bank_account'] = $singlePayroll->bank_account;
+                $updates['bank_name'] = $singlePayroll->bank_name;
+            }
+            if (!empty($updates)) {
+                $user->updateQuietly($updates);
+            }
+
+            return $query->where('employee_name', $cleanName);
+        }
+
+        // Tier 5: No matching record
+        return $query->whereRaw('1 = 0');
     }
 }

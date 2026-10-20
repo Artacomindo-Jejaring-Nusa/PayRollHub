@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/storage/token_storage.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
@@ -57,6 +58,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isAuthenticated: true,
         user: user,
       );
+
+      // Pastikan token FCM selalu sinkron dengan database
+      try {
+        NotificationService.syncTokenWithBackend();
+      } catch (_) {}
     }
   }
 

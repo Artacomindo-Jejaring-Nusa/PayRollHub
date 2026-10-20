@@ -343,8 +343,9 @@ class PayrollHubApiTest extends TestCase
         $slipResponse = $this->actingAs($user, 'sanctum')->getJson("/api/payrolls/{$payroll->id}/slip-pdf");
         $slipResponse->assertStatus(403);
 
-        // Cannot export reports
-        $exportResponse = $this->actingAs($user, 'sanctum')->get('/api/payrolls/export?format=xlsx');
+        // Employee cannot export reports
+        $employee = User::factory()->create(['role' => 'karyawan']);
+        $exportResponse = $this->actingAs($employee, 'sanctum')->get('/api/payrolls/export?format=xlsx');
         $exportResponse->assertStatus(403);
     }
 
@@ -745,9 +746,22 @@ class PayrollHubApiTest extends TestCase
             'company' => 'rbs',
         ]);
 
-        $responseAdmin = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/work-reports');
+        $responseAdmin = $this->actingAs($admin, 'sanctum')->getJson('/api/admin/work-reports?per_page=10');
         $responseAdmin->assertStatus(200)
-            ->assertJsonPath('status', 'success');
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('meta.per_page', 10)
+            ->assertJsonStructure([
+                'status',
+                'data',
+                'meta' => [
+                    'current_page',
+                    'last_page',
+                    'per_page',
+                    'total',
+                    'from',
+                    'to',
+                ],
+            ]);
     }
 
     public function test_role_user_can_submit_feedback_and_admin_can_review_it(): void

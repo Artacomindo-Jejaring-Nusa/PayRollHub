@@ -1842,7 +1842,16 @@ export const AdminAttendancePage: React.FC = () => {
                               {row.check_in_distance_meters !== null ? `${row.check_in_distance_meters} m` : '-'}
                             </td>
                             <td className="py-3 px-3 font-mono font-medium">
-                              {row.check_out_time ? row.check_out_time.substring(0, 5) : '-'}
+                              {row.check_out_time ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <span>{row.check_out_time.substring(0, 5)}</span>
+                                  {(row.shift?.cross_day || (row.check_in_time && row.check_out_time < row.check_in_time)) && (
+                                    <span className="text-[9px] font-sans font-bold px-1 py-0.5 rounded bg-purple-100 text-purple-700" title="Pulang di hari berikutnya (+1 hari)">
+                                      +1h
+                                    </span>
+                                  )}
+                                </span>
+                              ) : '-'}
                             </td>
                             <td className="py-3 px-3 font-mono text-[11px] font-semibold text-text-primary">
                               {row.work_duration_formatted || '-'}

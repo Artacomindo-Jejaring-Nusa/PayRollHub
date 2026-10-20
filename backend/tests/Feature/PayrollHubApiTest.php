@@ -634,10 +634,17 @@ class PayrollHubApiTest extends TestCase
         $this->assertEquals('1234567890', $employeeUser->bank_account);
         $this->assertEquals('Jl. Salemba Raya No. 10', $employeeUser->address);
 
+        // NIK can be updated by employee:
+        $this->assertEquals('9999999999999999', $employeeUser->nik);
+
         // HRD locked fields UNCHANGED:
         $this->assertEquals('Febri Hidayat', $employeeUser->name);
-        $this->assertEquals('3171012304910001', $employeeUser->nik);
         $this->assertEquals('Salemba (Pusat)', $employeeUser->school_unit);
+
+        // Verify GET profile reflects updated NIK on refresh
+        $getProfile = $this->actingAs($employeeUser, 'sanctum')->getJson('/api/employee/profile');
+        $getProfile->assertStatus(200)
+            ->assertJsonPath('data.user.nik', '9999999999999999');
     }
 
     public function test_cross_company_login_is_blocked_for_normal_users_but_allowed_for_super_admin(): void

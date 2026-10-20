@@ -81,7 +81,15 @@ export const EmployeeProfilePage: React.FC = () => {
       });
 
       setUser(updatedUser);
-      setProfileData((prev) => prev ? { ...prev, user: updatedUser } : null);
+      setProfileData((prev) => (prev ? { ...prev, user: updatedUser } : null));
+      setNik(updatedUser.nik || '');
+      setPhone(updatedUser.phone || '');
+      setEmail(updatedUser.email || '');
+      setBirthDate(updatedUser.birth_date || '');
+      setGender(updatedUser.gender || '');
+      setBankName(updatedUser.bank_name || '');
+      setBankAccount(updatedUser.bank_account || '');
+      setAddress(updatedUser.address || '');
       setSuccessMessage('Data profil & NIK Anda berhasil disimpan.');
       setCurrentPassword('');
       setNewPassword('');

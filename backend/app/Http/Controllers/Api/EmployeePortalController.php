@@ -225,11 +225,9 @@ class EmployeePortalController extends Controller
             $user->password = Hash::make($validated['new_password']);
         }
 
-        if (empty($user->nik) && array_key_exists('nik', $validated)) {
+        if (array_key_exists('nik', $validated)) {
             $cleanedNik = trim((string) $validated['nik']);
-            if ($cleanedNik !== '') {
-                $user->nik = $cleanedNik;
-            }
+            $user->nik = $cleanedNik !== '' ? $cleanedNik : null;
         }
 
         if (array_key_exists('phone', $validated)) {

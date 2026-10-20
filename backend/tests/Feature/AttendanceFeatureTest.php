@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Attendance;
 use App\Models\AttendanceLocation;
 use App\Models\AttendanceSetting;
+use App\Models\Shift;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -750,6 +751,146 @@ class AttendanceFeatureTest extends TestCase
             'check_in_time' => '00:30:00',
             'check_out_time' => '07:05:00',
         ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_24_hour_shift_target_work_hours_not_met_at_8_hours(): void
+    {
+        $shift24 = Shift::create([
+            'company' => 'rimamandiri',
+            'name' => 'Shift 24 Jam',
+            'code' => '24-JAM',
+            'start_time' => '09:00:00',
+            'end_time' => '08:59:00',
+            'work_hours' => 24,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rimamandiri',
+            'shift_id' => $shift24->id,
+        ]);
+
+        // 1. Check in at 09:00
+        Carbon::setTestNow(Carbon::parse('2026-10-20 09:00:00', 'Asia/Jakarta'));
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Mulai shift 24 jam',
+        ]);
+        $checkInRes->assertStatus(200);
+
+        // 2. Check out after 8 hours at 17:00
+        Carbon::setTestNow(Carbon::parse('2026-10-20 17:00:00', 'Asia/Jakarta'));
+        $checkOutRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', [
+            'notes' => 'Pulang setelah 8 jam',
+        ]);
+        $checkOutRes->assertStatus(200)
+            ->assertJsonPath('work_duration.minutes', 480)
+            ->assertJsonPath('work_duration.target_hours', 24)
+            ->assertJsonPath('work_duration.target_minutes', 1440)
+            ->assertJsonPath('work_duration.is_target_met', false)
+            ->assertJsonPath('work_duration.is_eight_hours_met', false);
+
+        $att = Attendance::where('user_id', $employee->id)->latest('id')->first();
+        $this->assertFalse($att->is_eight_hours_met);
+
+        // 3. If worked full 24 hours (until next morning 09:00)
+        $att->update(['check_out_time' => null]);
+        Carbon::setTestNow(Carbon::parse('2026-10-21 09:00:00', 'Asia/Jakarta'));
+        $checkOut24Res = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', [
+            'notes' => 'Pulang setelah 24 jam',
+        ]);
+        $checkOut24Res->assertStatus(200)
+            ->assertJsonPath('work_duration.target_hours', 24)
+            ->assertJsonPath('work_duration.is_target_met', true)
+            ->assertJsonPath('work_duration.is_eight_hours_met', true);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_24_hour_shift_early_arrival_is_on_time_not_late(): void
+    {
+        $shift24 = Shift::create([
+            'company' => 'rimamandiri',
+            'name' => 'Shift 24 Jam Guard',
+            'code' => '24-GUARD',
+            'start_time' => '09:00:00',
+            'end_time' => '08:59:00',
+            'late_tolerance_minutes' => 15,
+            'work_hours' => 24,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rimamandiri',
+            'shift_id' => $shift24->id,
+        ]);
+
+        // Employee arrives 10 minutes early at 08:50
+        Carbon::setTestNow(Carbon::parse('2026-10-20 08:50:00', 'Asia/Jakarta'));
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Datang lebih awal 10 menit',
+        ]);
+
+        $checkInRes->assertStatus(200);
+
+        $attendance = Attendance::where('user_id', $employee->id)->where('date', '2026-10-20')->first();
+        $this->assertNotNull($attendance);
+        $this->assertEquals('on_time', $attendance->check_in_status);
+        $this->assertEquals('present', $attendance->status);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_24_hour_shift_checkout_slightly_past_24_hours_duration(): void
+    {
+        $shift24 = Shift::create([
+            'company' => 'rimamandiri',
+            'name' => 'Shift 24 Jam Guard 2',
+            'code' => '24-GUARD-2',
+            'start_time' => '09:00:00',
+            'end_time' => '08:59:00',
+            'late_tolerance_minutes' => 15,
+            'work_hours' => 24,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rimamandiri',
+            'shift_id' => $shift24->id,
+        ]);
+
+        // 1. Check in at 09:00 on Day 1
+        Carbon::setTestNow(Carbon::parse('2026-10-20 09:00:00', 'Asia/Jakarta'));
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Mulai shift 24 jam',
+        ]);
+        $checkInRes->assertStatus(200);
+
+        // 2. Check out next day at 09:05 (24 hours and 5 minutes = 1445 minutes)
+        Carbon::setTestNow(Carbon::parse('2026-10-21 09:05:00', 'Asia/Jakarta'));
+        $checkOutRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', [
+            'notes' => 'Pulang setelah 24 jam 5 menit',
+        ]);
+
+        $checkOutRes->assertStatus(200)
+            ->assertJsonPath('work_duration.minutes', 1445)
+            ->assertJsonPath('work_duration.target_hours', 24)
+            ->assertJsonPath('work_duration.is_target_met', true)
+            ->assertJsonPath('work_duration.is_eight_hours_met', true);
+
+        $attendance = Attendance::where('user_id', $employee->id)->where('date', '2026-10-20')->first();
+        $this->assertEquals(1445, $attendance->work_duration_minutes);
+        $this->assertTrue($attendance->is_eight_hours_met);
 
         Carbon::setTestNow();
     }

@@ -6,6 +6,7 @@ import { PayrollPaginationMeta } from '../../../types/payroll';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { getStorageUrl } from '../../../lib/utils';
+import { useTenantTheme } from '../../../lib/theme';
 import {
   ClipboardList,
   Search,
@@ -112,6 +113,9 @@ function getReportActivities(report: WorkReport): ActivitySlot[] {
 }
 
 export const AdminWorkReportsPage: React.FC = () => {
+  const { tenant, tenantId } = useTenantTheme();
+  const isRima = tenantId === 'rimamandiri';
+
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -270,10 +274,12 @@ export const AdminWorkReportsPage: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
-            Laporan Kerja Karyawan
+            {isRima ? 'Laporan Kegiatan Karyawan' : 'Laporan Kerja Karyawan'}
           </h1>
           <p className="font-body-default text-body-default text-text-muted mt-1">
-            Kelola rekap 4 aktivitas harian, evaluasi bukti foto kerja, dan ekspor data laporan
+            {isRima
+              ? 'Kelola rekap 4 aktivitas kegiatan harian unit sekolah, evaluasi bukti foto kegiatan, dan ekspor data laporan'
+              : 'Kelola rekap 4 aktivitas harian, evaluasi bukti foto kerja, dan ekspor data laporan'}
           </p>
         </div>
 

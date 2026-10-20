@@ -342,11 +342,12 @@ class AdminAttendanceController extends Controller
             });
         }
 
-        $users = $usersQuery->orderBy('name', 'asc')->get();
+        $users = $usersQuery->with('shift')->orderBy('name', 'asc')->get();
         $userIds = $users->pluck('id');
 
-        // Tarik data absensi di periode SP yang dipilih
-        $attendances = Attendance::whereIn('user_id', $userIds)
+        // Tarik data absensi di periode SP yang dipilih (eager load shift untuk hindari N+1 query)
+        $attendances = Attendance::with(['shift', 'user.shift'])
+            ->whereIn('user_id', $userIds)
             ->whereBetween('date', $spRange)
             ->get()
             ->groupBy('user_id');
@@ -368,7 +369,7 @@ class AdminAttendanceController extends Controller
                 $dur = $log->work_duration_minutes;
                 if ($dur !== null) {
                     $totalWorkMinutes += $dur;
-                    if ($dur >= 480) {
+                    if ($log->is_eight_hours_met) {
                         $eightHoursMetCount++;
                     }
                 }
@@ -847,10 +848,11 @@ class AdminAttendanceController extends Controller
                 });
             }
 
-            $users = $usersQuery->orderBy('name', 'asc')->get();
+            $users = $usersQuery->with('shift')->orderBy('name', 'asc')->get();
             $userIds = $users->pluck('id');
 
-            $attendances = Attendance::whereIn('user_id', $userIds)
+            $attendances = Attendance::with(['shift', 'user.shift'])
+                ->whereIn('user_id', $userIds)
                 ->whereBetween('date', $range)
                 ->get()
                 ->groupBy('user_id');
@@ -880,7 +882,7 @@ class AdminAttendanceController extends Controller
                     $dur = $log->work_duration_minutes;
                     if ($dur !== null) {
                         $totalWorkMinutes += $dur;
-                        if ($dur >= 480) {
+                        if ($log->is_eight_hours_met) {
                             $eightHoursCount++;
                         }
                     }
@@ -938,7 +940,7 @@ class AdminAttendanceController extends Controller
                         'Terlambat',
                         'Perjalanan Dinas',
                         'Libur / Off',
-                        'Memenuhi 8 Jam Kerja (Hari)',
+                        'Memenuhi Target Shift (Hari)',
                         'Total Durasi Kerja',
                     ]);
 
@@ -983,7 +985,7 @@ class AdminAttendanceController extends Controller
                 'Terlambat',
                 'Perjalanan Dinas',
                 'Libur / Off',
-                'Memenuhi 8 Jam Kerja (Hari)',
+                'Memenuhi Target Shift (Hari)',
                 'Total Durasi Kerja',
             ];
             $sheet->fromArray([$headings], null, 'A1');
@@ -1085,7 +1087,7 @@ class AdminAttendanceController extends Controller
         // =========================================================================
         // MODE 2: DETAIL LOG ABSENSI
         // =========================================================================
-        $query = Attendance::with(['user', 'location']);
+        $query = Attendance::with(['user.shift', 'location', 'shift']);
 
         if ($targetCompany) {
             $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
@@ -1180,7 +1182,7 @@ class AdminAttendanceController extends Controller
                     'Jam Pulang',
                     'Jarak Pulang (Meter)',
                     'Durasi Kerja',
-                    'Target 8 Jam',
+                    'Target Jam Kerja',
                     'Status Kehadiran',
                     'Foto Bukti',
                     'Catatan',
@@ -1200,9 +1202,13 @@ class AdminAttendanceController extends Controller
                             ? 'Dinas Luar'
                             : ($row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status))));
 
-                    $eightHoursText = $row->is_eight_hours_met === true
-                        ? 'Ya (>= 8 Jam)'
-                        : ($row->is_eight_hours_met === false ? 'Tidak (< 8 Jam)' : '-');
+                    $targetHours = ($row->shift && $row->shift->work_hours > 0)
+                        ? (float) $row->shift->work_hours
+                        : ($row->user && $row->user->shift ? (float) $row->user->shift->work_hours : 8.0);
+                    $targetHoursStr = (floor($targetHours) == $targetHours) ? (int) $targetHours : $targetHours;
+                    $targetText = $row->is_eight_hours_met === true
+                        ? "Terpenuhi ({$targetHoursStr} Jam)"
+                        : ($row->is_eight_hours_met === false ? "Kurang (< {$targetHoursStr} Jam)" : '-');
 
                     fputcsv($handle, [
                         $no++,
@@ -1220,7 +1226,7 @@ class AdminAttendanceController extends Controller
                         $row->check_out_time ? substr($row->check_out_time, 0, 5) : '-',
                         $row->check_out_distance_meters !== null ? $row->check_out_distance_meters . ' m' : '-',
                         $row->work_duration_formatted ?? '-',
-                        $eightHoursText,
+                        $targetText,
                         $statusKehadiran,
                         $row->photo_full_url ?: ($row->photo_url ?: '-'),
                         $row->notes ?? '-',
@@ -1252,7 +1258,7 @@ class AdminAttendanceController extends Controller
             'Jam Pulang',
             'Jarak Pulang (Meter)',
             'Durasi Kerja',
-            'Target 8 Jam',
+            'Target Jam Kerja',
             'Status Kehadiran',
             'Foto Bukti',
             'Catatan',
@@ -1274,9 +1280,13 @@ class AdminAttendanceController extends Controller
                     ? 'Dinas Luar'
                     : ($row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status))));
 
-            $eightHoursText = $row->is_eight_hours_met === true
-                ? 'Ya (>= 8 Jam)'
-                : ($row->is_eight_hours_met === false ? 'Tidak (< 8 Jam)' : '-');
+            $targetHours = ($row->shift && $row->shift->work_hours > 0)
+                ? (float) $row->shift->work_hours
+                : ($row->user && $row->user->shift ? (float) $row->user->shift->work_hours : 8.0);
+            $targetHoursStr = (floor($targetHours) == $targetHours) ? (int) $targetHours : $targetHours;
+            $targetText = $row->is_eight_hours_met === true
+                ? "Terpenuhi ({$targetHoursStr} Jam)"
+                : ($row->is_eight_hours_met === false ? "Kurang (< {$targetHoursStr} Jam)" : '-');
 
             $excelRows[] = [
                 $no++,
@@ -1294,7 +1304,7 @@ class AdminAttendanceController extends Controller
                 $row->check_out_time ? substr($row->check_out_time, 0, 5) : '-',
                 $row->check_out_distance_meters !== null ? $row->check_out_distance_meters . ' m' : '-',
                 $row->work_duration_formatted ?? '-',
-                $eightHoursText,
+                $targetText,
                 $statusKehadiran,
                 $row->photo_full_url ?: ($row->photo_url ?: '-'),
                 $row->notes ?? '-',

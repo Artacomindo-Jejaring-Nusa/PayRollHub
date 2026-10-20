@@ -150,7 +150,7 @@ export const LoginPage: React.FC = () => {
               <div>
                 {/* Header Info */}
                 <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                     <span
                       className={`px-2 py-0.5 rounded text-caption-medium font-caption-medium ${
                         isRima
@@ -160,6 +160,21 @@ export const LoginPage: React.FC = () => {
                     >
                       {tenant.shortName} • {tenant.companyLegalName}
                     </span>
+
+                    {/* Quick Switcher for Localhost / Development */}
+                    {!isLockedDomain() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextTenant = isRima ? 'rbs' : 'rimamandiri';
+                          switchTenant(nextTenant);
+                          setErrorMessage(null);
+                        }}
+                        className="text-xs px-2.5 py-1 rounded-md font-medium text-primary hover:bg-primary/10 border border-primary/30 transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        ⇄ Beralih ke {isRima ? 'Portal RBS' : 'Portal Riama'}
+                      </button>
+                    )}
                   </div>
                   <h1 className="font-headline-page text-headline-page text-text-primary tracking-tight">
                     Masuk ke Akun Anda
@@ -174,7 +189,22 @@ export const LoginPage: React.FC = () => {
                 {errorMessage && (
                   <div className="mb-5 p-3.5 rounded-lg bg-red-50 border border-red-200 text-status-danger-text text-[13px] flex items-start gap-2.5 animate-in fade-in">
                     <BadgeAlert className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 font-medium">{errorMessage}</div>
+                    <div className="flex-1 font-medium">
+                      <div>{errorMessage}</div>
+                      {!isLockedDomain() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const targetTenant = errorMessage.toLowerCase().includes('riama') ? 'rimamandiri' : 'rbs';
+                            switchTenant(targetTenant);
+                            setErrorMessage(null);
+                          }}
+                          className="mt-2 text-xs font-semibold underline hover:no-underline text-blue-700 block cursor-pointer"
+                        >
+                          → Klik di sini untuk langsung beralih ke Portal {errorMessage.toLowerCase().includes('riama') ? 'Riama Mandiri' : 'RBS'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 

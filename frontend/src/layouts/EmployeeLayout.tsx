@@ -40,13 +40,15 @@ export const EmployeeLayout: React.FC = () => {
     isHold?: boolean;
   }
 
+  const isRima = tenant.id === 'rimamandiri';
+
   const navItems: EmployeeNavItem[] = [
     { label: 'Beranda', mobileLabel: 'Beranda', path: '/employee/dashboard', icon: Home },
     { label: 'Absensi', mobileLabel: 'Absensi', path: '/employee/attendance', icon: Clock },
     { label: 'Slip Gaji', mobileLabel: 'Slip', path: '/employee/payrolls', icon: FileText },
     {
-      label: 'Laporan Kerja',
-      mobileLabel: 'Laporan',
+      label: isRima ? 'Laporan Kegiatan' : 'Laporan Kerja',
+      mobileLabel: isRima ? 'Kegiatan' : 'Laporan',
       path: '/employee/reports',
       icon: ClipboardList,
     },

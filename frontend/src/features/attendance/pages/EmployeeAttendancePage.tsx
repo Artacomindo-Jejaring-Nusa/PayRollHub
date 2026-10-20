@@ -505,16 +505,29 @@ export const EmployeeAttendancePage: React.FC = () => {
     }
   };
 
-  // POINT 8: Kalkulasi Durasi Kerja Berjalan & Jam Kerja 8 Jam
+  // POINT 8: Kalkulasi Durasi Kerja Berjalan & Target Jam Kerja Shift
+  const assignedShift = todayData?.assigned_shift;
+  const targetWorkHours = (assignedShift && assignedShift.work_hours > 0) ? assignedShift.work_hours : 8;
+  const targetWorkMinutes = Math.round(targetWorkHours * 60);
+
   const elapsedWorkMinutes = useMemo(() => {
     if (!todayData?.attendance?.check_in_time) return null;
     try {
-      const parts = todayData.attendance.check_in_time.split(':');
+      const inDate = todayData.attendance.date || todayData.today || new Date().toISOString().slice(0, 10);
+      const inTime = todayData.attendance.check_in_time.substring(0, 8);
+      const checkInDateTime = new Date(`${inDate}T${inTime}`);
+
+      const now = new Date();
+      if (!isNaN(checkInDateTime.getTime())) {
+        const diffMs = now.getTime() - checkInDateTime.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        return Math.max(0, diffMins);
+      }
+
+      const parts = inTime.split(':');
       if (parts.length < 2) return null;
       const inHours = parseInt(parts[0], 10);
       const inMinutes = parseInt(parts[1], 10);
-
-      const now = new Date();
       const currentHours = now.getHours();
       const currentMinutes = now.getMinutes();
 
@@ -524,9 +537,9 @@ export const EmployeeAttendancePage: React.FC = () => {
     } catch {
       return null;
     }
-  }, [todayData?.attendance?.check_in_time, currentTime]);
+  }, [todayData?.attendance?.check_in_time, todayData?.attendance?.date, todayData?.today, currentTime]);
 
-  const isEightHoursMet = elapsedWorkMinutes !== null && elapsedWorkMinutes >= 480;
+  const isEightHoursMet = elapsedWorkMinutes !== null && elapsedWorkMinutes >= targetWorkMinutes;
 
   const elapsedFormatted = useMemo(() => {
     if (elapsedWorkMinutes === null) return '';
@@ -536,9 +549,9 @@ export const EmployeeAttendancePage: React.FC = () => {
   }, [elapsedWorkMinutes]);
 
   const remainingToEightHours = useMemo(() => {
-    if (elapsedWorkMinutes === null || elapsedWorkMinutes >= 480) return 0;
-    return 480 - elapsedWorkMinutes;
-  }, [elapsedWorkMinutes]);
+    if (elapsedWorkMinutes === null || elapsedWorkMinutes >= targetWorkMinutes) return 0;
+    return targetWorkMinutes - elapsedWorkMinutes;
+  }, [elapsedWorkMinutes, targetWorkMinutes]);
 
   const remainingFormatted = useMemo(() => {
     if (remainingToEightHours <= 0) return '';
@@ -547,7 +560,7 @@ export const EmployeeAttendancePage: React.FC = () => {
     return h > 0 ? `${h} jam ${m} menit` : `${m} menit`;
   }, [remainingToEightHours]);
 
-  // POINT 8: Absensi Pulang Di-Los (Bebas Radius, Terpenting 8 Jam Kerja)
+  // POINT 8: Absensi Pulang Di-Los (Bebas Radius, Terpenting Memenuhi Target Jam Kerja Shift)
   const handleCheckOutClick = () => {
     if (hasCheckedOut) {
       setMessage({
@@ -563,8 +576,8 @@ export const EmployeeAttendancePage: React.FC = () => {
       });
       return;
     }
-    // Jika durasi kerja < 8 jam (480 menit), tampilkan konfirmasi
-    if (elapsedWorkMinutes !== null && elapsedWorkMinutes < 480) {
+    // Jika durasi kerja < target jam kerja shift, tampilkan konfirmasi
+    if (elapsedWorkMinutes !== null && elapsedWorkMinutes < targetWorkMinutes) {
       setEarlyCheckOutModalOpen(true);
     } else {
       executeCheckOut();
@@ -1086,7 +1099,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                 )}
               </div>
 
-              {/* POINT 8: Live Duration & 8-Hour Tracker */}
+              {/* POINT 8: Live Duration & Shift Target Tracker */}
               {hasRealWorkCheckedIn && !hasCheckedOut && (
                 <div
                   className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${
@@ -1107,8 +1120,8 @@ export const EmployeeAttendancePage: React.FC = () => {
                       </div>
                       <div className="text-[11px] opacity-90 mt-0.5">
                         {isEightHoursMet
-                          ? '✓ Standar 8 jam kerja sudah terpenuhi. Anda dapat melakukan absen pulang.'
-                          : `Kurang ${remainingFormatted} lagi untuk mencapai standar 8 jam kerja.`}
+                          ? `✓ Target ${targetWorkHours} jam kerja shift sudah terpenuhi. Anda dapat melakukan absen pulang.`
+                          : `Kurang ${remainingFormatted} lagi untuk mencapai target ${targetWorkHours} jam kerja shift.`}
                       </div>
                     </div>
                   </div>
@@ -1119,7 +1132,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                         : 'bg-amber-200/80 text-amber-900'
                     }`}
                   >
-                    {isEightHoursMet ? '8 Jam Terpenuhi' : '< 8 Jam'}
+                    {isEightHoursMet ? `${targetWorkHours} Jam Terpenuhi` : `< ${targetWorkHours} Jam`}
                   </div>
                 </div>
               )}
@@ -1142,8 +1155,8 @@ export const EmployeeAttendancePage: React.FC = () => {
                     }`}
                   >
                     {todayData.attendance.is_eight_hours_met
-                      ? '✓ Memenuhi 8 Jam'
-                      : 'Kurang dari 8 Jam'}
+                      ? `✓ Memenuhi Target (${targetWorkHours} Jam)`
+                      : `Kurang dari Target (${targetWorkHours} Jam)`}
                   </span>
                 </div>
               )}
@@ -2038,7 +2051,7 @@ export const EmployeeAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* POINT 8: Modal Konfirmasi Absen Pulang Sebelum 8 Jam Kerja */}
+      {/* POINT 8: Modal Konfirmasi Absen Pulang Sebelum Target Jam Kerja Shift */}
       {earlyCheckOutModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
           <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -2050,13 +2063,13 @@ export const EmployeeAttendancePage: React.FC = () => {
                 <h3 className="text-base font-bold text-text-primary">Konfirmasi Absen Pulang</h3>
                 <p className="text-xs text-text-muted mt-1 leading-relaxed">
                   Durasi jam kerja Anda hari ini baru berjalan{' '}
-                  <strong className="text-amber-700 font-semibold">{elapsedFormatted}</strong> (belum mencapai standar kerja 8 jam).
+                  <strong className="text-amber-700 font-semibold">{elapsedFormatted}</strong> (belum mencapai target kerja shift {targetWorkHours} jam).
                 </p>
               </div>
             </div>
 
             <div className="p-3 bg-amber-50/90 rounded-xl border border-amber-200 text-xs text-amber-900 leading-relaxed">
-              Masih tersisa sekitar <strong>{remainingFormatted}</strong> untuk mencapai standar 8 jam kerja (480 menit). Absen pulang di-los (bebas lokasi), namun durasi kerja tetap tercatat di laporan. Tetap ingin absen pulang sekarang?
+              Masih tersisa sekitar <strong>{remainingFormatted}</strong> untuk mencapai target {targetWorkHours} jam kerja ({targetWorkMinutes} menit) sesuai shift ({assignedShift?.name || 'Reguler'}). Absen pulang di-los (bebas lokasi), namun durasi kerja tetap tercatat di laporan. Tetap ingin absen pulang sekarang?
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">

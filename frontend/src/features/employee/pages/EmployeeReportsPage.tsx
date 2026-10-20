@@ -7,6 +7,7 @@ import { Card } from '../../../components/ui/Card';
 import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { getStorageUrl } from '../../../lib/utils';
+import { useTenantTheme } from '../../../lib/theme';
 import {
   ClipboardList,
   Plus,
@@ -110,6 +111,9 @@ function getReportActivities(report: WorkReport): ActivitySlot[] {
 }
 
 export const EmployeeReportsPage: React.FC = () => {
+  const { tenant, tenantId } = useTenantTheme();
+  const isRima = tenantId === 'rimamandiri';
+
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -283,7 +287,7 @@ export const EmployeeReportsPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border-subtle">
         <div>
           <h1 className="font-headline-page text-[22px] sm:text-[24px] font-bold text-text-primary tracking-tight">
-            Laporan Kerja Harian
+            {isRima ? 'Laporan Kegiatan Harian' : 'Laporan Kerja Harian'}
           </h1>
           <p className="font-body-default text-[13px] text-text-muted mt-1">
             Rekap 4 tugas harian & foto kegiatan: Absen Masuk, Kegiatan 1, Kegiatan 2, dan Kegiatan Lain

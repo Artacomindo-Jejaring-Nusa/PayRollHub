@@ -129,14 +129,33 @@ class EmployeeAttendanceController extends Controller
         if ($unclosedYesterday && in_array($attendanceType, ['masuk', 'dinas_luar'])) {
             $shift = $unclosedYesterday->shift ?: $user->shift;
             $isCrossDay = $shift && ($shift->cross_day || $shift->start_time > $shift->end_time);
-            $checkInDateTime = Carbon::parse($yesterday . ' ' . $unclosedYesterday->check_in_time);
-            $hoursSinceCheckIn = $now->diffInHours($checkInDateTime);
+            $shiftWorkHours = ($shift && $shift->work_hours > 0) ? (float) $shift->work_hours : 8.0;
+            $maxWindowHours = max(18.0, $shiftWorkHours + 6.0);
 
-            // Jika dalam rentang kerja shift malam kemarin (masuk malam kemarin dan sekarang masih pagi sebelum jam 14:00):
-            if (($isCrossDay || $unclosedYesterday->check_in_time >= '17:00:00') && $hoursSinceCheckIn <= 18 && $now->format('H:i:s') < '14:00:00') {
+            $checkInDateTime = $unclosedYesterday->created_at
+                ? $unclosedYesterday->created_at->copy()
+                : Carbon::parse($yesterday . ' ' . $unclosedYesterday->check_in_time);
+
+            if ($isCrossDay && $unclosedYesterday->check_in_time < '12:00:00' && $checkInDateTime->toDateString() === $yesterday) {
+                $checkInDateTime->addDay();
+            }
+
+            $hoursSinceCheckIn = abs($now->diffInHours($checkInDateTime));
+
+            $isSessionActive = false;
+            if ($shiftWorkHours >= 20.0) {
+                $isSessionActive = ($hoursSinceCheckIn <= $maxWindowHours);
+            } else {
+                $isSessionActive = ($isCrossDay || $unclosedYesterday->check_in_time >= '17:00:00')
+                    && $hoursSinceCheckIn <= $maxWindowHours
+                    && $now->format('H:i:s') < '16:00:00';
+            }
+
+            if ($isSessionActive) {
+                $shiftLabel = $shift ? $shift->name : 'shift sebelumnya';
                 return response()->json([
                     'status' => 'error',
-                    'message' => "Anda masih memiliki sesi shift malam yang aktif dari kemarin (Masuk pada pukul {$unclosedYesterday->check_in_time}). Silakan lakukan Absen Pulang (Check Out) terlebih dahulu sebelum melakukan absensi masuk baru.",
+                    'message' => "Anda masih memiliki sesi {$shiftLabel} yang aktif dari kemarin (Masuk pada pukul {$unclosedYesterday->check_in_time}). Silakan lakukan Absen Pulang (Check Out) terlebih dahulu sebelum melakukan absensi masuk baru.",
                 ], 422);
             }
         }
@@ -410,7 +429,7 @@ class EmployeeAttendanceController extends Controller
 
         $currentCheckInTime = Carbon::createFromTimeString($currentTime);
         $isCrossDay = $userShift && ($userShift->cross_day || $userShift->start_time > $userShift->end_time);
-        if ($isCrossDay && $currentCheckInTime->lessThan($workStart) && (int) $currentCheckInTime->format('H') < 12) {
+        if ($isCrossDay && (int) $workStart->format('H') >= 12 && $currentCheckInTime->lessThan($workStart) && (int) $currentCheckInTime->format('H') < 12) {
             $currentCheckInTime->addDay();
         }
 
@@ -548,27 +567,6 @@ class EmployeeAttendanceController extends Controller
             }
         }
 
-        // Hitung durasi jam kerja dari jam masuk ke jam pulang
-        $durationFormatted = null;
-        $isEightHours = false;
-        $durationMinutes = 0;
-
-        if ($attendance->check_in_time) {
-            try {
-                $checkIn = Carbon::createFromTimeString($attendance->check_in_time);
-                $checkOut = Carbon::createFromTimeString($currentTime);
-                if ($checkOut->lessThan($checkIn)) {
-                    $checkOut->addDay();
-                }
-                $durationMinutes = (int) $checkIn->diffInMinutes($checkOut);
-                $hours = intdiv($durationMinutes, 60);
-                $mins = $durationMinutes % 60;
-                $durationFormatted = "{$hours} jam {$mins} menit";
-                $isEightHours = $durationMinutes >= 480;
-            } catch (\Throwable) {
-            }
-        }
-
         $notesUpdate = $attendance->notes;
         if (!empty($validated['notes'])) {
             $notesUpdate = $attendance->notes ? $attendance->notes . ' | ' . $validated['notes'] : $validated['notes'];
@@ -582,20 +580,34 @@ class EmployeeAttendanceController extends Controller
             'notes' => $notesUpdate,
         ]);
 
-        $fresh = $attendance->fresh();
+        $fresh = $attendance->fresh(['shift', 'location', 'user']);
+
+        $shift = $fresh->shift ?: ($user->shift ?: null);
+        $targetHours = ($shift && $shift->work_hours > 0) ? (float) $shift->work_hours : 8.0;
+        $targetMinutes = (int) round($targetHours * 60);
+
+        $durationMinutes = $fresh->work_duration_minutes ?? 0;
+        $hours = intdiv($durationMinutes, 60);
+        $mins = $durationMinutes % 60;
+        $durationFormatted = "{$hours} jam {$mins} menit";
+        $isTargetMet = $fresh->is_eight_hours_met ?? false;
+
         $durationText = $durationFormatted ? " Durasi kerja: {$durationFormatted}." : "";
-        $eightHoursText = $isEightHours ? " (✓ 8 Jam Kerja Terpenuhi)" : " (Kurang dari 8 Jam Kerja)";
+        $targetText = $isTargetMet ? " (✓ Target {$targetHours} Jam Kerja Shift Terpenuhi)" : " (Kurang dari Target {$targetHours} Jam Kerja Shift)";
 
         return response()->json([
             'status' => 'success',
-            'message' => "Absen pulang berhasil tercatat pada {$currentTime} {$tzData['timezone']}.{$durationText}{$eightHoursText} Selamat beristirahat!",
+            'message' => "Absen pulang berhasil tercatat pada {$currentTime} {$tzData['timezone']}.{$durationText}{$targetText} Selamat beristirahat!",
             'data' => $fresh,
             'timezone' => $tzData['timezone'],
             'timezone_label' => $tzData['timezone_label'],
             'work_duration' => [
                 'minutes' => $durationMinutes,
                 'formatted' => $durationFormatted,
-                'is_eight_hours_met' => $isEightHours,
+                'is_eight_hours_met' => $isTargetMet,
+                'is_target_met' => $isTargetMet,
+                'target_hours' => $targetHours,
+                'target_minutes' => $targetMinutes,
             ],
         ]);
     }
@@ -821,20 +833,36 @@ class EmployeeAttendanceController extends Controller
         if ($hasYesterdayCheckIn) {
             $shift = $yesterdayAttendance->shift ?: $user->shift;
             $isCrossDayShift = $shift && ($shift->cross_day || $shift->start_time > $shift->end_time);
+            $shiftWorkHours = ($shift && $shift->work_hours > 0) ? (float) $shift->work_hours : 8.0;
             $checkInTimeStr = $yesterdayAttendance->check_in_time;
             $isNightCheckIn = $checkInTimeStr >= '17:00:00';
 
             // KASUS A: Catatan kemarin BELUM checkout (masih terbuka / menunggu absen pulang)
             if (empty($yesterdayAttendance->check_out_time)) {
-                $checkInDateTime = Carbon::parse($yesterday . ' ' . $checkInTimeStr);
-                $hoursSinceCheckIn = $now->diffInHours($checkInDateTime);
+                $checkInDateTime = $yesterdayAttendance->created_at
+                    ? $yesterdayAttendance->created_at->copy()
+                    : Carbon::parse($yesterday . ' ' . $checkInTimeStr);
+
+                // Jika shift lintas hari dan check_in_time terjadi setelah tengah malam (misal masuk jam 00:30)
+                if ($isCrossDayShift && $checkInTimeStr < '12:00:00' && $checkInDateTime->toDateString() === $yesterday) {
+                    $checkInDateTime->addDay();
+                }
+
+                $hoursSinceCheckIn = abs($now->diffInHours($checkInDateTime));
 
                 // Sesi kemarin valid sebagai sesi aktif jika:
                 // 1) Merupakan shift lintas hari atau check-in malam kemarin (>= 17:00), DAN
-                // 2) Masih berada di jam pagi/siang (sebelum jam 15:00) dan belum lebih dari 18 jam sejak check-in.
-                $isWithinActiveWindow = ($isCrossDayShift || $isNightCheckIn)
-                    && $hoursSinceCheckIn <= 18
-                    && $now->format('H:i:s') < '15:00:00';
+                // 2) Masih berada dalam batas jam aktif kerja shift.
+                $maxHours = max(18.0, $shiftWorkHours + 6.0);
+
+                if ($shiftWorkHours >= 20.0) {
+                    // Shift 24 jam: berlaku sampai toleransi batas waktu shift (misal 30 jam sejak check-in)
+                    $isWithinActiveWindow = ($hoursSinceCheckIn <= $maxHours);
+                } else {
+                    $isWithinActiveWindow = ($isCrossDayShift || $isNightCheckIn)
+                        && $hoursSinceCheckIn <= $maxHours
+                        && $now->format('H:i:s') < '16:00:00';
+                }
 
                 if ($isWithinActiveWindow) {
                     // Jika hari ini belum ada check-in baru, utamakan sesi shift kemarin yang belum selesai!

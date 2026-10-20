@@ -26,6 +26,7 @@ import {
 export const EmployeeDashboardPage: React.FC = () => {
   const { user } = useAuthStore();
   const { tenant } = useTenantTheme();
+  const isRima = tenant.id === 'rimamandiri';
   const navigate = useNavigate();
 
   const [data, setData] = useState<EmployeeDashboardData | null>(null);
@@ -254,17 +255,17 @@ export const EmployeeDashboardPage: React.FC = () => {
           </div>
         </Card>
 
-        {/* KPI 4: Laporan Kerja */}
+        {/* KPI 4: Laporan Kerja / Laporan Kegiatan */}
         <Card
-          onClick={() => navigate('/work-reports')}
+          onClick={() => navigate('/employee/reports')}
           role="button"
           tabIndex={0}
-          title="Klik untuk mengelola laporan kerja"
+          title={isRima ? "Klik untuk mengelola laporan kegiatan" : "Klik untuk mengelola laporan kerja"}
           className="p-6 sm:p-7 flex flex-col justify-between border-border-subtle bg-surface-panel shadow-xs hover:border-primary/40 hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-[12.5px] font-medium text-text-muted group-hover:text-text-primary transition-colors">
-              Laporan Kerja Anda
+              {isRima ? 'Laporan Kegiatan Anda' : 'Laporan Kerja Anda'}
             </span>
             <div className="w-9 h-9 rounded-xl bg-surface-container text-text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
               <ClipboardList className="w-4.5 h-4.5" />

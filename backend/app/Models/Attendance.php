@@ -58,9 +58,39 @@ class Attendance extends Model
             return null;
         }
         try {
+            $shift = $this->shift ?: ($this->user ? $this->user->shift : null);
+            $is24HoursOrCrossDay = $shift && ($shift->cross_day || $shift->work_hours >= 20 || $shift->start_time > $shift->end_time);
+
+            $dateStr = $this->date ? \Carbon\Carbon::parse($this->date)->toDateString() : null;
+            if (!$dateStr && $this->created_at) {
+                $dateStr = $this->created_at->toDateString();
+            }
+
+            if ($dateStr) {
+                $in = \Carbon\Carbon::parse("{$dateStr} {$this->check_in_time}");
+                $out = \Carbon\Carbon::parse("{$dateStr} {$this->check_out_time}");
+
+                $updatedDate = $this->updated_at ? $this->updated_at->toDateString() : null;
+
+                if ($updatedDate && $updatedDate > $dateStr) {
+                    $out->addDay();
+                } elseif ($out->lessThan($in)) {
+                    $out->addDay();
+                } elseif ($is24HoursOrCrossDay && $out->equalTo($in)) {
+                    $out->addDay();
+                } elseif ($is24HoursOrCrossDay && (!$updatedDate || $updatedDate > $dateStr) && $in->diffInMinutes($out) <= 180) {
+                    $out->addDay();
+                }
+
+                return (int) $in->diffInMinutes($out);
+            }
+
             $in = \Carbon\Carbon::createFromTimeString($this->check_in_time);
             $out = \Carbon\Carbon::createFromTimeString($this->check_out_time);
+
             if ($out->lessThan($in)) {
+                $out->addDay();
+            } elseif ($is24HoursOrCrossDay && ($out->equalTo($in) || $in->diffInMinutes($out) <= 180)) {
                 $out->addDay();
             }
             return (int) $in->diffInMinutes($out);
@@ -86,7 +116,16 @@ class Attendance extends Model
         if ($minutes === null) {
             return null;
         }
-        return $minutes >= 480; // 8 jam kerja = 480 menit
+        $shift = $this->shift ?: ($this->user ? $this->user->shift : null);
+        $targetHours = ($shift && $shift->work_hours > 0) ? (float) $shift->work_hours : 8.0;
+        $targetMinutes = (int) round($targetHours * 60);
+
+        // Toleransi 1 menit untuk shift 24 jam dengan jadwal berakhir di menit 59 (misal 09:00 - 08:59 = 1439 menit)
+        if ($targetMinutes === 1440 && $minutes >= 1439) {
+            return true;
+        }
+
+        return $minutes >= $targetMinutes;
     }
 
     public function getPhotoFullUrlAttribute(): ?string

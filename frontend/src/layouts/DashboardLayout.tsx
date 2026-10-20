@@ -120,7 +120,7 @@ export const DashboardLayout: React.FC = () => {
       validationSubdomainOnly: true,
     },
     {
-      label: 'Laporan Kerja',
+      label: isRima ? 'Laporan Kegiatan' : 'Laporan Kerja',
       path: '/work-reports',
       icon: <ClipboardList className="w-4 h-4" />,
       adminOnly: true, // Khusus Admin & Super Admin (Role User disembunyikan)
@@ -379,7 +379,7 @@ export const DashboardLayout: React.FC = () => {
                   }`}
                 >
                   <ClipboardList className={`w-4 h-4 shrink-0 ${isItemActive('/work-reports') ? 'text-white' : 'text-text-muted'}`} />
-                  <span>Laporan Kerja</span>
+                  <span>{isRima ? 'Laporan Kegiatan' : 'Laporan Kerja'}</span>
                 </Link>
               )}
 

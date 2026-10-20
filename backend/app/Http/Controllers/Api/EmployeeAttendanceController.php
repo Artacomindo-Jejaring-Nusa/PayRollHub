@@ -763,19 +763,29 @@ class EmployeeAttendanceController extends Controller
             $cleanUserSchool = trim($user->school_unit);
             $cleanLower = strtolower($cleanUserSchool);
 
-            $loc = \App\Models\AttendanceLocation::where('is_active', true)
+            $allLocations = \App\Models\AttendanceLocation::where('is_active', true)
                 ->where(function ($q) use ($targetCompany) {
                     $q->where('tenant_id', $targetCompany)->orWhere('tenant_id', 'all');
                 })
-                ->get()
-                ->first(function ($l) use ($cleanLower) {
-                    $name = strtolower(trim($l->name));
-                    $code = strtolower(trim($l->code ?? ''));
-                    return $name === $cleanLower
-                        || $code === $cleanLower
-                        || ($code !== '' && str_contains($cleanLower, $code))
-                        || ($name !== '' && (str_contains($cleanLower, $name) || str_contains($name, $cleanLower)));
-                });
+                ->get();
+
+            // 1. Prioritaskan exact match (nama atau kode unit sama persis)
+            $loc = $allLocations->first(function ($l) use ($cleanLower) {
+                $name = strtolower(trim($l->name));
+                $code = strtolower(trim($l->code ?? ''));
+                return $name === $cleanLower || ($code !== '' && $code === $cleanLower);
+            });
+
+            // 2. Jika belum cocok, cari kecocokan sebagian dengan memprioritaskan nama lokasi terpanjang (terspesifik)
+            if (!$loc) {
+                $loc = $allLocations->sortByDesc(fn ($l) => strlen(trim($l->name)))
+                    ->first(function ($l) use ($cleanLower) {
+                        $name = strtolower(trim($l->name));
+                        $code = strtolower(trim($l->code ?? ''));
+                        return ($code !== '' && str_contains($cleanLower, $code))
+                            || ($name !== '' && (str_contains($cleanLower, $name) || str_contains($name, $cleanLower)));
+                    });
+            }
 
             if (!$loc) {
                 $loc = \App\Models\AttendanceLocation::create([

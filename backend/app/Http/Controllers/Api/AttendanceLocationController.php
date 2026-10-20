@@ -467,7 +467,7 @@ class AttendanceLocationController extends Controller
                 $updatedCount++;
             }
 
-            // Tautkan karyawan di sekolah tersebut ke titik lokasi ini
+            // Tautkan karyawan di sekolah tersebut ke titik lokasi ini (hanya yang belum memiliki penugasan lokasi)
             $affected = \App\Models\User::where(function ($q) use ($targetCompany) {
                     $q->where('company', $targetCompany);
                     if ($targetCompany === 'rbs') {
@@ -475,6 +475,7 @@ class AttendanceLocationController extends Controller
                     }
                 })
                 ->where('school_unit', $schoolName)
+                ->whereNull('attendance_location_id')
                 ->update(['attendance_location_id' => $existing->id]);
             $linkedEmployees += $affected;
         }
@@ -550,8 +551,12 @@ class AttendanceLocationController extends Controller
 
         // Pasang lokasi ke user_ids terpilih
         if (!empty($userIds)) {
+            $userUpdates = ['attendance_location_id' => $attendanceLocation->id];
+            if ($attendanceLocation->type === 'school' && !empty($attendanceLocation->name)) {
+                $userUpdates['school_unit'] = $attendanceLocation->name;
+            }
             \App\Models\User::whereIn('id', $userIds)
-                ->update(['attendance_location_id' => $attendanceLocation->id]);
+                ->update($userUpdates);
         }
 
         ActivityLog::record(

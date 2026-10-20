@@ -182,6 +182,27 @@ class UserController extends Controller
         }
 
         try {
+            // Jika school_unit diubah oleh Admin, sinkronkan attendance_location_id ke lokasi sekolah baru
+            if (array_key_exists('school_unit', $data) && $data['school_unit'] !== $user->school_unit) {
+                if (!empty($data['school_unit'])) {
+                    $newSchool = trim($data['school_unit']);
+                    $targetCompany = $user->company ?: 'rbs';
+                    $matchedLoc = \App\Models\AttendanceLocation::where('is_active', true)
+                        ->where(function ($q) use ($targetCompany) {
+                            $q->where('tenant_id', $targetCompany)->orWhere('tenant_id', 'all');
+                        })
+                        ->where(function ($q) use ($newSchool) {
+                            $q->where('name', $newSchool)->orWhere('code', $newSchool);
+                        })
+                        ->first();
+                    if ($matchedLoc) {
+                        $data['attendance_location_id'] = $matchedLoc->id;
+                    }
+                } else {
+                    $data['attendance_location_id'] = null;
+                }
+            }
+
             $user->update($data);
 
             \App\Models\ActivityLog::record(

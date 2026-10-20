@@ -28,7 +28,7 @@ class FirebaseNotificationService
         $path = storage_path('app/firebase/firebase_credentials.json');
 
         if (!file_exists($path)) {
-            Log::warning('[FCM] Firebase credentials file not found at: ' . $path);
+            // File kredensial Firebase opsional, jangan spam warning log di setiap request API
             return;
         }
 

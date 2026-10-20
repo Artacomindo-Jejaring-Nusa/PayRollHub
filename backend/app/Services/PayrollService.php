@@ -302,9 +302,13 @@ class PayrollService
             }
 
             if ($user) {
-                // Update unit sekolah dan informasi pendukung agar selalu sinkron dan terkoneksi
+                // Update informasi pendukung agar sinkron, TANPA menimpa data yang sudah diubah manual oleh Admin.
                 $updates = [];
-                if (!empty($schoolUnit) && $user->school_unit !== $schoolUnit) {
+                // PERBAIKAN BUG: Hanya set school_unit jika user BELUM punya school_unit (kosong).
+                // Jangan overwrite school_unit yang sudah ada, karena bisa jadi admin sudah
+                // memindahkan karyawan ke unit lain secara manual (misal SRT 6 Bogor → SRT 5 Bogor).
+                // Import ulang Excel tidak boleh me-revert perubahan manual admin.
+                if (!empty($schoolUnit) && empty($user->school_unit)) {
                     $updates['school_unit'] = $schoolUnit;
                 }
                 if (!empty($company) && $user->company !== $company) {

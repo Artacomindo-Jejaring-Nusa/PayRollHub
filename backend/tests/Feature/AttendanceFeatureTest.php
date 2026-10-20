@@ -894,4 +894,203 @@ class AttendanceFeatureTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    /**
+     * REGRESI BUG VP: Memastikan upload ulang data gaji/Excel tidak akan pernah
+     * me-revert penugasan lokasi atau unit sekolah karyawan yang sudah diubah manual oleh Admin.
+     */
+    public function test_payroll_reimport_does_not_revert_manually_assigned_employee_location(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'company' => 'rbs']);
+
+        $locSrt6 = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'SRT 6 Bogor',
+            'latitude' => -6.5950,
+            'longitude' => 106.8166,
+            'radius_meters' => 100,
+            'type' => 'school',
+            'is_active' => true,
+        ]);
+
+        $locSrt5 = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'SRT 5 Bogor',
+            'latitude' => -6.5910,
+            'longitude' => 106.8120,
+            'radius_meters' => 120,
+            'type' => 'school',
+            'is_active' => true,
+        ]);
+
+        // Karyawan awalnya di SRT 6 Bogor
+        $dean = User::factory()->create([
+            'name' => 'Dean Karyawan',
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'school_unit' => 'SRT 6 Bogor',
+            'attendance_location_id' => $locSrt6->id,
+        ]);
+
+        // 1. Admin memindahkan Dean ke SRT 5 Bogor via assign-employees
+        $assignRes = $this->actingAs($admin, 'sanctum')->postJson("/api/admin/attendance-locations/{$locSrt5->id}/assign-employees", [
+            'user_ids' => [$dean->id],
+        ]);
+        $assignRes->assertStatus(200);
+
+        $deanFresh = $dean->fresh();
+        $this->assertEquals($locSrt5->id, $deanFresh->attendance_location_id);
+        $this->assertEquals('SRT 5 Bogor', $deanFresh->school_unit);
+
+        // 2. Admin melakukan upload ulang data gaji di mana file Excel masih berisi data lama (SRT 6 Bogor)
+        $oldPayroll = \App\Models\Payroll::create([
+            'employee_name' => 'Dean Karyawan',
+            'company' => 'rbs',
+            'period' => '2026-10',
+            'province' => 'Jawa Barat',
+            'school_unit' => 'SRT 6 Bogor', // data lama di file Excel
+            'status' => 'active',
+            'take_home_pay' => 4500000,
+        ]);
+
+        // Proses sinkronisasi akun dari payroll Excel
+        \App\Services\PayrollService::syncEmployeeAccount($oldPayroll);
+
+        // 3. Admin atau sistem menjalankan sinkronisasi unit sekolah
+        $syncRes = $this->actingAs($admin, 'sanctum')->postJson('/api/admin/attendance-locations/sync-from-school-units', [
+            'company' => 'rbs',
+        ]);
+        $syncRes->assertStatus(200);
+
+        // 4. Verifikasi mutlak: Data Dean TETAP di SRT 5 Bogor, TIDAK revert ke SRT 6 Bogor
+        $deanAfterSync = $dean->fresh();
+        $this->assertEquals('SRT 5 Bogor', $deanAfterSync->school_unit, 'School unit karyawan tidak boleh revert ke data Excel lama!');
+        $this->assertEquals($locSrt5->id, $deanAfterSync->attendance_location_id, 'Attendance location karyawan tidak boleh tertimpa!');
+
+        // 5. Cek endpoint absensi karyawan (/today) mengunci ke SRT 5 Bogor
+        $todayRes = $this->actingAs($deanAfterSync, 'sanctum')->getJson('/api/employee/attendance/today');
+        $todayRes->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.assigned_location.id', $locSrt5->id)
+            ->assertJsonPath('data.assigned_location.name', 'SRT 5 Bogor')
+            ->assertJsonPath('data.assigned_location.radius_meters', 120);
+    }
+
+    /**
+     * REGRESI BUG VP: Memastikan pencocokan nama lokasi spesifik (SRT 1 Kuantan Singingi
+     * dan SRT 1 Kotawaringin Timur) tidak tertukar atau dibajak oleh unit umum 'SRT 1'.
+     */
+    public function test_exact_location_matching_prevents_hijacking_by_similar_names(): void
+    {
+        // 3 Lokasi dengan kemiripan nama
+        $locGeneric = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'SRT 1',
+            'latitude' => -6.1000,
+            'longitude' => 106.1000,
+            'radius_meters' => 50,
+            'type' => 'school',
+            'is_active' => true,
+        ]);
+
+        $locKuantan = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'SRT 1 Kuantan Singingi',
+            'latitude' => -0.5333,
+            'longitude' => 101.4500,
+            'radius_meters' => 200,
+            'type' => 'school',
+            'is_active' => true,
+        ]);
+
+        $locKotawaringin = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'SRT 1 Kotawaringin Timur',
+            'latitude' => -2.5333,
+            'longitude' => 112.9500,
+            'radius_meters' => 300,
+            'type' => 'school',
+            'is_active' => true,
+        ]);
+
+        $empKuantan = User::factory()->create([
+            'name' => 'Guru Kuantan',
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'school_unit' => 'SRT 1 Kuantan Singingi',
+        ]);
+
+        $empKotawaringin = User::factory()->create([
+            'name' => 'Guru Kotawaringin',
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'school_unit' => 'SRT 1 Kotawaringin Timur',
+        ]);
+
+        $empGeneric = User::factory()->create([
+            'name' => 'Guru Umum',
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'school_unit' => 'SRT 1',
+        ]);
+
+        // Cek target lokasi masing-masing karyawan
+        $resKuantan = $this->actingAs($empKuantan, 'sanctum')->getJson('/api/employee/attendance/today');
+        $resKuantan->assertStatus(200)
+            ->assertJsonPath('data.assigned_location.id', $locKuantan->id)
+            ->assertJsonPath('data.assigned_location.name', 'SRT 1 Kuantan Singingi')
+            ->assertJsonPath('data.assigned_location.radius_meters', 200);
+
+        $resKotawaringin = $this->actingAs($empKotawaringin, 'sanctum')->getJson('/api/employee/attendance/today');
+        $resKotawaringin->assertStatus(200)
+            ->assertJsonPath('data.assigned_location.id', $locKotawaringin->id)
+            ->assertJsonPath('data.assigned_location.name', 'SRT 1 Kotawaringin Timur')
+            ->assertJsonPath('data.assigned_location.radius_meters', 300);
+
+        $resGeneric = $this->actingAs($empGeneric, 'sanctum')->getJson('/api/employee/attendance/today');
+        $resGeneric->assertStatus(200)
+            ->assertJsonPath('data.assigned_location.id', $locGeneric->id)
+            ->assertJsonPath('data.assigned_location.name', 'SRT 1')
+            ->assertJsonPath('data.assigned_location.radius_meters', 50);
+    }
+
+    /**
+     * REGRESI BUG VP: Memastikan pengubahan school_unit via manajemen pengguna
+     * langsung otomatis menyelaraskan attendance_location_id ke lokasi sekolah baru.
+     */
+    public function test_updating_user_school_unit_syncs_attendance_location(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'company' => 'rbs']);
+
+        $locNew = AttendanceLocation::create([
+            'tenant_id' => 'rbs',
+            'name' => 'SRT 5 Bogor',
+            'latitude' => -6.5910,
+            'longitude' => 106.8120,
+            'radius_meters' => 100,
+            'type' => 'school',
+            'is_active' => true,
+        ]);
+
+        $soni = User::factory()->create([
+            'name' => 'Soni Karyawan',
+            'email' => 'soni@example.com',
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'school_unit' => 'SRT 6 Bogor',
+            'attendance_location_id' => null,
+        ]);
+
+        // Admin mengubah school_unit Soni menjadi SRT 5 Bogor
+        $updateRes = $this->actingAs($admin, 'sanctum')->putJson("/api/users/{$soni->id}", [
+            'name' => 'Soni Karyawan',
+            'email' => 'soni@example.com',
+            'role' => 'karyawan',
+            'school_unit' => 'SRT 5 Bogor',
+        ]);
+        $updateRes->assertStatus(200);
+
+        // Verifikasi attendance_location_id langsung terpasang ke SRT 5 Bogor
+        $this->assertEquals($locNew->id, $soni->fresh()->attendance_location_id);
+    }
 }

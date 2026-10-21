@@ -158,8 +158,14 @@ export const DataValidationPage: React.FC = () => {
 
   // Filtered rows for table
   const filteredRows = (validationData?.rows || []).filter((r) => {
-    if (statusFilter !== 'ALL' && r.status !== statusFilter) {
-      return false;
+    if (statusFilter !== 'ALL') {
+      if (statusFilter === 'DUPLIKAT_PERIODE' || statusFilter === 'DUPLIKAT' || statusFilter === 'DUPLIKAT_FILE') {
+        if (r.status !== 'DUPLIKAT_PERIODE' && r.status !== 'DUPLIKAT_FILE') {
+          return false;
+        }
+      } else if (r.status !== statusFilter) {
+        return false;
+      }
     }
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
@@ -167,7 +173,8 @@ export const DataValidationPage: React.FC = () => {
       const matchSchool = (r.school_unit || '').toLowerCase().includes(q);
       const matchProvince = (r.province || '').toLowerCase().includes(q);
       const matchNik = (r.effective_nik || '').toLowerCase().includes(q);
-      return matchName || matchSchool || matchProvince || matchNik;
+      const matchRec = (r.recommendation || '').toLowerCase().includes(q);
+      return matchName || matchSchool || matchProvince || matchNik || matchRec;
     }
     return true;
   });
@@ -660,8 +667,8 @@ export const DataValidationPage: React.FC = () => {
                             badgeClass = 'bg-rose-100 text-rose-800 border-rose-300 font-black';
                             badgeText = 'TIDAK ADA DI SK';
                           } else if (r.status === 'DUPLIKAT_PERIODE' || r.status === 'DUPLIKAT_FILE') {
-                            badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
-                            badgeText = 'DUPLIKAT';
+                            badgeClass = 'bg-rose-50 text-rose-700 border-rose-200 font-bold';
+                            badgeText = r.status === 'DUPLIKAT_FILE' ? 'DUPLIKAT FILE' : 'DUPLIKAT SP';
                           } else if (r.status === 'REVIEW_MIRIP') {
                             badgeClass = 'bg-amber-50 text-amber-800 border-amber-200';
                             badgeText = 'PERLU REVIEW';
@@ -680,16 +687,26 @@ export const DataValidationPage: React.FC = () => {
                                   >
                                     {badgeText}
                                   </span>
-                                  <div className="text-[11px] text-slate-600 line-clamp-1" title={r.recommendation}>
+                                  <div className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed" title={r.recommendation}>
                                     {r.recommendation}
                                   </div>
                                 </div>
                               </td>
 
                               <td className="py-2.5 px-3 font-semibold text-slate-900">
-                                <div>{r.name}</div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span>{r.name}</span>
+                                  {r.excel_row && (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-mono text-[9.5px] font-normal border border-slate-200"
+                                      title={`Baris ke-${r.excel_row} di file spreadsheet`}
+                                    >
+                                      Baris {r.excel_row}
+                                    </span>
+                                  )}
+                                </div>
                                 {r.position && (
-                                  <div className="text-[10px] text-slate-500 font-normal">
+                                  <div className="text-[10px] text-slate-500 font-normal mt-0.5">
                                     {r.position}
                                   </div>
                                 )}
@@ -1131,6 +1148,14 @@ export const DataValidationPage: React.FC = () => {
                     {selectedRowDetail.recovered_nik || '-'}
                   </div>
                 </div>
+                {selectedRowDetail.excel_row && (
+                  <div>
+                    <span className="text-slate-400">Posisi Baris di Excel:</span>
+                    <div className="font-mono font-semibold text-indigo-700">
+                      Baris ke-{selectedRowDetail.excel_row}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -230,4 +230,44 @@ class DataValidationFeatureTest extends TestCase
             'period' => 'SP 9',
         ]);
     }
+
+    public function test_detects_duplicate_rows_in_file_with_exact_row_reference(): void
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([
+            ['No', 'Wilayah', 'Sekolah', 'NIK', 'Nama Karyawan', 'Jabatan', 'Gaji Pokok'],
+            ['1', 'JAWA BARAT', 'SDN 1 BOGOR', '3201010101900001', 'Budi Santoso', 'Guru', 3500000],
+            ['2', 'JAWA BARAT', 'SDN 2 BOGOR', '3201010101900002', 'Siti Aminah', 'Guru', 3500000],
+            ['3', 'JAWA BARAT', 'SDN 1 BOGOR', '3201010101900001', 'Budi Santoso', 'Guru', 3500000], // Duplicate of Row 2 (Excel row 4)
+        ], null, 'A1');
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_dup_') . '.xlsx';
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($tempPath);
+
+        $uploadedFile = new UploadedFile($tempPath, 'sp_duplicate.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $res = $this->actingAs($this->adminUser)->post('/api/admin/validation/upload', [
+            'file' => $uploadedFile,
+            'target_period' => 'SP 10',
+            'company' => 'rbs',
+        ], ['Accept' => 'application/json']);
+
+        @unlink($tempPath);
+
+        $res->assertOk();
+        $summary = $res->json('data.summary');
+        $rows = $res->json('data.rows');
+
+        $this->assertEquals(3, $summary['total_rows']);
+        $this->assertEquals(1, $summary['duplicate_count']);
+
+        // Check the duplicate row
+        $dupRow = collect($rows)->where('status', 'DUPLIKAT_FILE')->first();
+        $this->assertNotNull($dupRow);
+        $this->assertEquals('Budi Santoso', $dupRow['name']);
+        $this->assertEquals(4, $dupRow['excel_row']);
+        $this->assertStringContainsString('Baris Excel 2', $dupRow['recommendation']);
+    }
 }

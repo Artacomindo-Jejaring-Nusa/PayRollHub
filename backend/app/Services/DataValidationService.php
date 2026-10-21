@@ -379,9 +379,12 @@ class DataValidationService
 
             // 1. Cross-check internal duplicate in uploaded file
             $isDuplicateInFile = false;
+            $duplicateDetails = [];
             if (!empty($normName)) {
                 if (isset($fileSeenNames[$normName])) {
                     $isDuplicateInFile = true;
+                    $firstRow = $fileSeenNames[$normName];
+                    $duplicateDetails[] = "Nama '{$rawName}' ganda (sama dengan Baris Excel {$firstRow})";
                 } else {
                     $fileSeenNames[$normName] = $rowNum;
                 }
@@ -389,6 +392,8 @@ class DataValidationService
             if (!empty($rawNik)) {
                 if (isset($fileSeenNiks[$rawNik])) {
                     $isDuplicateInFile = true;
+                    $firstRow = $fileSeenNiks[$rawNik];
+                    $duplicateDetails[] = "NIK '{$rawNik}' ganda (sama dengan Baris Excel {$firstRow})";
                 } else {
                     $fileSeenNiks[$rawNik] = $rowNum;
                 }
@@ -486,7 +491,8 @@ class DataValidationService
                 if ($isDuplicateInFile) {
                     $status = 'DUPLIKAT_FILE';
                     $badgeColor = 'red';
-                    $recommendation = "Duplikasi Ganda di File. Data ini muncul lebih dari 1 kali dalam spreadsheet yang diunggah.";
+                    $reasonStr = !empty($duplicateDetails) ? implode(' dan ', $duplicateDetails) : "Data ganda di file";
+                    $recommendation = "Duplikasi Ganda di File: {$reasonStr}. Baris Excel {$rowNum} terdeteksi sebagai data duplikat.";
                     $summary['duplicate_count']++;
                 } elseif ($alreadyInTarget) {
                     $status = 'DUPLIKAT_PERIODE';
@@ -550,7 +556,8 @@ class DataValidationService
                 if ($isDuplicateInFile) {
                     $status = 'DUPLIKAT_FILE';
                     $badgeColor = 'red';
-                    $recommendation = "Duplikasi di File. Nama ini muncul berulang kali di file unggahan.";
+                    $reasonStr = !empty($duplicateDetails) ? implode(' dan ', $duplicateDetails) : "Data ganda di file";
+                    $recommendation = "Duplikasi di File: {$reasonStr}. Baris Excel {$rowNum} terdeteksi sebagai data duplikat.";
                     $summary['duplicate_count']++;
                 } else {
                     $status = 'BARU';

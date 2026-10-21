@@ -58,10 +58,7 @@ export const DataValidationPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const rowsPerPage = 12;
 
-  // Commit to Payroll State
-  const [isCommitting, setIsCommitting] = useState<boolean>(false);
-  const [commitSuccessMessage, setCommitSuccessMessage] = useState<string | null>(null);
-  const [showCommitModal, setShowCommitModal] = useState<boolean>(false);
+
 
   // Single Quick-Check State
   const [quickName, setQuickName] = useState<string>('');
@@ -107,7 +104,6 @@ export const DataValidationPage: React.FC = () => {
 
     setIsAnalyzing(true);
     setAnalysisError(null);
-    setCommitSuccessMessage(null);
 
     try {
       const result = await validationService.uploadAndValidate(
@@ -131,39 +127,6 @@ export const DataValidationPage: React.FC = () => {
       await validationService.exportReport(validationData.rows, validationData.summary);
     } catch (err: any) {
       alert('Gagal mengekspor laporan: ' + (err.message || 'Error'));
-    }
-  };
-
-  const handleCommitToPayroll = async () => {
-    if (!validationData) return;
-    setIsCommitting(true);
-    setCommitSuccessMessage(null);
-
-    try {
-      // Filter rows that are safe to commit (exclude duplicate within same target period and missing from SK)
-      const safeRows = validationData.rows.filter(
-        (r) =>
-          r.status !== 'DUPLIKAT_PERIODE' &&
-          r.status !== 'DUPLIKAT_FILE' &&
-          r.status !== 'TIDAK_ADA_DI_SK' &&
-          !r.is_missing_from_sk
-      );
-
-      const result = await validationService.commitToPayroll({
-        rows: safeRows,
-        target_period: targetPeriod,
-        company: targetCompany,
-      });
-
-      setCommitSuccessMessage(
-        `Sukses! ${result.inserted_count} data karyawan berhasil dimasukkan ke periode ${result.period}. Data lama tetap aman dan tidak terganggu.`
-      );
-      setShowCommitModal(false);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Gagal memproses data ke payroll.';
-      alert('Gagal memasukkan data: ' + msg);
-    } finally {
-      setIsCommitting(false);
     }
   };
 
@@ -281,12 +244,7 @@ export const DataValidationPage: React.FC = () => {
         </div>
       </div>
 
-      {commitSuccessMessage && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-start gap-3 shadow-sm animate-fade-in">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-          <div className="text-sm font-medium">{commitSuccessMessage}</div>
-        </div>
-      )}
+
 
       {/* ======================================================== */}
       {/* 2. TAB CONTENT: BULK SPREADSHEET VALIDATION              */}
@@ -566,21 +524,12 @@ export const DataValidationPage: React.FC = () => {
 
                 <div className="flex items-center gap-2.5">
                   <Button
-                    variant="outline"
+                    variant="primary"
                     onClick={handleExportReport}
-                    className="gap-2 text-xs py-2 px-3 border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+                    className="gap-2 text-xs py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm font-semibold rounded-xl"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Download Hasil (.xlsx)
-                  </Button>
-
-                  <Button
-                    variant="primary"
-                    onClick={() => setShowCommitModal(true)}
-                    className="gap-2 text-xs py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Proses Masuk ke {targetPeriod}
+                    Download Hasil Analisis (.xlsx)
                   </Button>
                 </div>
               </div>
@@ -1136,86 +1085,7 @@ export const DataValidationPage: React.FC = () => {
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* 4. COMMIT TO PAYROLL CONFIRMATION MODAL                  */}
-      {/* ======================================================== */}
-      {showCommitModal && validationData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-              <div className="p-2.5 rounded-full bg-emerald-100 text-emerald-700">
-                <Send className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Konfirmasi Input ke Payroll
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Data yang aman akan dimasukkan ke periode {targetPeriod}
-                </p>
-              </div>
-            </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2 text-slate-700">
-              <div className="flex justify-between">
-                <span>Target Periode:</span>
-                <span className="font-bold text-slate-900">{targetPeriod}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Target Perusahaan:</span>
-                <span className="font-bold text-slate-900">
-                  {targetCompany === 'rimamandiri' ? 'Riama Mandiri' : 'RBS Global'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Data Siap Input:</span>
-                <span className="font-bold text-emerald-700">
-                  {validationData.summary.new_count +
-                    validationData.summary.renewal_count +
-                    validationData.summary.transfer_count}{' '}
-                  Orang
-                </span>
-              </div>
-              <div className="flex justify-between text-slate-500">
-                <span>Data Dilewati (Duplikat):</span>
-                <span>{validationData.summary.duplicate_count} Orang</span>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-[11px] leading-relaxed">
-              <ShieldCheck className="w-4 h-4 inline mr-1 text-blue-600" />
-              <strong>Garansi Keamanan Data:</strong> Proses ini hanya akan menambahkan data sebagai draft baru di periode {targetPeriod}. Data SP sebelumnya (SP 1 - SP 8) tidak akan diubah atau dihapus.
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCommitModal(false)}
-                disabled={isCommitting}
-              >
-                Batal
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleCommitToPayroll}
-                disabled={isCommitting}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {isCommitting ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                    Sedang Memproses...
-                  </>
-                ) : (
-                  'Ya, Proses Sekarang'
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ======================================================== */}
       {/* 5. ROW DETAIL MODAL                                      */}

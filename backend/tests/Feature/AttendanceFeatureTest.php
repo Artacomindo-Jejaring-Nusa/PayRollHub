@@ -683,12 +683,26 @@ class AttendanceFeatureTest extends TestCase
             'check_out_time' => '07:15:00',
         ]);
 
-        // 4. Employee opens dashboard again at 08:00
+        // 4. Employee opens dashboard again at 08:00 (Today is open, not locked with yesterday's checkout)
         Carbon::setTestNow(Carbon::parse('2026-10-20 08:00:00', 'Asia/Jakarta'));
         $todayResAfter = $this->actingAs($employee, 'sanctum')->getJson('/api/employee/attendance/today');
         $todayResAfter->assertStatus(200)
-            ->assertJsonPath('data.attendance.date', '2026-10-19')
-            ->assertJsonPath('data.attendance.check_out_time', '07:15:00');
+            ->assertJsonPath('data.attendance', null);
+
+        // 5. Employee checks in again for the next shift on 2026-10-20 at 23:00
+        Carbon::setTestNow(Carbon::parse('2026-10-20 23:00:00', 'Asia/Jakarta'));
+        $nextShiftCheckIn = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Masuk shift malam berikutnya',
+        ]);
+        $nextShiftCheckIn->assertStatus(200);
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-20',
+            'check_in_time' => '23:00:00',
+            'check_out_time' => null,
+        ]);
 
         Carbon::setTestNow(); // reset
     }
@@ -1092,5 +1106,175 @@ class AttendanceFeatureTest extends TestCase
 
         // Verifikasi attendance_location_id langsung terpasang ke SRT 5 Bogor
         $this->assertEquals($locNew->id, $soni->fresh()->attendance_location_id);
+    }
+
+    public function test_unclosed_yesterday_shift_is_auto_closed_when_checking_in_new_shift(): void
+    {
+        $shift = Shift::create([
+            'company' => 'rbs',
+            'name' => 'Shift 3 Malam',
+            'code' => 'SHIFT-M',
+            'start_time' => '23:00:00',
+            'end_time' => '07:00:00',
+            'late_tolerance_minutes' => 15,
+            'work_hours' => 8.0,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'shift_id' => $shift->id,
+        ]);
+
+        // Yesterday 23:00 employee checks in but forgets to check out in morning
+        Attendance::create([
+            'user_id' => $employee->id,
+            'date' => '2026-10-19',
+            'check_in_time' => '23:00:00',
+            'check_out_time' => null,
+            'attendance_type' => 'masuk',
+            'shift_id' => $shift->id,
+        ]);
+
+        // Next day 2026-10-20 at 22:50 employee checks in for the new shift
+        Carbon::setTestNow(Carbon::parse('2026-10-20 22:50:00', 'Asia/Jakarta'));
+
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Masuk shift baru malam kedua',
+        ]);
+
+        $checkInRes->assertStatus(200);
+
+        // Yesterday's forgotten shift should be auto-closed
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-19',
+            'check_out_time' => '07:00:00',
+        ]);
+
+        // Today's new shift should be active
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-20',
+            'check_in_time' => '22:50:00',
+            'check_out_time' => null,
+        ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_employee_can_check_in_twice_in_one_day_after_checkout(): void
+    {
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-21 08:00:00', 'Asia/Jakarta'));
+
+        // Sesi 1: Masuk pagi
+        $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Sesi 1 Pagi',
+        ])->assertStatus(200);
+
+        // Sesi 1: Pulang siang
+        Carbon::setTestNow(Carbon::parse('2026-10-21 12:00:00', 'Asia/Jakarta'));
+        $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', [
+            'notes' => 'Selesai sesi 1',
+        ])->assertStatus(200);
+
+        // Sesi 2: Masuk lagi sore (absen 2x sehari)
+        Carbon::setTestNow(Carbon::parse('2026-10-21 13:00:00', 'Asia/Jakarta'));
+        $resSession2 = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Sesi 2 Siang',
+        ]);
+        $resSession2->assertStatus(200);
+
+        // Catatan sesi 1 terarsip di notes dan sesi 2 aktif masuk
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-21',
+            'check_in_time' => '13:00:00',
+            'check_out_time' => null,
+        ]);
+
+        // Sesi 2: Pulang sore
+        Carbon::setTestNow(Carbon::parse('2026-10-21 17:00:00', 'Asia/Jakarta'));
+        $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', [
+            'notes' => 'Selesai sesi 2',
+        ])->assertStatus(200);
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-21',
+            'check_in_time' => '13:00:00',
+            'check_out_time' => '17:00:00',
+        ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_24_hour_shift_unclosed_is_auto_closed_when_checking_in_next_shift(): void
+    {
+        $shift24 = Shift::create([
+            'company' => 'rbs',
+            'name' => 'Shift 24 Jam Security',
+            'code' => 'SHIFT-24H',
+            'start_time' => '08:00:00',
+            'end_time' => '08:00:00',
+            'late_tolerance_minutes' => 30,
+            'work_hours' => 24.0,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'shift_id' => $shift24->id,
+        ]);
+
+        // Day 1: 2026-10-18 08:00 employee checks in for 24h shift
+        Attendance::create([
+            'user_id' => $employee->id,
+            'date' => '2026-10-18',
+            'check_in_time' => '08:00:00',
+            'check_out_time' => null,
+            'attendance_type' => 'masuk',
+            'shift_id' => $shift24->id,
+        ]);
+
+        // Day 3: 2026-10-20 08:00 employee checks in for the next rotation (Day 2 was off)
+        // Employee forgot to check out on 2026-10-19 08:00
+        Carbon::setTestNow(Carbon::parse('2026-10-20 08:00:00', 'Asia/Jakarta'));
+
+        $checkInRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'dinas_luar',
+            'notes' => 'Masuk shift 24 jam baru',
+        ]);
+
+        $checkInRes->assertStatus(200);
+
+        // Previous 24h shift should be auto-closed with end_time '08:00:00'
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-18',
+            'check_out_time' => '08:00:00',
+        ]);
+
+        // Today's new shift should be active
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-20',
+            'check_in_time' => '08:00:00',
+            'check_out_time' => null,
+        ]);
+
+        Carbon::setTestNow();
     }
 }

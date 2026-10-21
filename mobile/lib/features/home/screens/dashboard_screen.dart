@@ -2080,7 +2080,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                       // Interactive Shift Selector Pill / Banner (Pilihan 5 Shift Sekolah & Riama)
                       InkWell(
-                        onTap: hasCheckedIn ? null : _showShiftSelectionModal,
+                        onTap: (hasCheckedIn && !hasCheckedOut) ? null : _showShiftSelectionModal,
                         borderRadius: BorderRadius.circular(16),
                         child: Container(
                           margin: const EdgeInsets.only(top: 12),
@@ -2143,7 +2143,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   ],
                                 ),
                               ),
-                              if (!hasCheckedIn) ...[
+                              if (!hasCheckedIn || hasCheckedOut) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
                                   decoration: BoxDecoration(
@@ -2336,6 +2336,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ],
                           ),
                         ),
+
+                      // Action Button Tambahan: Absen Masuk Sesi 2 / Shift Berikutnya (Multi-shift / 2x Absen Sehari)
+                      if (hasCheckedIn && hasCheckedOut && !isHoliday) ...[
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: _openCheckInModal,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: secondaryAccentColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 4,
+                            shadowColor: secondaryAccentColor.withValues(alpha: 0.4),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.fingerprint_rounded, size: 22),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Absen Masuk Sesi 2 / Shift Baru',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       const SizedBox(height: 20),
 

@@ -116,51 +116,9 @@ class EmployeeAttendanceController extends Controller
         $currentTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
 
-        // 1. Cek apakah ada shift malam aktif dari kemarin yang BELUM ditutup (belum absen pulang)
         $yesterday = Carbon::parse($today)->subDay()->toDateString();
-        $unclosedYesterday = Attendance::with('shift')->where('user_id', $user->id)
-            ->where('date', $yesterday)
-            ->whereNotNull('check_in_time')
-            ->whereNull('check_out_time')
-            ->whereNotIn('attendance_type', ['libur', 'sakit', 'izin'])
-            ->where('status', '!=', 'holiday')
-            ->first();
 
-        if ($unclosedYesterday && in_array($attendanceType, ['masuk', 'dinas_luar'])) {
-            $shift = $unclosedYesterday->shift ?: $user->shift;
-            $isCrossDay = $shift && ($shift->cross_day || $shift->start_time > $shift->end_time);
-            $shiftWorkHours = ($shift && $shift->work_hours > 0) ? (float) $shift->work_hours : 8.0;
-            $maxWindowHours = max(18.0, $shiftWorkHours + 6.0);
-
-            $checkInDateTime = $unclosedYesterday->created_at
-                ? $unclosedYesterday->created_at->copy()
-                : Carbon::parse($yesterday . ' ' . $unclosedYesterday->check_in_time);
-
-            if ($isCrossDay && $unclosedYesterday->check_in_time < '12:00:00' && $checkInDateTime->toDateString() === $yesterday) {
-                $checkInDateTime->addDay();
-            }
-
-            $hoursSinceCheckIn = abs($now->diffInHours($checkInDateTime));
-
-            $isSessionActive = false;
-            if ($shiftWorkHours >= 20.0) {
-                $isSessionActive = ($hoursSinceCheckIn <= $maxWindowHours);
-            } else {
-                $isSessionActive = ($isCrossDay || $unclosedYesterday->check_in_time >= '17:00:00')
-                    && $hoursSinceCheckIn <= $maxWindowHours
-                    && $now->format('H:i:s') < '16:00:00';
-            }
-
-            if ($isSessionActive) {
-                $shiftLabel = $shift ? $shift->name : 'shift sebelumnya';
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "Anda masih memiliki sesi {$shiftLabel} yang aktif dari kemarin (Masuk pada pukul {$unclosedYesterday->check_in_time}). Silakan lakukan Absen Pulang (Check Out) terlebih dahulu sebelum melakukan absensi masuk baru.",
-                ], 422);
-            }
-        }
-
-        // Tentukan tanggal shift yang sesuai (mendukung check-in dini hari untuk shift lintas hari)
+        // 1. Tentukan tanggal shift yang sesuai (mendukung check-in dini hari untuk shift lintas hari)
         $attendanceDate = $today;
         $activeShift = null;
         if (!empty($request->input('shift_id'))) {
@@ -181,6 +139,27 @@ class EmployeeAttendanceController extends Controller
             }
         }
 
+        // 2. DI-LOSS-KAN: Auto-close shift masa lalu (Shift 3 Malam & Shift 24 Jam) yang lupa checkout
+        // Jika ada shift sebelumnya yang belum ditutup (belum absen pulang), sistem otomatis menutupnya
+        // agar karyawan tidak diblokir dan bisa langsung absen masuk untuk shift baru.
+        $unclosedPast = Attendance::with('shift')->where('user_id', $user->id)
+            ->where('date', '<', $attendanceDate)
+            ->whereNotNull('check_in_time')
+            ->whereNull('check_out_time')
+            ->whereNotIn('attendance_type', ['libur', 'sakit', 'izin'])
+            ->where('status', '!=', 'holiday')
+            ->latest('date')
+            ->first();
+
+        if ($unclosedPast && in_array($attendanceType, ['masuk', 'dinas_luar'])) {
+            $pastShift = $unclosedPast->shift ?: $user->shift;
+            $autoOutTime = $pastShift ? $pastShift->end_time : '07:00:00';
+            $unclosedPast->update([
+                'check_out_time' => $autoOutTime,
+                'notes' => trim(($unclosedPast->notes ?: '') . ' [Auto-checkout sistem: Sesi shift ditutup otomatis saat karyawan memulai shift baru]'),
+            ]);
+        }
+
         // Cek apakah sudah check-in hari ini (pada tanggal shift yang ditentukan)
         $existing = Attendance::where('user_id', $user->id)
             ->where('date', $attendanceDate)
@@ -192,7 +171,18 @@ class EmployeeAttendanceController extends Controller
 
             // Jika sebelumnya hanya tercatat absen libur, dan sekarang user ingin absen masuk kerja riil (atau dinas luar),
             // izinkan untuk memperbarui kehadiran (override holiday) daripada menolaknya dengan error!
-            if (!$isExistingHoliday || !$isRequestingWork) {
+            if ($isExistingHoliday && $isRequestingWork) {
+                // Diizinkan override
+            } elseif (!empty($existing->check_out_time)) {
+                // DI-LOSS-KAN: KASUS ABSEN 2x SEHARI (Sesi sebelumnya sudah checkout / pulang)
+                // Arsipkan sesi sebelumnya ke notes dan izinkan absen masuk sesi kedua
+                $existing->update([
+                    'notes' => trim(($existing->notes ?: '') . " | [Sesi 1: Masuk {$existing->check_in_time}, Pulang {$existing->check_out_time}]"),
+                    'check_out_time' => null,
+                    'check_out_lat' => null,
+                    'check_out_lng' => null,
+                ]);
+            } else {
                 $jenis = match ($existing->attendance_type) {
                     'libur' => 'absen libur',
                     'sakit' => 'pengajuan sakit',
@@ -202,7 +192,7 @@ class EmployeeAttendanceController extends Controller
                 };
                 return response()->json([
                     'status' => 'error',
-                    'message' => "Anda sudah melakukan {$jenis} hari ini pada pukul {$existing->check_in_time}.",
+                    'message' => "Anda sudah melakukan {$jenis} hari ini pada pukul {$existing->check_in_time}. Silakan lakukan absen pulang terlebih dahulu sebelum absen masuk kembali.",
                 ], 422);
             }
         }
@@ -318,8 +308,11 @@ class EmployeeAttendanceController extends Controller
                     'check_in_distance_meters' => null,
                     'check_in_status' => 'on_time',
                     'status' => 'present',
-                    'notes' => $notes,
+                    'notes' => !empty($existing?->notes) ? trim($existing->notes . ' | ' . $notes) : $notes,
                     'photo_url' => $photoPath,
+                    'check_out_time' => null,
+                    'check_out_lat' => null,
+                    'check_out_lng' => null,
                 ]
             );
 
@@ -450,8 +443,11 @@ class EmployeeAttendanceController extends Controller
                 'check_in_distance_meters' => $distance,
                 'check_in_status' => $checkInStatus,
                 'status' => $overallStatus,
-                'notes' => $validated['notes'] ?? null,
+                'notes' => !empty($existing?->notes) ? trim($existing->notes . (!empty($validated['notes']) ? ' | ' . $validated['notes'] : '')) : ($validated['notes'] ?? null),
                 'photo_url' => $photoPath,
+                'check_out_time' => null,
+                'check_out_lat' => null,
+                'check_out_lng' => null,
             ]
         );
 
@@ -877,21 +873,6 @@ class EmployeeAttendanceController extends Controller
                 if ($isWithinActiveWindow) {
                     // Jika hari ini belum ada check-in baru, utamakan sesi shift kemarin yang belum selesai!
                     if (!$todayAttendance || empty($todayAttendance->check_in_time)) {
-                        return $yesterdayAttendance;
-                    }
-                }
-            } else {
-                // KASUS B: Catatan kemarin SUDAH checkout (misal baru saja absen pulang jam 07:00 pagi ini)
-                // Jika hari ini belum ada check-in baru ($todayAttendance kosong),
-                // dan sekarang masih jam pagi/siang sebelum shift berikutnya dimulai (sebelum jam 16:00 sore):
-                // Tampilkan catatan kemarin agar dasbor mobile karyawan tetap menampilkan status
-                // "Sudah Absen Masuk" dan "Sudah Absen Pulang".
-                if (!$todayAttendance && $isCrossDayShift) {
-                    $currentTimeStr = $now->format('H:i:s');
-                    $shiftStart = $shift ? $shift->start_time : '18:00:00';
-                    $nextShiftThreshold = Carbon::createFromTimeString($shiftStart)->subHours(3)->format('H:i:s');
-
-                    if ($currentTimeStr < $nextShiftThreshold || $currentTimeStr < '16:00:00') {
                         return $yesterdayAttendance;
                     }
                 }

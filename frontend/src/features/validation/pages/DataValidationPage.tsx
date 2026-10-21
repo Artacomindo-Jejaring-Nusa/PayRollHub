@@ -26,7 +26,6 @@ import {
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { useTenantTheme, isValidationSubdomain } from '../../../lib/theme';
-import { SP_PERIOD_LIST } from '../../../lib/period';
 import {
   validationService,
   ValidatedRow,
@@ -43,7 +42,6 @@ export const DataValidationPage: React.FC = () => {
 
   // Bulk Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [targetPeriod, setTargetPeriod] = useState<string>('SP 9');
   const [targetCompany, setTargetCompany] = useState<string>(tenant.id);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -108,7 +106,7 @@ export const DataValidationPage: React.FC = () => {
     try {
       const result = await validationService.uploadAndValidate(
         selectedFile,
-        targetPeriod,
+        undefined,
         targetCompany
       );
       setValidationData(result);
@@ -258,42 +256,22 @@ export const DataValidationPage: React.FC = () => {
               Upload Dokumen SP Calon Data Baru
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Target Periode / SP
-                </label>
-                <select
-                  value={targetPeriod}
-                  onChange={(e) => setTargetPeriod(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {SP_PERIOD_LIST.map((sp) => (
-                    <option key={sp.code} value={sp.code}>
-                      {sp.fullLabel}
-                    </option>
-                  ))}
-                  <option value="SP 13">SP 13 (Khusus)</option>
-                </select>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Untuk mendeteksi apakah data sudah ada di SP ini.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Perusahaan
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  Perusahaan Pembanding
                 </label>
                 <select
                   value={targetCompany}
                   onChange={(e) => setTargetCompany(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                 >
                   <option value="rbs">PT. Rimbun Buana Sejahtera (RBS Global)</option>
                   <option value="rimamandiri">PT. Riama Mandiri Pratama</option>
                 </select>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Mencocokkan dengan database arsip perusahaan terpilih.
+                  Mencocokkan otomatis dengan <strong>seluruh database arsip (Semua SP)</strong> dari perusahaan terpilih.
                 </p>
               </div>
 

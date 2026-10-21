@@ -12,12 +12,13 @@ export interface ValidatedRow {
   position?: string | null;
   basic_salary?: number;
   take_home_pay?: number;
-  status: 'BARU' | 'PERPANJANGAN_SP' | 'MUTASI_SEKOLAH' | 'DUPLIKAT_PERIODE' | 'DUPLIKAT_FILE' | 'REVIEW_MIRIP';
-  badge_color: 'emerald' | 'blue' | 'purple' | 'red' | 'amber';
-  matched_by: 'none' | 'nik' | 'name' | 'fuzzy';
+  status: 'BARU' | 'PERPANJANGAN_SP' | 'MUTASI_SEKOLAH' | 'DUPLIKAT_PERIODE' | 'DUPLIKAT_FILE' | 'REVIEW_MIRIP' | 'TIDAK_ADA_DI_SK';
+  badge_color: 'emerald' | 'blue' | 'purple' | 'red' | 'amber' | 'rose';
+  matched_by: 'none' | 'nik' | 'name' | 'fuzzy' | 'system_only';
   recommendation: string;
   history_periods?: string[];
   history_schools?: string[];
+  is_missing_from_sk?: boolean;
 }
 
 export interface ValidationSummary {
@@ -28,6 +29,7 @@ export interface ValidationSummary {
   duplicate_count: number;
   review_count: number;
   recovered_nik_count: number;
+  missing_from_file_count?: number;
   health_score: number;
   company: string;
   target_period?: string | null;

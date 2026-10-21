@@ -339,6 +339,7 @@ class DataValidationService
         // Track internal duplicates within the uploaded file itself
         $fileSeenNames = [];
         $fileSeenNiks = [];
+        $matchedDbKeys = [];
 
         $analyzedRows = [];
         $summary = [
@@ -349,6 +350,7 @@ class DataValidationService
             'duplicate_count' => 0,
             'review_count' => 0,
             'recovered_nik_count' => 0,
+            'missing_from_file_count' => 0,
         ];
 
         $targetPeriodNorm = !empty($targetPeriod) ? strtoupper(trim($targetPeriod)) : null;
@@ -457,6 +459,15 @@ class DataValidationService
                 foreach ($matchedPayrolls as $mp) {
                     if (!empty($mp->period)) $historyPeriods[] = $mp->period;
                     if (!empty($mp->school_unit)) $historySchools[] = $mp->school_unit;
+
+                    $mpNorm = $this->normalizeName($mp->employee_name);
+                    $mpCleanNik = !empty($mp->nik) ? trim(ltrim($mp->nik, "'")) : null;
+                    if (!empty($mpCleanNik) && $mpCleanNik !== '-' && $mpCleanNik !== '0') {
+                        $matchedDbKeys['nik:' . $mpCleanNik] = true;
+                    }
+                    if (!empty($mpNorm)) {
+                        $matchedDbKeys['name:' . $mpNorm] = true;
+                    }
                 }
                 $historyPeriods = array_values(array_unique($historyPeriods));
                 $historySchools = array_values(array_unique($historySchools));
@@ -569,6 +580,97 @@ class DataValidationService
             ];
         }
 
+        // 4. Identify Employees in System Database who are MISSING from the uploaded SK file
+        // (e.g. from previous periods / active in DB, but not present in the new Excel SK)
+        $distinctDbEmployees = [];
+        foreach ($existingPayrolls as $ep) {
+            $epNorm = $this->normalizeName($ep->employee_name);
+            $epCleanNik = !empty($ep->nik) ? trim(ltrim($ep->nik, "'")) : null;
+            if ($epCleanNik === '-' || $epCleanNik === '0') $epCleanNik = null;
+
+            if (empty($epNorm) && empty($epCleanNik)) continue;
+
+            $empKey = $epCleanNik ? "nik:{$epCleanNik}" : "name:{$epNorm}";
+
+            if (!isset($distinctDbEmployees[$empKey])) {
+                $distinctDbEmployees[$empKey] = [
+                    'name' => $ep->employee_name,
+                    'norm_name' => $epNorm,
+                    'nik' => $epCleanNik,
+                    'province' => $ep->province,
+                    'school_unit' => $ep->school_unit,
+                    'position' => $ep->position,
+                    'basic_salary' => $ep->basic_salary,
+                    'periods' => [],
+                    'schools' => [],
+                    'last_period' => $ep->period,
+                ];
+            }
+
+            if (!empty($ep->period)) {
+                $distinctDbEmployees[$empKey]['periods'][] = $ep->period;
+            }
+            if (!empty($ep->school_unit)) {
+                $distinctDbEmployees[$empKey]['schools'][] = $ep->school_unit;
+            }
+            if (!empty($ep->position) && empty($distinctDbEmployees[$empKey]['position'])) {
+                $distinctDbEmployees[$empKey]['position'] = $ep->position;
+            }
+            if (!empty($ep->province) && empty($distinctDbEmployees[$empKey]['province'])) {
+                $distinctDbEmployees[$empKey]['province'] = $ep->province;
+            }
+        }
+
+        $missingRows = [];
+        foreach ($distinctDbEmployees as $empKey => $emp) {
+            $isFoundInFile = false;
+            if (!empty($emp['norm_name']) && isset($fileSeenNames[$emp['norm_name']])) {
+                $isFoundInFile = true;
+            }
+            if (!empty($emp['nik']) && isset($fileSeenNiks[$emp['nik']])) {
+                $isFoundInFile = true;
+            }
+            if (isset($matchedDbKeys[$empKey])) {
+                $isFoundInFile = true;
+            }
+            if (!empty($emp['norm_name']) && isset($matchedDbKeys['name:' . $emp['norm_name']])) {
+                $isFoundInFile = true;
+            }
+            if (!empty($emp['nik']) && isset($matchedDbKeys['nik:' . $emp['nik']])) {
+                $isFoundInFile = true;
+            }
+
+            if (!$isFoundInFile) {
+                $historyPeriods = array_values(array_unique($emp['periods']));
+                $historySchools = array_values(array_unique($emp['schools']));
+                $lastPeriod = end($historyPeriods) ?: $emp['last_period'] ?: 'Arsip Lama';
+                $lastSchool = end($historySchools) ?: $emp['school_unit'] ?: '-';
+
+                $missingRows[] = [
+                    'row_no' => 'DB-' . (count($missingRows) + 1),
+                    'excel_row' => null,
+                    'name' => $emp['name'],
+                    'nik' => $emp['nik'],
+                    'recovered_nik' => null,
+                    'effective_nik' => $emp['nik'],
+                    'province' => $emp['province'],
+                    'school_unit' => $lastSchool,
+                    'position' => $emp['position'],
+                    'basic_salary' => (float)$emp['basic_salary'],
+                    'status' => 'TIDAK_ADA_DI_SK',
+                    'badge_color' => 'rose',
+                    'matched_by' => 'system_only',
+                    'recommendation' => "Ada di database sistem (Terakhir di {$lastPeriod} - {$lastSchool}), tetapi TIDAK tercantum di file SK baru" . (!empty($targetPeriod) ? " ({$targetPeriod})" : "") . ". Verifikasi apakah karyawan Habis Kontrak / Resign (Out) atau terlewat saat pembuatan SK.",
+                    'history_periods' => $historyPeriods,
+                    'history_schools' => $historySchools,
+                    'is_missing_from_sk' => true,
+                ];
+            }
+        }
+
+        $summary['missing_from_file_count'] = count($missingRows);
+        $analyzedRows = array_merge($analyzedRows, $missingRows);
+
         // Calculate data health score (0-100%)
         $validReadyCount = $summary['new_count'] + $summary['renewal_count'] + $summary['transfer_count'];
         $healthScore = $summary['total_rows'] > 0
@@ -677,6 +779,11 @@ class DataValidationService
         $skippedCount = 0;
 
         foreach ($rows as $r) {
+            // Never commit records that were missing from the uploaded SK file
+            if (($r['status'] ?? '') === 'TIDAK_ADA_DI_SK' || !empty($r['is_missing_from_sk'])) {
+                continue;
+            }
+
             $name = trim($r['name'] ?? '');
             if (empty($name)) continue;
 

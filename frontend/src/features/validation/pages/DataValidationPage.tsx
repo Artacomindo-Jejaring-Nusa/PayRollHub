@@ -140,9 +140,13 @@ export const DataValidationPage: React.FC = () => {
     setCommitSuccessMessage(null);
 
     try {
-      // Filter rows that are safe to commit (exclude duplicate within same target period)
+      // Filter rows that are safe to commit (exclude duplicate within same target period and missing from SK)
       const safeRows = validationData.rows.filter(
-        (r) => r.status !== 'DUPLIKAT_PERIODE' && r.status !== 'DUPLIKAT_FILE'
+        (r) =>
+          r.status !== 'DUPLIKAT_PERIODE' &&
+          r.status !== 'DUPLIKAT_FILE' &&
+          r.status !== 'TIDAK_ADA_DI_SK' &&
+          !r.is_missing_from_sk
       );
 
       const result = await validationService.commitToPayroll({
@@ -439,10 +443,10 @@ export const DataValidationPage: React.FC = () => {
           {validationData && (
             <div className="space-y-6 animate-fade-in">
               {/* SUMMARY KPI CARDS */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                 <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
                   <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Total Dianalisis
+                    Total Baris SK
                   </div>
                   <div className="text-2xl font-black text-slate-900">
                     {validationData.summary.total_rows}
@@ -450,7 +454,13 @@ export const DataValidationPage: React.FC = () => {
                   <div className="text-[11px] text-slate-500 mt-1">Baris spreadsheet</div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-sm">
+                <div
+                  onClick={() => {
+                    setStatusFilter('BARU');
+                    setCurrentPage(1);
+                  }}
+                  className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-sm cursor-pointer hover:bg-emerald-100/60 transition-all hover:scale-[1.01]"
+                >
                   <div className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider mb-1">
                     Data Baru (New)
                   </div>
@@ -460,7 +470,13 @@ export const DataValidationPage: React.FC = () => {
                   <div className="text-[11px] text-emerald-600 mt-1">Belum pernah terdaftar</div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 shadow-sm">
+                <div
+                  onClick={() => {
+                    setStatusFilter('PERPANJANGAN_SP');
+                    setCurrentPage(1);
+                  }}
+                  className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 shadow-sm cursor-pointer hover:bg-blue-100/60 transition-all hover:scale-[1.01]"
+                >
                   <div className="text-[11px] font-semibold text-blue-800 uppercase tracking-wider mb-1">
                     Perpanjangan SP
                   </div>
@@ -470,7 +486,13 @@ export const DataValidationPage: React.FC = () => {
                   <div className="text-[11px] text-blue-600 mt-1">Karyawan lama di sekolah sama</div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200 shadow-sm">
+                <div
+                  onClick={() => {
+                    setStatusFilter('MUTASI_SEKOLAH');
+                    setCurrentPage(1);
+                  }}
+                  className="p-4 rounded-xl bg-purple-50/70 border border-purple-200 shadow-sm cursor-pointer hover:bg-purple-100/60 transition-all hover:scale-[1.01]"
+                >
                   <div className="text-[11px] font-semibold text-purple-800 uppercase tracking-wider mb-1">
                     Potensi Mutasi
                   </div>
@@ -478,6 +500,23 @@ export const DataValidationPage: React.FC = () => {
                     {validationData.summary.transfer_count}
                   </div>
                   <div className="text-[11px] text-purple-600 mt-1">Pindah unit sekolah</div>
+                </div>
+
+                <div
+                  onClick={() => {
+                    setStatusFilter('TIDAK_ADA_DI_SK');
+                    setCurrentPage(1);
+                  }}
+                  className="p-4 rounded-xl bg-rose-50/80 border border-rose-200 shadow-sm cursor-pointer hover:bg-rose-100/70 transition-all hover:scale-[1.01]"
+                >
+                  <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Tidak Ada di SK</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-200 text-rose-800 font-bold">Out / Hilang</span>
+                  </div>
+                  <div className="text-2xl font-black text-rose-700">
+                    {validationData.summary.missing_from_file_count || 0}
+                  </div>
+                  <div className="text-[11px] text-rose-600 mt-1">Ada di DB, tak masuk SK</div>
                 </div>
 
                 <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 shadow-sm">
@@ -490,14 +529,20 @@ export const DataValidationPage: React.FC = () => {
                   <div className="text-[11px] text-amber-600 mt-1">Ditemukan dari arsip SP</div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-rose-50/70 border border-rose-200 shadow-sm">
-                  <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider mb-1">
+                <div
+                  onClick={() => {
+                    setStatusFilter('DUPLIKAT_PERIODE');
+                    setCurrentPage(1);
+                  }}
+                  className="p-4 rounded-xl bg-red-50/70 border border-red-200 shadow-sm cursor-pointer hover:bg-red-100/60 transition-all hover:scale-[1.01]"
+                >
+                  <div className="text-[11px] font-semibold text-red-800 uppercase tracking-wider mb-1">
                     Duplikat / Review
                   </div>
-                  <div className="text-2xl font-black text-rose-700">
+                  <div className="text-2xl font-black text-red-700">
                     {validationData.summary.duplicate_count + validationData.summary.review_count}
                   </div>
-                  <div className="text-[11px] text-rose-600 mt-1">Perlu perhatian admin</div>
+                  <div className="text-[11px] text-red-600 mt-1">Perlu perhatian admin</div>
                 </div>
               </div>
 
@@ -540,16 +585,69 @@ export const DataValidationPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* KAMUS PANDUAN ISTILAH VALIDASI UNTUK USER & MANAJEMEN */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs shadow-2xs">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-2.5">
+                  <Info className="w-4 h-4 text-indigo-600" />
+                  <span>Kamus Istilah & Arti Kategori Validasi Data:</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 text-slate-600">
+                  <div className="flex items-start gap-2 bg-white p-2.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 mt-1"></span>
+                    <div>
+                      <strong className="text-slate-900 block">Data Baru (New):</strong>
+                      Ada di file SK baru, namun belum pernah terdaftar di database sistem (karyawan baru masuk).
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-white p-2.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 mt-1"></span>
+                    <div>
+                      <strong className="text-slate-900 block">Perpanjangan SP:</strong>
+                      Karyawan lama di database yang tetap bertugas di unit sekolah yang sama pada SK baru (kontrak berlanjut).
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-white p-2.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0 mt-1"></span>
+                    <div>
+                      <strong className="text-slate-900 block">Potensi Mutasi:</strong>
+                      Karyawan lama di database yang dipindah tugaskan ke unit sekolah berbeda pada SK baru.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-rose-50/40 p-2.5 rounded-xl border border-rose-200/70 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 mt-1"></span>
+                    <div>
+                      <strong className="text-rose-900 block">Tidak Ada di SK (Out / Ketinggalan):</strong>
+                      Ada di database periode sebelumnya, namun tidak ada di file SK baru. (Indikasi: Resign/Habis Kontrak, atau terlewat saat pengetikan SK).
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-white p-2.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 mt-1"></span>
+                    <div>
+                      <strong className="text-slate-900 block">NIK Dipulihkan:</strong>
+                      Karyawan lama yang NIK-nya kosong di spreadsheet, berhasil dipulihkan otomatis oleh AI dari database.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 bg-white p-2.5 rounded-xl border border-slate-200/70 shadow-2xs">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 mt-1"></span>
+                    <div>
+                      <strong className="text-slate-900 block">Duplikat / Review:</strong>
+                      Data ganda di file atau kemiripan nama yang membutuhkan pengecekan manual admin.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* TABLE CARD */}
               <Card className="p-5 border border-slate-200 shadow-sm rounded-2xl bg-white">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
                   {/* FILTER TABS */}
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-semibold">
                     {[
-                      { key: 'ALL', label: 'Semua Data', count: validationData.summary.total_rows },
+                      { key: 'ALL', label: 'Semua Data', count: validationData.summary.total_rows + (validationData.summary.missing_from_file_count || 0) },
                       { key: 'BARU', label: 'Data Baru', count: validationData.summary.new_count },
                       { key: 'PERPANJANGAN_SP', label: 'Perpanjangan SP', count: validationData.summary.renewal_count },
                       { key: 'MUTASI_SEKOLAH', label: 'Mutasi Sekolah', count: validationData.summary.transfer_count },
+                      { key: 'TIDAK_ADA_DI_SK', label: 'Tidak Ada di SK', count: validationData.summary.missing_from_file_count || 0 },
                       { key: 'DUPLIKAT_PERIODE', label: 'Duplikat SP', count: validationData.summary.duplicate_count },
                       { key: 'REVIEW_MIRIP', label: 'Perlu Review', count: validationData.summary.review_count },
                     ].map((tab) => (
@@ -631,6 +729,9 @@ export const DataValidationPage: React.FC = () => {
                           } else if (r.status === 'MUTASI_SEKOLAH') {
                             badgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
                             badgeText = 'MUTASI';
+                          } else if (r.status === 'TIDAK_ADA_DI_SK') {
+                            badgeClass = 'bg-rose-100 text-rose-800 border-rose-300 font-black';
+                            badgeText = 'TIDAK ADA DI SK';
                           } else if (r.status === 'DUPLIKAT_PERIODE' || r.status === 'DUPLIKAT_FILE') {
                             badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
                             badgeText = 'DUPLIKAT';
@@ -1132,6 +1233,8 @@ export const DataValidationPage: React.FC = () => {
                       ? 'bg-blue-50 text-blue-700 border-blue-200'
                       : selectedRowDetail.status === 'MUTASI_SEKOLAH'
                       ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : selectedRowDetail.status === 'TIDAK_ADA_DI_SK'
+                      ? 'bg-rose-100 text-rose-800 border-rose-300'
                       : 'bg-rose-50 text-rose-700 border-rose-200'
                   }`}
                 >

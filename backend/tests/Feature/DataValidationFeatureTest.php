@@ -150,4 +150,84 @@ class DataValidationFeatureTest extends TestCase
             'period' => 'SP 9',
         ]);
     }
+
+    public function test_detects_employees_in_system_but_missing_from_uploaded_sk(): void
+    {
+        // 1. In DB: Karyawan A (Ahmad Fauzi) and Karyawan B (Dewi Sartika) in SP 8
+        Payroll::create([
+            'employee_name' => 'Ahmad Fauzi',
+            'nik' => '7371010101900001',
+            'province' => 'SULAWESI SELATAN',
+            'school_unit' => 'SDN 1 MAKASSAR',
+            'company' => 'rbs',
+            'period' => 'SP 8',
+            'status' => 'active',
+            'basic_salary' => 3500000,
+        ]);
+        Payroll::create([
+            'employee_name' => 'Dewi Sartika',
+            'nik' => '7371010101900002',
+            'province' => 'SULAWESI SELATAN',
+            'school_unit' => 'SDN 1 MAKASSAR',
+            'company' => 'rbs',
+            'period' => 'SP 8',
+            'status' => 'active',
+            'basic_salary' => 3500000,
+        ]);
+
+        // 2. Uploaded Excel for SP 9 only contains:
+        // - Ahmad Fauzi (Renewal)
+        // - Hendra Gunawan (New)
+        // Dewi Sartika is MISSING from the Excel file!
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([
+            ['No', 'Wilayah', 'Sekolah', 'NIK', 'Nama Karyawan', 'Jabatan', 'Gaji Pokok'],
+            ['1', 'SULAWESI SELATAN', 'SDN 1 MAKASSAR', '7371010101900001', 'Ahmad Fauzi', 'Guru', 3500000],
+            ['2', 'SULAWESI SELATAN', 'SDN 1 MAKASSAR', '', 'Hendra Gunawan', 'Staf', 3000000],
+        ], null, 'A1');
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_val_') . '.xlsx';
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($tempPath);
+
+        $uploadedFile = new UploadedFile($tempPath, 'sp9_calon.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $res = $this->actingAs($this->adminUser)->post('/api/admin/validation/upload', [
+            'file' => $uploadedFile,
+            'target_period' => 'SP 9',
+            'company' => 'rbs',
+        ], ['Accept' => 'application/json']);
+
+        @unlink($tempPath);
+
+        $res->assertOk();
+        $summary = $res->json('data.summary');
+        $rows = $res->json('data.rows');
+
+        $this->assertEquals(2, $summary['total_rows']); // 2 rows in spreadsheet
+        $this->assertEquals(1, $summary['new_count']); // Hendra Gunawan
+        $this->assertEquals(1, $summary['renewal_count']); // Ahmad Fauzi
+        $this->assertEquals(1, $summary['missing_from_file_count']); // Dewi Sartika missing!
+
+        // Find the missing row
+        $missingRow = collect($rows)->firstWhere('name', 'Dewi Sartika');
+        $this->assertNotNull($missingRow);
+        $this->assertEquals('TIDAK_ADA_DI_SK', $missingRow['status']);
+        $this->assertStringContainsString('TIDAK tercantum di file SK baru', $missingRow['recommendation']);
+
+        // Verify commitToPayroll skips TIDAK_ADA_DI_SK
+        $commitRes = $this->actingAs($this->adminUser)->postJson('/api/admin/validation/commit', [
+            'target_period' => 'SP 9',
+            'company' => 'rbs',
+            'rows' => $rows,
+        ]);
+        $commitRes->assertOk();
+        // Only 2 rows committed (Ahmad Fauzi & Hendra Gunawan), Dewi Sartika was skipped!
+        $this->assertEquals(2, $commitRes->json('data.inserted_count'));
+        $this->assertDatabaseMissing('payrolls', [
+            'employee_name' => 'Dewi Sartika',
+            'period' => 'SP 9',
+        ]);
+    }
 }

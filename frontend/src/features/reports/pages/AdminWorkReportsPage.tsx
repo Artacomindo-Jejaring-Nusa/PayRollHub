@@ -26,6 +26,7 @@ import {
   Table as TableIcon,
   LayoutGrid,
   Download,
+  X,
 } from 'lucide-react';
 
 interface ActivitySlot {
@@ -141,6 +142,29 @@ export const AdminWorkReportsPage: React.FC = () => {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [downloadingPdfId, setDownloadingPdfId] = useState<number | null>(null);
 
+  // Selected Report IDs for Checklist Selection
+  const [selectedReportIds, setSelectedReportIds] = useState<number[]>([]);
+
+  const handleToggleSelectReport = (id: number) => {
+    setSelectedReportIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    const pageIds = reports.map((r) => r.id);
+    const isAllSelected = pageIds.length > 0 && pageIds.every((id) => selectedReportIds.includes(id));
+    if (isAllSelected) {
+      setSelectedReportIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+    } else {
+      setSelectedReportIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+
+  const handleClearSelectedReports = () => {
+    setSelectedReportIds([]);
+  };
+
   // Selected Report for Full Detail Modal (4 Kolom 4 Foto)
   const [detailReport, setDetailReport] = useState<WorkReport | null>(null);
 
@@ -166,6 +190,11 @@ export const AdminWorkReportsPage: React.FC = () => {
     }, 400);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // Reset selected reports when filters or page change
+  useEffect(() => {
+    setSelectedReportIds([]);
+  }, [page, perPage, statusFilter, dateFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchReports();
@@ -200,6 +229,7 @@ export const AdminWorkReportsPage: React.FC = () => {
           status: statusFilter !== 'all' ? statusFilter : undefined,
           date: dateFilter || undefined,
           search: search.trim() || undefined,
+          ids: selectedReportIds.length > 0 ? selectedReportIds : undefined,
         },
         'xlsx'
       );
@@ -218,6 +248,7 @@ export const AdminWorkReportsPage: React.FC = () => {
           status: statusFilter !== 'all' ? statusFilter : undefined,
           date: dateFilter || undefined,
           search: search.trim() || undefined,
+          ids: selectedReportIds.length > 0 ? selectedReportIds : undefined,
         },
         'pdf'
       );
@@ -289,20 +320,40 @@ export const AdminWorkReportsPage: React.FC = () => {
             type="button"
             onClick={handleExportExcel}
             disabled={isExportingExcel}
-            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[12.5px] font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            className={`px-3.5 py-2 rounded-xl text-white text-[12.5px] font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer disabled:opacity-50 ${
+              selectedReportIds.length > 0
+                ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400'
+                : 'bg-emerald-600 hover:bg-emerald-700'
+            }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>{isExportingExcel ? 'Mengekspor...' : 'Export Excel'}</span>
+            <span>
+              {isExportingExcel
+                ? 'Mengekspor...'
+                : selectedReportIds.length > 0
+                ? `Export Excel (${selectedReportIds.length} Terpilih)`
+                : 'Export Excel'}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={handleExportPdf}
             disabled={isExportingPdf}
-            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[12.5px] font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+            className={`px-3.5 py-2 rounded-xl text-white text-[12.5px] font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer disabled:opacity-50 ${
+              selectedReportIds.length > 0
+                ? 'bg-rose-600 hover:bg-rose-700 ring-2 ring-rose-400'
+                : 'bg-rose-600 hover:bg-rose-700'
+            }`}
           >
             <FileText className="w-4 h-4" />
-            <span>{isExportingPdf ? 'Mencetak...' : 'Cetak Rekap PDF'}</span>
+            <span>
+              {isExportingPdf
+                ? 'Mencetak...'
+                : selectedReportIds.length > 0
+                ? `Cetak PDF (${selectedReportIds.length} Terpilih)`
+                : 'Cetak Rekap PDF'}
+            </span>
           </button>
 
           {/* Toggle Mode Tampilan (Table vs Grid Cards) */}
@@ -420,7 +471,16 @@ export const AdminWorkReportsPage: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-surface-container/60 border-b border-border-row text-[11.5px] font-semibold text-text-muted uppercase tracking-wider">
-                  <th className="py-3 px-4 w-12 text-center">No</th>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={reports.length > 0 && reports.every((r) => selectedReportIds.includes(r.id))}
+                      onChange={handleToggleSelectAll}
+                      className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                      title="Pilih Semua Laporan pada Halaman Ini"
+                    />
+                  </th>
+                  <th className="py-3 px-3 w-12 text-center">No</th>
                   <th className="py-3 px-4 w-32">Tanggal</th>
                   <th className="py-3 px-4 min-w-[180px]">Karyawan</th>
                   <th className="py-3 px-4 min-w-[200px]">4 Bukti Kegiatan</th>
@@ -433,15 +493,29 @@ export const AdminWorkReportsPage: React.FC = () => {
                 {reports.map((report, idx) => {
                   const isApproved = report.status === 'approved';
                   const isRejected = report.status === 'rejected';
+                  const isSelected = selectedReportIds.includes(report.id);
                   const activities = getReportActivities(report);
 
                   return (
                     <tr
                       key={report.id}
-                      className="hover:bg-surface-container/30 transition-colors"
+                      className={`hover:bg-surface-container/30 transition-colors ${
+                        isSelected ? 'bg-primary/5' : ''
+                      }`}
                     >
+                      {/* Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectReport(report.id)}
+                          className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
+                          title={`Pilih laporan ${report.user?.name || 'karyawan'}`}
+                        />
+                      </td>
+
                       {/* No */}
-                      <td className="py-3 px-4 text-center text-text-muted font-mono text-[11.5px]">
+                      <td className="py-3 px-3 text-center text-text-muted font-mono text-[11.5px]">
                         {(meta.from || 1) + idx}
                       </td>
 
@@ -595,16 +669,26 @@ export const AdminWorkReportsPage: React.FC = () => {
           {reports.map((report) => {
             const isApproved = report.status === 'approved';
             const isRejected = report.status === 'rejected';
+            const isSelected = selectedReportIds.includes(report.id);
             const activities = getReportActivities(report);
 
             return (
               <div
                 key={report.id}
-                className="bg-surface-panel rounded-2xl border border-border-subtle p-5 shadow-xs space-y-4"
+                className={`bg-surface-panel rounded-2xl border p-5 shadow-xs space-y-4 transition-all ${
+                  isSelected ? 'border-primary ring-1 ring-primary/30 bg-primary/5' : 'border-border-subtle'
+                }`}
               >
                 {/* Header Row */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border-row">
                   <div className="flex flex-wrap items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggleSelectReport(report.id)}
+                      className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary mr-1"
+                      title={`Pilih laporan ${report.user?.name || 'karyawan'}`}
+                    />
                     <span
                       className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold flex items-center gap-1 ${
                         isApproved
@@ -1008,6 +1092,54 @@ export const AdminWorkReportsPage: React.FC = () => {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Floating Action Bar Saat Laporan Dipilih */}
+      {selectedReportIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-surface-panel/95 backdrop-blur-md border border-primary/40 shadow-xl rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-text-primary">
+              {selectedReportIds.length} Laporan Kerja Dipilih
+            </span>
+            {dateFilter && (
+              <span className="text-[11px] text-text-muted hidden sm:inline">
+                (Tanggal {dateFilter})
+              </span>
+            )}
+          </div>
+          <div className="h-4 w-px bg-border-subtle hidden sm:block" />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={isExportingExcel}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Export laporan yang dipilih ke Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>{isExportingExcel ? 'Mengekspor...' : `Export Excel (${selectedReportIds.length})`}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Cetak rekap laporan yang dipilih ke PDF"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>{isExportingPdf ? 'Mencetak...' : `Cetak PDF (${selectedReportIds.length})`}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleClearSelectedReports}
+              className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-container rounded-lg transition-all cursor-pointer ml-1"
+              title="Batalkan Pilihan"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

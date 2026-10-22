@@ -33,7 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('payrollhub_user', JSON.stringify(user));
 
     // Kunci aktif tenant ke perusahaannya masing-masing jika bukan super_admin
-    if (user.role !== 'super_admin' && user.company) {
+    if (user.role !== 'super_admin' && user.role !== 'lord_admin' && user.company) {
       const compLower = user.company.toLowerCase();
       const tenantId = compLower.includes('riama') || compLower.includes('rimamandiri') ? 'rimamandiri' : 'rbs';
       localStorage.setItem('payrollhub_active_tenant', tenantId);
@@ -53,7 +53,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setUser: (user: User) => {
     localStorage.setItem('payrollhub_user', JSON.stringify(user));
-    if (user.role !== 'super_admin' && user.company) {
+    if (user.role !== 'super_admin' && user.role !== 'lord_admin' && user.company) {
       const compLower = user.company.toLowerCase();
       const tenantId = compLower.includes('riama') || compLower.includes('rimamandiri') ? 'rimamandiri' : 'rbs';
       localStorage.setItem('payrollhub_active_tenant', tenantId);

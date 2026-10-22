@@ -40,7 +40,7 @@ import { getStorageUrl } from '../../../lib/utils';
 
 export const EmployeeAttendancePage: React.FC = () => {
   const { user } = useAuthStore();
-  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'lord_admin';
 
   // Server & Attendance State
   const [todayData, setTodayData] = useState<TodayAttendanceData | null>(null);

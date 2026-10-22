@@ -249,7 +249,7 @@ export const AdminComplaintsPage: React.FC = () => {
             <option value="lainnya">📝 Lainnya</option>
           </select>
 
-          {user?.role === 'super_admin' && (
+          {(user?.role === 'super_admin' || user?.role === 'lord_admin') && (
             <select
               value={selectedCompany}
               onChange={(e) => {

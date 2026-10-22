@@ -235,7 +235,7 @@ class FirebaseNotificationService
     public function notifyAdmins(string $title, string $body, string $company = 'all', string $type = 'admin_complaint', array $data = []): int
     {
         $admins = User::active()
-            ->whereIn('role', ['admin', 'super_admin'])
+            ->whereIn('role', ['admin', 'super_admin', 'lord_admin'])
             ->get();
 
         $sentCount = 0;

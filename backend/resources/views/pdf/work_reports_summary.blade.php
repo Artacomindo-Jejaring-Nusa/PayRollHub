@@ -65,6 +65,18 @@
         .badge-approved { background-color: #dcfce7; color: #166534; }
         .badge-rejected { background-color: #fee2e2; color: #991b1b; }
         .badge-pending { background-color: #fef3c7; color: #92400e; }
+        .photo-thumb {
+            max-height: 48px;
+            max-width: 80px;
+            border-radius: 3px;
+            border: 1px solid #cbd5e1;
+            display: block;
+            margin-top: 3px;
+        }
+        .photo-link {
+            text-decoration: none;
+            display: inline-block;
+        }
         .footer {
             font-size: 8.5px;
             color: #94a3b8;
@@ -96,13 +108,13 @@
                 <th style="width: 25px;" class="text-center">No</th>
                 <th style="width: 65px;">Tanggal</th>
                 <th style="width: 70px;">NIK</th>
-                <th style="width: 110px;">Nama Karyawan</th>
-                <th>1. Absen Masuk</th>
-                <th>2. Kegiatan 1</th>
-                <th>3. Kegiatan 2</th>
-                <th>4. Kegiatan Lain</th>
-                <th style="width: 75px;" class="text-center">Status</th>
-                <th style="width: 100px;">Catatan HR</th>
+                <th style="width: 105px;">Nama Karyawan</th>
+                <th style="width: 140px;">1. Absen Masuk</th>
+                <th style="width: 140px;">2. Kegiatan 1</th>
+                <th style="width: 140px;">3. Kegiatan 2</th>
+                <th style="width: 140px;">4. Kegiatan Lain</th>
+                <th style="width: 70px;" class="text-center">Status</th>
+                <th style="width: 95px;">Catatan HR</th>
             </tr>
         </thead>
         <tbody>
@@ -116,20 +128,44 @@
                     <span style="color: #64748b; font-size: 8.5px;">{{ $row->user?->company === 'rimamandiri' ? 'Riama Mandiri' : 'RBS Global' }}</span>
                 </td>
                 <td>
-                    {{ $row->desc_absen ?: '-' }}
-                    @if($row->photo_absen) <br><small style="color: #0284c7;">[Ada Foto]</small> @endif
+                    <div style="font-size: 8.5px; line-height: 1.25; margin-bottom: 3px;">{{ $row->desc_absen ?: '-' }}</div>
+                    @if(!empty($row->photo_absen_thumb))
+                        <a href="{{ $row->photo_absen_url }}" target="_blank" class="photo-link">
+                            <img src="{{ $row->photo_absen_thumb }}" class="photo-thumb" alt="Foto Absen" />
+                        </a>
+                    @elseif($row->photo_absen)
+                        <small style="color: #94a3b8; font-style: italic;">[Foto tidak tersedia]</small>
+                    @endif
                 </td>
                 <td>
-                    {{ $row->desc_kegiatan1 ?: ($row->description ?: '-') }}
-                    @if($row->photo_kegiatan1 || $row->attachment_path) <br><small style="color: #0284c7;">[Ada Foto]</small> @endif
+                    <div style="font-size: 8.5px; line-height: 1.25; margin-bottom: 3px;">{{ $row->desc_kegiatan1 ?: ($row->description ?: '-') }}</div>
+                    @if(!empty($row->photo_kegiatan1_thumb))
+                        <a href="{{ $row->photo_kegiatan1_url }}" target="_blank" class="photo-link">
+                            <img src="{{ $row->photo_kegiatan1_thumb }}" class="photo-thumb" alt="Foto Kegiatan 1" />
+                        </a>
+                    @elseif($row->photo_kegiatan1 || $row->attachment_path)
+                        <small style="color: #94a3b8; font-style: italic;">[Foto tidak tersedia]</small>
+                    @endif
                 </td>
                 <td>
-                    {{ $row->desc_kegiatan2 ?: '-' }}
-                    @if($row->photo_kegiatan2) <br><small style="color: #0284c7;">[Ada Foto]</small> @endif
+                    <div style="font-size: 8.5px; line-height: 1.25; margin-bottom: 3px;">{{ $row->desc_kegiatan2 ?: '-' }}</div>
+                    @if(!empty($row->photo_kegiatan2_thumb))
+                        <a href="{{ $row->photo_kegiatan2_url }}" target="_blank" class="photo-link">
+                            <img src="{{ $row->photo_kegiatan2_thumb }}" class="photo-thumb" alt="Foto Kegiatan 2" />
+                        </a>
+                    @elseif($row->photo_kegiatan2)
+                        <small style="color: #94a3b8; font-style: italic;">[Foto tidak tersedia]</small>
+                    @endif
                 </td>
                 <td>
-                    {{ $row->desc_kegiatan_lain ?: '-' }}
-                    @if($row->photo_kegiatan_lain) <br><small style="color: #0284c7;">[Ada Foto]</small> @endif
+                    <div style="font-size: 8.5px; line-height: 1.25; margin-bottom: 3px;">{{ $row->desc_kegiatan_lain ?: '-' }}</div>
+                    @if(!empty($row->photo_kegiatan_lain_thumb))
+                        <a href="{{ $row->photo_kegiatan_lain_url }}" target="_blank" class="photo-link">
+                            <img src="{{ $row->photo_kegiatan_lain_thumb }}" class="photo-thumb" alt="Foto Kegiatan Lain" />
+                        </a>
+                    @elseif($row->photo_kegiatan_lain)
+                        <small style="color: #94a3b8; font-style: italic;">[Foto tidak tersedia]</small>
+                    @endif
                 </td>
                 <td class="text-center">
                     @if($row->status === 'approved')

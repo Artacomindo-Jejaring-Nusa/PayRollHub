@@ -57,15 +57,22 @@ class AuthController extends Controller
             }
         }
 
+        $normalizedIdentifier = $identifier;
+        if (str_ends_with(strtolower($identifier), '@rimbun')) {
+            $normalizedIdentifier = str_ireplace('@rimbun', '@rimbunbuanasejahtera.com', $identifier);
+        }
+
         // 1. Try finding user directly by email or NIK
-        $userQuery = User::where(function ($q) use ($identifier) {
-            $q->where('email', $identifier)->orWhere('nik', $identifier);
+        $userQuery = User::where(function ($q) use ($identifier, $normalizedIdentifier) {
+            $q->where('email', $identifier)
+              ->orWhere('email', $normalizedIdentifier)
+              ->orWhere('nik', $identifier);
         });
 
         if ($requestedCompany) {
-            // Priority: find user belonging to this company or super_admin
+            // Priority: find user belonging to this company, or super_admin / lord_admin
             $user = (clone $userQuery)->where(function ($q) use ($requestedCompany) {
-                $q->where('company', $requestedCompany)->orWhere('role', 'super_admin');
+                $q->where('company', $requestedCompany)->orWhereIn('role', ['super_admin', 'lord_admin']);
             })->first();
 
             // If not found, look for any user with this identifier to detect wrong portal
@@ -111,8 +118,8 @@ class AuthController extends Controller
             ], 422);
         }
 
-        // 3. Strict portal boundary enforcement: Only Super Admin can access both dashboards
-        if ($user->role !== 'super_admin' && $requestedCompany) {
+        // 3. Strict portal boundary enforcement: Super Admin & Lord Admin can access both dashboards
+        if (!$user->isSuperAdmin() && $requestedCompany) {
             $userCompany = in_array(strtolower($user->company ?: ''), ['rimamandiri', 'rima', 'riamamandiripratama']) ? 'rimamandiri' : 'rbs';
             if ($userCompany !== $requestedCompany) {
                 $targetPortal = $userCompany === 'rimamandiri'

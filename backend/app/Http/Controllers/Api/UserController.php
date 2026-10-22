@@ -31,10 +31,10 @@ class UserController extends Controller
                 $query->where('company', $company);
             }
         } else {
-            // Admin biasa hanya bisa melihat akun di perusahaannya sendiri & tidak bisa melihat akun Super Admin
+            // Admin biasa hanya bisa melihat akun di perusahaannya sendiri & tidak bisa melihat akun Super Admin / Lord Admin
             $userCompany = $currentUser->company ?: 'rbs';
             $query->where('company', $userCompany)
-                  ->where('role', '!=', 'super_admin');
+                  ->whereNotIn('role', ['super_admin', 'lord_admin']);
         }
 
         $query->when($search, fn ($q, $s) => 
@@ -44,7 +44,7 @@ class UserController extends Controller
                     ->orWhere('nik', 'like', "%{$s}%");
             })
         )
-        ->when($role && in_array($role, ['super_admin', 'admin', 'viewer', 'user', 'karyawan']), fn ($q) => 
+        ->when($role && in_array($role, ['lord_admin', 'super_admin', 'admin', 'viewer', 'user', 'karyawan']), fn ($q) => 
             $q->where('role', $role)
         )
         ->latest('id');
@@ -95,11 +95,15 @@ class UserController extends Controller
         $currentUser = $request->user();
         $data = $request->validated();
 
+        if (!$currentUser->isLordAdmin() && ($data['role'] ?? '') === 'lord_admin') {
+            abort(403, 'Akses ditolak. Hanya Lord Administrator yang berhak membuat akun Lord Admin.');
+        }
+
         if (!$currentUser->isSuperAdmin()) {
             // Force user to current admin's company
             $data['company'] = $currentUser->company ?: 'rbs';
-            if (($data['role'] ?? '') === 'super_admin') {
-                abort(403, 'Akses ditolak. Hanya Super Admin yang berhak membuat akun Super Admin.');
+            if (in_array($data['role'] ?? '', ['super_admin', 'lord_admin'])) {
+                abort(403, 'Akses ditolak. Hanya Super Admin atau Lord Admin yang berhak membuat akun tingkat administrator.');
             }
         }
 
@@ -160,6 +164,11 @@ class UserController extends Controller
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
         $currentUser = $request->user();
+        // Akun Lord Admin hanya boleh diubah oleh sesama Lord Admin (Super Admin tidak boleh mengubah akun Lord Admin)
+        if ($user->isLordAdmin() && !$currentUser->isLordAdmin()) {
+            abort(403, 'Akses ditolak. Akun Lord Administrator hanya dapat diubah oleh Lord Administrator.');
+        }
+
         if (!$currentUser->isSuperAdmin()) {
             if ($user->company !== $currentUser->company || $user->isSuperAdmin()) {
                 abort(403, 'Akses ditolak. Anda tidak memiliki izin untuk mengubah pengguna perusahaan lain.');
@@ -168,9 +177,13 @@ class UserController extends Controller
 
         $data = $request->validated();
 
+        if (!$currentUser->isLordAdmin() && ($data['role'] ?? '') === 'lord_admin') {
+            unset($data['role']);
+        }
+
         if (!$currentUser->isSuperAdmin()) {
             unset($data['company']); // Cannot switch user to another company
-            if (($data['role'] ?? '') === 'super_admin') {
+            if (in_array($data['role'] ?? '', ['super_admin', 'lord_admin'])) {
                 unset($data['role']);
             }
         }
@@ -263,6 +276,11 @@ class UserController extends Controller
                 'status' => 'error',
                 'message' => 'Anda tidak dapat menghapus akun Anda sendiri.',
             ], 422);
+        }
+
+        // Akun Lord Administrator tidak dapat dihapus oleh Super Administrator
+        if ($user->isLordAdmin() && !$currentUser->isLordAdmin()) {
+            abort(403, 'Akses ditolak. Akun Lord Administrator tidak dapat dihapus oleh Super Administrator.');
         }
 
         if (!$currentUser->isSuperAdmin()) {

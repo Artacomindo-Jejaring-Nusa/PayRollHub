@@ -44,7 +44,7 @@ export const DashboardOverviewPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { tenant } = useTenantTheme();
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'lord_admin';
 
   // Metrics and data state
   const [metrics, setMetrics] = useState<PayrollMetrics>({

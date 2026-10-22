@@ -10,7 +10,7 @@ interface TenantSwitcherProps {
 export const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ variant = 'full' }) => {
   const { tenant, tenantId, switchTenant } = useTenantTheme();
   const { user } = useAuthStore();
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = user?.role === 'super_admin' || user?.role === 'lord_admin';
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 

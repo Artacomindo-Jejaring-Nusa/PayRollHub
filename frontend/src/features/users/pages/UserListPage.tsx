@@ -130,7 +130,7 @@ export const UserListPage: React.FC = () => {
       name: formName.trim(),
       email: formEmail.trim(),
       role: formRole,
-      company: formRole === 'super_admin' ? null : formCompany,
+      company: formRole === 'super_admin' ? null : (formRole === 'lord_admin' ? (formCompany || 'rbs') : formCompany),
       nik: formNik.trim() || null,
       school_unit: formSchoolUnit.trim() || null,
       marital_status: formMaritalStatus || null,
@@ -254,10 +254,11 @@ export const UserListPage: React.FC = () => {
               className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] cursor-pointer"
             >
               <option value="">Semua Peran (Role)</option>
-              <option value="karyawan">📱 Karyawan (Portal)</option>
+              <option value="lord_admin">👑 Lord Admin (Owner)</option>
+              <option value="super_admin">⭐ Super Admin</option>
               <option value="admin">🛡️ Admin Perusahaan</option>
               <option value="user">👤 User (View & Search)</option>
-              <option value="super_admin">⭐ Super Admin</option>
+              <option value="karyawan">📱 Karyawan (Portal)</option>
             </select>
           </div>
         </div>
@@ -335,7 +336,9 @@ export const UserListPage: React.FC = () => {
                       <td className="py-3.5 px-4 text-center">
                         <Badge
                           variant={
-                            item.role === 'super_admin'
+                            item.role === 'lord_admin'
+                              ? 'lord_admin'
+                              : item.role === 'super_admin'
                               ? 'super_admin'
                               : item.role === 'admin'
                               ? 'admin'
@@ -344,7 +347,9 @@ export const UserListPage: React.FC = () => {
                               : 'viewer'
                           }
                         >
-                          {item.role === 'super_admin'
+                          {item.role === 'lord_admin'
+                            ? '👑 Lord Admin'
+                            : item.role === 'super_admin'
                             ? '⭐ Super Admin'
                             : item.role === 'admin'
                             ? `Admin (${item.company?.toUpperCase() || 'RBS'})`
@@ -364,15 +369,22 @@ export const UserListPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => handleOpenEdit(item)}
-                            className="p-1.5 rounded text-text-muted hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                            title="Ubah Pengguna"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
+                          {/* Akun Lord Admin hanya boleh diedit oleh sesama Lord Admin */}
+                          {currentUser?.role === 'lord_admin' || item.role !== 'lord_admin' ? (
+                            <button
+                              onClick={() => handleOpenEdit(item)}
+                              className="p-1.5 rounded text-text-muted hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                              title="Ubah Pengguna"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <span className="p-1.5 text-text-muted/40" title="Akun Lord Admin Terkunci (Hanya Owner)">
+                              🔒
+                            </span>
+                          )}
 
-                          {currentUser?.id !== item.id && (
+                          {currentUser?.id !== item.id && (currentUser?.role === 'lord_admin' || item.role !== 'lord_admin') && (
                             <button
                               onClick={() => setDeleteTarget(item)}
                               className="p-1.5 rounded text-text-muted hover:text-status-danger-text hover:bg-red-50 transition-colors cursor-pointer"
@@ -457,6 +469,7 @@ export const UserListPage: React.FC = () => {
             value={formRole}
             onChange={(e) => setFormRole(e.target.value as UserRole)}
             options={[
+              ...(currentUser?.role === 'lord_admin' ? [{ label: '👑 Lord Admin (Owner / Dewa Admin - Hak Akses Tertinggi)', value: 'lord_admin' }] : []),
               { label: '⭐ Super Admin (Akses Kedua Dashboard & Melihat Audit Log)', value: 'super_admin' },
               { label: '🛡️ Admin Perusahaan (Akses Penuh Kelola Data Gaji & Absensi)', value: 'admin' },
               { label: '👤 User (Hanya View & Search Data Penggajian)', value: 'user' },
@@ -465,7 +478,7 @@ export const UserListPage: React.FC = () => {
             error={formErrors.role}
           />
 
-          {formRole !== 'super_admin' && (
+          {formRole !== 'super_admin' && formRole !== 'lord_admin' && (
             <Select
               label="Entitas Perusahaan"
               required

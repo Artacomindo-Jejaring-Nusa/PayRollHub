@@ -16,20 +16,45 @@ class WorkReportExport implements FromCollection, WithHeadings, WithMapping, Sho
 {
     protected ?string $status;
     protected ?string $date;
+    protected ?string $startDate;
+    protected ?string $endDate;
     protected ?string $search;
+    protected array $ids = [];
+    protected ?string $targetCompany = null;
+    private int $rowNumber = 0;
 
-    public function __construct(Request $request)
+    public function __construct(Request $request, array $ids = [], ?string $targetCompany = null)
     {
         $this->status = $request->input('status');
         $this->date = $request->input('date');
+        $this->startDate = $request->input('start_date');
+        $this->endDate = $request->input('end_date');
         $this->search = $request->input('search');
+
+        if (!empty($ids)) {
+            $this->ids = $ids;
+        } else {
+            $rawIds = $request->input('ids') ?: $request->input('report_ids');
+            if ($rawIds) {
+                $this->ids = is_array($rawIds) ? $rawIds : explode(',', (string) $rawIds);
+                $this->ids = array_filter(array_map('intval', $this->ids));
+            }
+        }
+
+        $this->targetCompany = $targetCompany ?: $request->input('company');
+        if ($this->targetCompany === 'all') {
+            $this->targetCompany = null;
+        }
     }
 
     public function collection(): Collection
     {
         return WorkReport::with(['user', 'reviewer'])
+            ->when(!empty($this->ids), fn ($q) => $q->whereIn('id', $this->ids))
+            ->when($this->targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $this->targetCompany)))
             ->when($this->status && $this->status !== 'all', fn ($q) => $q->where('status', $this->status))
-            ->when($this->date, fn ($q) => $q->whereDate('report_date', $this->date))
+            ->when($this->startDate && $this->endDate, fn ($q) => $q->whereBetween('report_date', [$this->startDate, $this->endDate]))
+            ->when($this->date && !$this->startDate, fn ($q) => $q->whereDate('report_date', $this->date))
             ->when($this->search, function ($q, $s) {
                 $q->where(function ($sub) use ($s) {
                     $sub->where('title', 'like', "%{$s}%")
@@ -72,8 +97,7 @@ class WorkReportExport implements FromCollection, WithHeadings, WithMapping, Sho
 
     public function map(mixed $row): array
     {
-        static $index = 0;
-        $index++;
+        $this->rowNumber++;
 
         $statusText = match ($row->status) {
             'approved' => 'Disetujui',
@@ -83,21 +107,27 @@ class WorkReportExport implements FromCollection, WithHeadings, WithMapping, Sho
 
         $companyText = ($row->user?->company === 'rimamandiri') ? 'PT. Riama Mandiri Pratama' : 'PT. Rimbun Buana Sejahtera';
 
+        $photoAbsen = $this->formatPhotoHyperlink($row->photo_absen);
+        $keg1Path = $row->photo_kegiatan1 ?: $row->attachment_path;
+        $photoKeg1 = $this->formatPhotoHyperlink($keg1Path);
+        $photoKeg2 = $this->formatPhotoHyperlink($row->photo_kegiatan2);
+        $photoKegLain = $this->formatPhotoHyperlink($row->photo_kegiatan_lain);
+
         return [
-            $index,
+            $this->rowNumber,
             $row->report_date ? date('d/m/Y', strtotime($row->report_date)) : '-',
             $row->nik ? "'" . $row->nik : '-',
             $row->user?->name ?? 'Karyawan',
             $companyText,
             $row->user?->phone ?? '-',
             $row->desc_absen ?: '-',
-            $row->photo_absen ? 'Ada Foto' : 'Tidak Ada',
+            $photoAbsen,
             $row->desc_kegiatan1 ?: ($row->description ?: '-'),
-            $row->photo_kegiatan1 ?: ($row->attachment_path ? 'Ada Foto' : 'Tidak Ada'),
+            $photoKeg1,
             $row->desc_kegiatan2 ?: '-',
-            $row->photo_kegiatan2 ? 'Ada Foto' : 'Tidak Ada',
+            $photoKeg2,
             $row->desc_kegiatan_lain ?: '-',
-            $row->photo_kegiatan_lain ? 'Ada Foto' : 'Tidak Ada',
+            $photoKegLain,
             $statusText,
             $row->reviewer?->name ?? '-',
             $row->reviewed_at ? date('d/m/Y H:i', strtotime($row->reviewed_at)) : '-',
@@ -105,8 +135,51 @@ class WorkReportExport implements FromCollection, WithHeadings, WithMapping, Sho
         ];
     }
 
+    protected function formatPhotoHyperlink(?string $path): string
+    {
+        if (empty($path)) {
+            return 'Tidak Ada';
+        }
+
+        $url = $this->formatPhotoUrl($path);
+        if (!$url) {
+            return 'Tidak Ada';
+        }
+
+        return '=HYPERLINK("' . $url . '", "Lihat Foto")';
+    }
+
+    protected function formatPhotoUrl(?string $path): ?string
+    {
+        if (empty($path)) return null;
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+        $clean = ltrim($path, '/');
+        if (str_starts_with($clean, 'storage/')) {
+            return url($clean);
+        }
+        return url('storage/' . $clean);
+    }
+
     public function styles(Worksheet $sheet): array
     {
+        $lastRow = max(2, $this->rowNumber + 1);
+
+        // Styling kolom foto: H (1. Foto Absen), J (2. Foto Kegiatan 1), L (3. Foto Kegiatan 2), N (4. Foto Kegiatan Lain)
+        foreach (['H', 'J', 'L', 'N'] as $col) {
+            $sheet->getStyle("{$col}2:{$col}{$lastRow}")
+                ->getFont()
+                ->getColor()
+                ->setRGB('0066CC');
+            $sheet->getStyle("{$col}2:{$col}{$lastRow}")
+                ->getFont()
+                ->setUnderline(true);
+            $sheet->getStyle("{$col}2:{$col}{$lastRow}")
+                ->getAlignment()
+                ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+        }
+
         return [
             1 => [
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],

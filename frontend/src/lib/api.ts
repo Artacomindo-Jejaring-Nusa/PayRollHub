@@ -49,7 +49,7 @@ api.interceptors.request.use(
     if (!isAuthRoute) {
       const user = useAuthStore.getState().user;
       let activeCompany = localStorage.getItem('payrollhub_active_tenant');
-      if (user && user.role !== 'super_admin' && user.company) {
+      if (user && user.role !== 'super_admin' && user.role !== 'lord_admin' && user.company) {
         activeCompany = user.company.toLowerCase().includes('riama') ? 'rimamandiri' : 'rbs';
       }
       if (activeCompany) {

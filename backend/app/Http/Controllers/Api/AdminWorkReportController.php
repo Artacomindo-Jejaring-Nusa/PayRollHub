@@ -146,6 +146,9 @@ class AdminWorkReportController extends Controller
      */
     public function export(Request $request)
     {
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(180);
+
         $currentUser = $request->user();
         if (!$currentUser || !$currentUser->isAdmin()) {
             abort(403, 'Akses ditolak: Pengguna dengan role User tidak memiliki wewenang mengunduh Laporan Kerja.');
@@ -156,17 +159,30 @@ class AdminWorkReportController extends Controller
             : ($currentUser->company ?: 'rbs');
 
         $format = strtolower($request->input('format', 'xlsx'));
-        $filename = 'rekap_laporan_kerja_' . date('Ymd_His');
 
         $status = $request->input('status');
         $date = $request->input('date');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
         $search = $request->input('search');
+
+        $rawIds = $request->input('ids') ?: $request->input('report_ids');
+        $ids = [];
+        if ($rawIds) {
+            $ids = is_array($rawIds) ? $rawIds : explode(',', (string) $rawIds);
+            $ids = array_filter(array_map('intval', $ids));
+        }
+
+        $suffixSelected = !empty($ids) ? '_terpilih_' . count($ids) : '';
+        $filename = 'rekap_laporan_kerja_' . date('Ymd_His') . $suffixSelected;
 
         if ($format === 'pdf') {
             $reports = WorkReport::with(['user', 'reviewer'])
+                ->when(!empty($ids), fn ($q) => $q->whereIn('id', $ids))
                 ->when($targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $targetCompany)))
                 ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
-                ->when($date, fn ($q) => $q->whereDate('report_date', $date))
+                ->when($startDate && $endDate, fn ($q) => $q->whereBetween('report_date', [$startDate, $endDate]))
+                ->when($date && !$startDate, fn ($q) => $q->whereDate('report_date', $date))
                 ->when($search, function ($q, $s) {
                     $q->where(function ($sub) use ($s) {
                         $sub->where('title', 'like', "%{$s}%")
@@ -182,16 +198,33 @@ class AdminWorkReportController extends Controller
                 ->latest('report_date')
                 ->get();
 
+            // Persiapkan thumbnail foto dan URL agar tampil langsung di PDF rekap
+            foreach ($reports as $report) {
+                $report->photo_absen_thumb = $this->getThumbnailBase64($report->photo_absen, 250);
+                $report->photo_absen_url = $this->formatPhotoUrl($report->photo_absen);
+
+                $keg1Path = $report->photo_kegiatan1 ?: $report->attachment_path;
+                $report->photo_kegiatan1_thumb = $this->getThumbnailBase64($keg1Path, 250);
+                $report->photo_kegiatan1_url = $this->formatPhotoUrl($keg1Path);
+
+                $report->photo_kegiatan2_thumb = $this->getThumbnailBase64($report->photo_kegiatan2, 250);
+                $report->photo_kegiatan2_url = $this->formatPhotoUrl($report->photo_kegiatan2);
+
+                $report->photo_kegiatan_lain_thumb = $this->getThumbnailBase64($report->photo_kegiatan_lain, 250);
+                $report->photo_kegiatan_lain_url = $this->formatPhotoUrl($report->photo_kegiatan_lain);
+            }
+
             $pdf = Pdf::loadView('pdf.work_reports_summary', [
                 'reports' => $reports,
-                'filterDate' => $date,
+                'filterDate' => $date ?: ($startDate && $endDate ? "{$startDate} s/d {$endDate}" : null),
                 'filterStatus' => $status,
+                'selectedCount' => count($ids),
             ])->setPaper('a4', 'landscape');
 
             return $pdf->download("{$filename}.pdf");
         }
 
-        return Excel::download(new WorkReportExport($request), "{$filename}.xlsx");
+        return Excel::download(new WorkReportExport($request, $ids, $targetCompany), "{$filename}.xlsx");
     }
 
     /**
@@ -213,10 +246,10 @@ class AdminWorkReportController extends Controller
         }
 
         $photos = [
-            'absen' => $this->convertPhotoToBase64($workReport->photo_absen),
-            'kegiatan1' => $this->convertPhotoToBase64($workReport->photo_kegiatan1 ?: $workReport->attachment_path),
-            'kegiatan2' => $this->convertPhotoToBase64($workReport->photo_kegiatan2),
-            'kegiatan_lain' => $this->convertPhotoToBase64($workReport->photo_kegiatan_lain),
+            'absen' => $this->getThumbnailBase64($workReport->photo_absen, 650),
+            'kegiatan1' => $this->getThumbnailBase64($workReport->photo_kegiatan1 ?: $workReport->attachment_path, 650),
+            'kegiatan2' => $this->getThumbnailBase64($workReport->photo_kegiatan2, 650),
+            'kegiatan_lain' => $this->getThumbnailBase64($workReport->photo_kegiatan_lain, 650),
         ];
 
         $pdf = Pdf::loadView('pdf.work_report_single', [
@@ -229,14 +262,87 @@ class AdminWorkReportController extends Controller
         return $pdf->download("Laporan_Kerja_{$cleanName}_{$dateStr}.pdf");
     }
 
-    private function convertPhotoToBase64(?string $path): ?string
+    public function formatPhotoUrl(?string $path): ?string
     {
-        if (!$path) return null;
-        $fullPath = storage_path('app/public/' . $path);
-        if (!file_exists($fullPath)) return null;
+        if (empty($path)) return null;
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+        $clean = ltrim($path, '/');
+        if (str_starts_with($clean, 'storage/')) {
+            return url($clean);
+        }
+        return url('storage/' . $clean);
+    }
+
+    public function getPhotoStoragePath(?string $path): ?string
+    {
+        if (empty($path)) return null;
+        $clean = ltrim($path, '/');
+        if (str_starts_with($clean, 'storage/')) {
+            $clean = substr($clean, 8);
+        }
+        return storage_path('app/public/' . $clean);
+    }
+
+    public function getThumbnailBase64(?string $path, int $maxDim = 250): ?string
+    {
+        if (empty($path)) return null;
+        $fullPath = $this->getPhotoStoragePath($path);
+        if (!$fullPath || !file_exists($fullPath)) return null;
+
+        // Jika file relatif kecil (< 80KB), langsung encode base64
+        if (filesize($fullPath) < 81920) {
+            $mime = mime_content_type($fullPath) ?: 'image/jpeg';
+            return "data:{$mime};base64," . base64_encode(file_get_contents($fullPath));
+        }
+
+        // Downscale dengan GD jika tersedia agar render PDF cepat dan hemat memori
+        if (extension_loaded('gd')) {
+            try {
+                $imageInfo = @getimagesize($fullPath);
+                if ($imageInfo) {
+                    [$w, $h] = $imageInfo;
+                    if ($w > $maxDim || $h > $maxDim) {
+                        $ratio = min($maxDim / $w, $maxDim / $h);
+                        $newW = max(1, (int) round($w * $ratio));
+                        $newH = max(1, (int) round($h * $ratio));
+
+                        $srcImg = match ($imageInfo[2]) {
+                            IMAGETYPE_JPEG => @imagecreatefromjpeg($fullPath),
+                            IMAGETYPE_PNG => @imagecreatefrompng($fullPath),
+                            IMAGETYPE_WEBP => @imagecreatefromwebp($fullPath),
+                            default => null,
+                        };
+
+                        if ($srcImg) {
+                            $thumb = imagecreatetruecolor($newW, $newH);
+                            if ($imageInfo[2] === IMAGETYPE_PNG) {
+                                imagealphablending($thumb, false);
+                                imagesavealpha($thumb, true);
+                            }
+                            imagecopyresampled($thumb, $srcImg, 0, 0, 0, 0, $newW, $newH, $w, $h);
+                            ob_start();
+                            imagejpeg($thumb, null, 75);
+                            $thumbData = ob_get_clean();
+                            imagedestroy($thumb);
+                            imagedestroy($srcImg);
+
+                            return 'data:image/jpeg;base64,' . base64_encode($thumbData);
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fallback jika proses GD mengalami kendala
+            }
+        }
 
         $mime = mime_content_type($fullPath) ?: 'image/jpeg';
-        $data = base64_encode(file_get_contents($fullPath));
-        return "data:{$mime};base64,{$data}";
+        return "data:{$mime};base64," . base64_encode(file_get_contents($fullPath));
+    }
+
+    private function convertPhotoToBase64(?string $path): ?string
+    {
+        return $this->getThumbnailBase64($path, 650);
     }
 }

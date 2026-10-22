@@ -76,12 +76,32 @@ class AdminAttendanceController extends Controller
             : ($currentUser->company ?: 'rbs');
 
         if ($targetCompany) {
-            $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+            $query->whereHas('user', function ($u) use ($targetCompany, $role) {
+                $u->where(function ($sub) use ($targetCompany, $role) {
+                    $sub->where('company', $targetCompany)
+                        ->orWhere('company', 'all');
+
+                    // Jika memfilter admin atau super admin, atau tanpa filter role spesifik, sertakan akun super admin/lord admin yang company-nya null
+                    if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                        $sub->orWhere(function ($saQ) use ($targetCompany) {
+                            $saQ->whereNull('company')
+                                ->whereIn('role', ['super_admin', 'lord_admin']);
+                            if ($targetCompany === 'rbs') {
+                                $saQ->where(fn ($eq) => $eq->where('email', 'like', '%rimbun%')->orWhere('email', 'not like', '%riama%'));
+                            } elseif ($targetCompany === 'rimamandiri') {
+                                $saQ->where('email', 'like', '%riama%');
+                            }
+                        });
+                    }
+                });
+            });
         }
 
-        // Filter berdasarkan tipe akun / role (admin vs user lapangan)
-        if ($role === 'admin') {
-            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
+        // Filter berdasarkan tipe akun / role (admin vs super admin vs user lapangan)
+        if ($role === 'super_admin') {
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['super_admin', 'lord_admin']));
+        } elseif ($role === 'admin') {
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin', 'lord_admin']));
         } elseif ($role === 'user' || $role === 'karyawan') {
             $query->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
@@ -160,18 +180,47 @@ class AdminAttendanceController extends Controller
         $usersQuery = User::query();
         $attendanceQuery = Attendance::query();
 
-        // Dukungan filter role untuk Admin vs Karyawan
-        if ($role === 'admin') {
-            $usersQuery->whereIn('role', ['admin', 'super_admin']);
-            $attendanceQuery->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
+        // Dukungan filter role untuk Admin vs Karyawan vs Super Admin
+        if ($role === 'super_admin') {
+            $usersQuery->whereIn('role', ['super_admin', 'lord_admin']);
+            $attendanceQuery->whereHas('user', fn ($u) => $u->whereIn('role', ['super_admin', 'lord_admin']));
+        } elseif ($role === 'admin') {
+            $usersQuery->whereIn('role', ['admin', 'super_admin', 'lord_admin']);
+            $attendanceQuery->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin', 'lord_admin']));
         } elseif ($role === 'user' || $role === 'karyawan') {
             $usersQuery->whereIn('role', ['user', 'karyawan']);
             $attendanceQuery->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
 
         if ($targetCompany) {
-            $usersQuery->where('company', $targetCompany);
-            $attendanceQuery->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+            $usersQuery->where(function ($uq) use ($targetCompany, $role) {
+                $uq->where('company', $targetCompany)->orWhere('company', 'all');
+                if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                    $uq->orWhere(function ($saQ) use ($targetCompany) {
+                        $saQ->whereNull('company')->whereIn('role', ['super_admin', 'lord_admin']);
+                        if ($targetCompany === 'rbs') {
+                            $saQ->where(fn ($eq) => $eq->where('email', 'like', '%rimbun%')->orWhere('email', 'not like', '%riama%'));
+                        } elseif ($targetCompany === 'rimamandiri') {
+                            $saQ->where('email', 'like', '%riama%');
+                        }
+                    });
+                }
+            });
+            $attendanceQuery->whereHas('user', function ($u) use ($targetCompany, $role) {
+                $u->where(function ($sub) use ($targetCompany, $role) {
+                    $sub->where('company', $targetCompany)->orWhere('company', 'all');
+                    if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                        $sub->orWhere(function ($saQ) use ($targetCompany) {
+                            $saQ->whereNull('company')->whereIn('role', ['super_admin', 'lord_admin']);
+                            if ($targetCompany === 'rbs') {
+                                $saQ->where(fn ($eq) => $eq->where('email', 'like', '%rimbun%')->orWhere('email', 'not like', '%riama%'));
+                            } elseif ($targetCompany === 'rimamandiri') {
+                                $saQ->where('email', 'like', '%riama%');
+                            }
+                        });
+                    }
+                });
+            });
         }
 
         $totalRegistered = 0;
@@ -305,25 +354,44 @@ class AdminAttendanceController extends Controller
         }
 
         $usersQuery = User::query();
-        if ($role === 'admin') {
-            $usersQuery->whereIn('role', ['admin', 'super_admin']);
+        if ($role === 'super_admin') {
+            $usersQuery->whereIn('role', ['super_admin', 'lord_admin']);
+        } elseif ($role === 'admin') {
+            $usersQuery->whereIn('role', ['admin', 'super_admin', 'lord_admin']);
         } elseif ($role === 'user' || $role === 'karyawan') {
             $usersQuery->whereIn('role', ['user', 'karyawan']);
         }
 
         if ($targetCompany) {
-            $usersQuery->where('company', $targetCompany);
+            $usersQuery->where(function ($uq) use ($targetCompany, $role) {
+                $uq->where('company', $targetCompany)->orWhere('company', 'all');
+                if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                    $uq->orWhere(function ($saQ) use ($targetCompany) {
+                        $saQ->whereNull('company')->whereIn('role', ['super_admin', 'lord_admin']);
+                        if ($targetCompany === 'rbs') {
+                            $saQ->where(fn ($eq) => $eq->where('email', 'like', '%rimbun%')->orWhere('email', 'not like', '%riama%'));
+                        } elseif ($targetCompany === 'rimamandiri') {
+                            $saQ->where('email', 'like', '%riama%');
+                        }
+                    });
+                }
+            });
         }
 
         // Filter karyawan yang terdaftar dan aktif di periode SP tersebut
-        if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+        if ($spPeriod && strtolower(trim($spPeriod)) !== 'all' && !in_array($role, ['admin', 'super_admin'])) {
             $spClean = trim($spPeriod);
-            $usersQuery->whereIn('name', function ($q) use ($targetCompany, $spClean) {
-                $q->select('employee_name')
-                    ->from('payrolls')
-                    ->where('period', $spClean)
-                    ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany))
-                    ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'));
+            $usersQuery->where(function ($q) use ($targetCompany, $spClean, $role) {
+                $q->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                    $sq->select('employee_name')
+                        ->from('payrolls')
+                        ->where('period', $spClean)
+                        ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                        ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                });
+                if (empty($role) || $role === 'all') {
+                    $q->orWhereIn('role', ['admin', 'super_admin', 'lord_admin']);
+                }
             });
         } else {
             $usersQuery->where(function ($q) {
@@ -777,6 +845,9 @@ class AdminAttendanceController extends Controller
      */
     public function export(Request $request): StreamedResponse
     {
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(180);
+
         $format = strtolower($request->query('format', 'xlsx')); // 'xlsx' | 'csv'
         $mode = $request->query('mode', 'detail'); // 'detail' | 'employee_recap'
         $date = $request->query('date');
@@ -790,6 +861,13 @@ class AdminAttendanceController extends Controller
         if ($rawUserIds) {
             $selectedUserIds = is_array($rawUserIds) ? $rawUserIds : explode(',', (string) $rawUserIds);
             $selectedUserIds = array_filter(array_map('intval', $selectedUserIds));
+        }
+
+        $rawAttendanceIds = $request->query('attendance_ids') ?: $request->input('attendance_ids') ?: $request->query('ids') ?: $request->input('ids');
+        $selectedAttendanceIds = [];
+        if ($rawAttendanceIds) {
+            $selectedAttendanceIds = is_array($rawAttendanceIds) ? $rawAttendanceIds : explode(',', (string) $rawAttendanceIds);
+            $selectedAttendanceIds = array_filter(array_map('intval', $selectedAttendanceIds));
         }
 
         $currentUser = $request->user();
@@ -812,24 +890,44 @@ class AdminAttendanceController extends Controller
             ]));
 
             $usersQuery = User::query();
-            if ($role === 'admin') {
-                $usersQuery->whereIn('role', ['admin', 'super_admin']);
+            if ($role === 'super_admin') {
+                $usersQuery->whereIn('role', ['super_admin', 'lord_admin']);
+            } elseif ($role === 'admin') {
+                $usersQuery->whereIn('role', ['admin', 'super_admin', 'lord_admin']);
             } elseif ($role === 'user' || $role === 'karyawan') {
                 $usersQuery->whereIn('role', ['user', 'karyawan']);
             }
+
             if ($targetCompany) {
-                $usersQuery->where('company', $targetCompany);
+                $usersQuery->where(function ($uq) use ($targetCompany, $role) {
+                    $uq->where('company', $targetCompany)->orWhere('company', 'all');
+                    if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                        $uq->orWhere(function ($saQ) use ($targetCompany) {
+                            $saQ->whereNull('company')->whereIn('role', ['super_admin', 'lord_admin']);
+                            if ($targetCompany === 'rbs') {
+                                $saQ->where(fn ($eq) => $eq->where('email', 'like', '%rimbun%')->orWhere('email', 'not like', '%riama%'));
+                            } elseif ($targetCompany === 'rimamandiri') {
+                                $saQ->where('email', 'like', '%riama%');
+                            }
+                        });
+                    }
+                });
             }
 
             // Filter karyawan yang terdaftar dan aktif di periode SP tersebut
-            if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+            if ($spPeriod && strtolower(trim($spPeriod)) !== 'all' && !in_array($role, ['admin', 'super_admin'])) {
                 $spClean = trim($spPeriod);
-                $usersQuery->whereIn('name', function ($q) use ($targetCompany, $spClean) {
-                    $q->select('employee_name')
-                        ->from('payrolls')
-                        ->where('period', $spClean)
-                        ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany))
-                        ->where(fn ($sq) => $sq->where('status', '!=', 'off')->orWhereNull('status'));
+                $usersQuery->where(function ($q) use ($targetCompany, $spClean, $role) {
+                    $q->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                        $sq->select('employee_name')
+                            ->from('payrolls')
+                            ->where('period', $spClean)
+                            ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                            ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                    });
+                    if (empty($role) || $role === 'all') {
+                        $q->orWhereIn('role', ['admin', 'super_admin', 'lord_admin']);
+                    }
                 });
             } else {
                 $usersQuery->where(function ($q) {
@@ -1089,21 +1187,44 @@ class AdminAttendanceController extends Controller
         // =========================================================================
         $query = Attendance::with(['user.shift', 'location', 'shift']);
 
-        if ($targetCompany) {
-            $query->whereHas('user', fn ($u) => $u->where('company', $targetCompany));
+        if (!empty($selectedAttendanceIds)) {
+            $query->whereIn('id', $selectedAttendanceIds);
+        } elseif (!empty($selectedUserIds)) {
+            $query->whereIn('user_id', $selectedUserIds);
         }
 
-        if ($role === 'admin') {
-            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin']));
+        if ($targetCompany) {
+            $query->whereHas('user', function ($u) use ($targetCompany, $role) {
+                $u->where(function ($sub) use ($targetCompany, $role) {
+                    $sub->where('company', $targetCompany)
+                        ->orWhere('company', 'all');
+
+                    if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                        $sub->orWhere(function ($saQ) use ($targetCompany) {
+                            $saQ->whereNull('company')
+                                ->whereIn('role', ['super_admin', 'lord_admin']);
+                            if ($targetCompany === 'rbs') {
+                                $saQ->where(fn ($eq) => $eq->where('email', 'like', '%rimbun%')->orWhere('email', 'not like', '%riama%'));
+                            } elseif ($targetCompany === 'rimamandiri') {
+                                $saQ->where('email', 'like', '%riama%');
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        if ($role === 'super_admin') {
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['super_admin', 'lord_admin']));
+        } elseif ($role === 'admin') {
+            $query->whereHas('user', fn ($u) => $u->whereIn('role', ['admin', 'super_admin', 'lord_admin']));
         } elseif ($role === 'user' || $role === 'karyawan') {
             $query->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
 
-        if (!empty($selectedUserIds)) {
-            $query->whereIn('user_id', $selectedUserIds);
-        }
-
-        if ($spRange) {
+        if (!empty($selectedAttendanceIds)) {
+            $filterLabel = "terpilih_" . count($selectedAttendanceIds);
+        } elseif ($spRange) {
             $query->whereBetween('date', $spRange);
             $cleanSp = str_replace(' ', '_', $spPeriod);
             $filterLabel = "SP_{$cleanSp}";
@@ -1113,8 +1234,13 @@ class AdminAttendanceController extends Controller
         } elseif ($month) {
             $query->where('date', 'like', "{$month}%");
             $filterLabel = "bulan_{$month}";
+        } elseif (empty($selectedUserIds)) {
+            // Default to today if neither IDs, SP, date, nor month specified, preventing full database dump
+            $today = Carbon::today('Asia/Jakarta')->toDateString();
+            $query->where('date', $today);
+            $filterLabel = "tanggal_{$today}";
         } else {
-            $filterLabel = "semua";
+            $filterLabel = "karyawan_terpilih";
         }
 
         if ($status && $status !== 'all') {
@@ -1150,7 +1276,9 @@ class AdminAttendanceController extends Controller
         }
 
         $attendances = $query->orderBy('date', 'desc')->orderBy('check_in_time', 'desc')->get();
-        $suffixSelected = !empty($selectedUserIds) ? '_terpilih' : '';
+        $suffixSelected = !empty($selectedAttendanceIds)
+            ? '_terpilih_' . count($selectedAttendanceIds)
+            : (!empty($selectedUserIds) ? '_terpilih_' . count($selectedUserIds) . '_karyawan' : '');
         $filename = "rekap_absensi_detail_{$filterLabel}{$suffixSelected}";
 
         if ($format === 'csv') {

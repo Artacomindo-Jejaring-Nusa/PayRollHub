@@ -157,7 +157,7 @@ class EmployeeReplacementController extends Controller
             ]);
 
             \App\Models\User::where('company', $oldPayroll->company)
-                ->whereNotIn('role', ['admin', 'super_admin'])
+                ->whereNotIn('role', ['admin', 'super_admin', 'lord_admin'])
                 ->where(function ($q) use ($oldPayroll) {
                     if (!empty($oldPayroll->nik)) {
                         $q->where('nik', $oldPayroll->nik);

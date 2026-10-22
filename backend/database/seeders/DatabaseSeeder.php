@@ -14,6 +14,27 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // -1. Lord Admin (Owner / Dewa Admin - Akses Tertinggi & Melihat Absensi Super Admin)
+        User::updateOrCreate(
+            ['email' => 'erika@rimbunbuanasejahtera.com'],
+            [
+                'name' => 'Erika (Owner)',
+                'password' => 'password123',
+                'role' => 'lord_admin',
+                'company' => 'rbs',
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'martin@rimbunbuanasejahtera.com'],
+            [
+                'name' => 'Martin (Owner)',
+                'password' => 'password123',
+                'role' => 'lord_admin',
+                'company' => 'rbs',
+            ]
+        );
+
         // 0. Super Admin (Akses Kedua Dashboard & Melihat Log Aktivitas)
         User::updateOrCreate(
             ['email' => 'superadmin@payrollhub.com'],

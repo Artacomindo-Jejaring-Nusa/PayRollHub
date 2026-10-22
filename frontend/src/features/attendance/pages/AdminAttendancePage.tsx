@@ -54,7 +54,8 @@ import {
 
 export const AdminAttendancePage: React.FC = () => {
   const { user: currentUser } = useAuthStore();
-  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isLordAdmin = currentUser?.role === 'lord_admin';
+  const isSuperAdmin = currentUser?.role === 'super_admin' || isLordAdmin;
 
   const [activeTab, setActiveTab] = useState<'recap' | 'locations' | 'shifts' | 'settings'>('recap');
 
@@ -98,12 +99,19 @@ export const AdminAttendancePage: React.FC = () => {
   const [employeeRecapPage, setEmployeeRecapPage] = useState<number>(1);
   const [employeeRecapPerPage, setEmployeeRecapPerPage] = useState<number>(25);
 
-  // Point 13: Pemilihan Karyawan untuk Laporan Absensi Berdasarkan SP
+  // Point 13: Pemilihan Karyawan (Mode Rekap) & Log Absensi (Mode Detail) untuk Laporan Export
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [selectedAttendanceIds, setSelectedAttendanceIds] = useState<number[]>([]);
 
   const handleToggleSelectEmployee = (userId: number) => {
     setSelectedEmployeeIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleToggleSelectAttendance = (id: number) => {
+    setSelectedAttendanceIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
@@ -118,17 +126,21 @@ export const AdminAttendancePage: React.FC = () => {
   };
 
   const handleToggleSelectAllDetail = () => {
-    const pageUserIds = Array.from(new Set(attendances.map((a) => a.user_id).filter(Boolean))) as number[];
-    const isAllSelected = pageUserIds.length > 0 && pageUserIds.every((id) => selectedEmployeeIds.includes(id));
+    const pageAttendanceIds = attendances.map((a) => a.id).filter(Boolean) as number[];
+    const isAllSelected = pageAttendanceIds.length > 0 && pageAttendanceIds.every((id) => selectedAttendanceIds.includes(id));
     if (isAllSelected) {
-      setSelectedEmployeeIds((prev) => prev.filter((id) => !pageUserIds.includes(id)));
+      setSelectedAttendanceIds((prev) => prev.filter((id) => !pageAttendanceIds.includes(id)));
     } else {
-      setSelectedEmployeeIds((prev) => Array.from(new Set([...prev, ...pageUserIds])));
+      setSelectedAttendanceIds((prev) => Array.from(new Set([...prev, ...pageAttendanceIds])));
     }
   };
 
   const handleClearSelectedEmployees = () => {
     setSelectedEmployeeIds([]);
+  };
+
+  const handleClearSelectedAttendance = () => {
+    setSelectedAttendanceIds([]);
   };
 
   // Point 7: Edit Absensi Karyawan
@@ -387,13 +399,19 @@ export const AdminAttendancePage: React.FC = () => {
     }
   }, [filterType, selectedSp, selectedDate, statusFilter, roleFilter, searchQuery, attendancePage, attendancePerPage]);
 
-  // Reset page to 1 on filter changes
+  // Reset page to 1 & clear selections on filter changes
   useEffect(() => {
     setAttendancePage(1);
+    setSelectedAttendanceIds([]);
   }, [filterType, selectedSp, selectedDate, statusFilter, roleFilter, searchQuery]);
 
   useEffect(() => {
+    setSelectedAttendanceIds([]);
+  }, [attendancePage, attendancePerPage]);
+
+  useEffect(() => {
     setEmployeeRecapPage(1);
+    setSelectedEmployeeIds([]);
   }, [selectedSp, roleFilter, searchQuery]);
 
   // Point 6: Rekapitulasi Presensi per Karyawan
@@ -446,7 +464,7 @@ export const AdminAttendancePage: React.FC = () => {
       try {
         const res = await api.get('/users', { params: { per_page: 500 } });
         const list = res.data?.data || [];
-        setAllEmployees(list.filter((u: any) => u.role !== 'admin' && u.role !== 'super_admin'));
+        setAllEmployees(list.filter((u: any) => u.role !== 'admin' && u.role !== 'super_admin' && u.role !== 'lord_admin'));
       } catch (err) {
         console.error('Failed to load employee list', err);
       }
@@ -1058,6 +1076,7 @@ export const AdminAttendancePage: React.FC = () => {
   const handleExportAttendance = async (format: 'xlsx' | 'csv') => {
     try {
       setExportingAttendanceType(format);
+      const isDetail = recapViewMode === 'detail';
       await attendanceService.downloadAttendanceExport({
         format,
         mode: recapViewMode,
@@ -1066,7 +1085,8 @@ export const AdminAttendancePage: React.FC = () => {
         status: statusFilter !== 'all' ? statusFilter : undefined,
         role: roleFilter !== 'all' ? roleFilter : undefined,
         search: searchQuery.trim() || undefined,
-        user_ids: selectedEmployeeIds.length > 0 ? selectedEmployeeIds : undefined,
+        user_ids: !isDetail && selectedEmployeeIds.length > 0 ? selectedEmployeeIds : undefined,
+        attendance_ids: isDetail && selectedAttendanceIds.length > 0 ? selectedAttendanceIds : undefined,
       });
     } catch (err: any) {
       console.error('Error exporting attendance report:', err);
@@ -1560,6 +1580,7 @@ export const AdminAttendancePage: React.FC = () => {
                     className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                   >
                     <option value="all">Semua (Karyawan & Admin)</option>
+                    <option value="super_admin">👑 Khusus Super Admin & Lord Admin</option>
                     <option value="admin">👤 Khusus Admin (Kantor Pusat)</option>
                     <option value="user">👥 Karyawan Lapangan (User)</option>
                   </select>
@@ -1626,18 +1647,18 @@ export const AdminAttendancePage: React.FC = () => {
                     onClick={() => handleExportAttendance('xlsx')}
                     disabled={exportingAttendanceType !== null}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer shadow-2xs disabled:opacity-50 ${
-                      selectedEmployeeIds.length > 0
+                      (recapViewMode === 'detail' ? selectedAttendanceIds.length > 0 : selectedEmployeeIds.length > 0)
                         ? 'bg-emerald-600 text-white hover:bg-emerald-700 ring-2 ring-emerald-500/30'
                         : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200'
                     }`}
                     title={`Export ${recapViewMode === 'employee_recap' ? 'Rekap Karyawan' : 'Log Detail'} ke format Excel (.xlsx)`}
                   >
-                    <FileSpreadsheet className={`w-3.5 h-3.5 ${selectedEmployeeIds.length > 0 ? 'text-white' : 'text-emerald-600'}`} />
+                    <FileSpreadsheet className={`w-3.5 h-3.5 ${(recapViewMode === 'detail' ? selectedAttendanceIds.length > 0 : selectedEmployeeIds.length > 0) ? 'text-white' : 'text-emerald-600'}`} />
                     <span>
                       {exportingAttendanceType === 'xlsx'
                         ? 'Mengekspor...'
-                        : selectedEmployeeIds.length > 0
-                        ? `Export Excel (${selectedEmployeeIds.length} Terpilih)`
+                        : (recapViewMode === 'detail' ? selectedAttendanceIds.length > 0 : selectedEmployeeIds.length > 0)
+                        ? `Export Excel (${recapViewMode === 'detail' ? selectedAttendanceIds.length : selectedEmployeeIds.length} Terpilih)`
                         : 'Export Excel (.xlsx)'}
                     </span>
                   </button>
@@ -1653,8 +1674,8 @@ export const AdminAttendancePage: React.FC = () => {
                     <span>
                       {exportingAttendanceType === 'csv'
                         ? '...'
-                        : selectedEmployeeIds.length > 0
-                        ? `CSV (${selectedEmployeeIds.length})`
+                        : (recapViewMode === 'detail' ? selectedAttendanceIds.length > 0 : selectedEmployeeIds.length > 0)
+                        ? `CSV (${recapViewMode === 'detail' ? selectedAttendanceIds.length : selectedEmployeeIds.length})`
                         : 'CSV'}
                     </span>
                   </button>
@@ -1675,11 +1696,11 @@ export const AdminAttendancePage: React.FC = () => {
                           type="checkbox"
                           checked={
                             attendances.length > 0 &&
-                            attendances.every((a) => a.user_id && selectedEmployeeIds.includes(a.user_id))
+                            attendances.every((a) => selectedAttendanceIds.includes(a.id))
                           }
                           onChange={handleToggleSelectAllDetail}
                           className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
-                          title="Pilih Semua Karyawan pada Halaman Ini"
+                          title="Pilih Semua Log Absensi pada Halaman Ini"
                         />
                       </th>
                       <th className="py-3 px-4">Karyawan</th>
@@ -1721,22 +1742,32 @@ export const AdminAttendancePage: React.FC = () => {
                         const isPendingVerification = row.approval_status === 'pending';
                         const rawPhoto = row.photo_url || row.photo_full_url;
                         const photoSrc = rawPhoto ? getStorageUrl(rawPhoto) : null;
-                        const isRowSelected = row.user_id ? selectedEmployeeIds.includes(row.user_id) : false;
+                        const isRowSelected = selectedAttendanceIds.includes(row.id);
                         return (
                           <tr key={row.id} className={`hover:bg-surface-container/20 transition-colors ${isRowSelected ? 'bg-primary/5' : ''}`}>
                             <td className="py-3 px-3 text-center">
                               <input
                                 type="checkbox"
                                 checked={isRowSelected}
-                                onChange={() => row.user_id && handleToggleSelectEmployee(row.user_id)}
+                                onChange={() => handleToggleSelectAttendance(row.id)}
                                 className="w-4 h-4 rounded border-border-subtle text-primary focus:ring-primary cursor-pointer accent-primary"
-                                title={`Pilih ${row.user?.name || 'Karyawan'} untuk laporan SP`}
+                                title={`Pilih log absensi ${row.user?.name || 'Karyawan'}`}
                               />
                             </td>
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold text-text-primary">{row.user?.name || '-'}</span>
-                                {(row.user?.role === 'admin' || row.user?.role === 'super_admin') && (
+                                {row.user?.role === 'lord_admin' && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 text-amber-300 border border-amber-400/60 shadow-2xs">
+                                    👑 Lord Admin
+                                  </span>
+                                )}
+                                {row.user?.role === 'super_admin' && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs">
+                                    ⭐ Super Admin
+                                  </span>
+                                )}
+                                {row.user?.role === 'admin' && (
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                                     Admin Pusat
                                   </span>
@@ -2065,7 +2096,17 @@ export const AdminAttendancePage: React.FC = () => {
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-semibold text-text-primary">{emp.name}</span>
-                              {(emp.role === 'admin' || emp.role === 'super_admin') && (
+                              {emp.role === 'lord_admin' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 text-amber-300 border border-amber-400/60 shadow-2xs">
+                                  👑 Lord Admin
+                                </span>
+                              )}
+                              {emp.role === 'super_admin' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs">
+                                  ⭐ Super Admin
+                                </span>
+                              )}
+                              {emp.role === 'admin' && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                                   Admin Pusat
                                 </span>
@@ -5000,13 +5041,17 @@ export const AdminAttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* POINT 13: FLOATING ACTION BAR SAAT KARYAWAN DIPILIH UNTUK LAPORAN SP */}
-      {selectedEmployeeIds.length > 0 && activeTab === 'recap' && (
+      {/* POINT 13: FLOATING ACTION BAR SAAT LOG ABSENSI / KARYAWAN DIPILIH UNTUK LAPORAN */}
+      {((recapViewMode === 'detail' && selectedAttendanceIds.length > 0) ||
+        (recapViewMode === 'employee_recap' && selectedEmployeeIds.length > 0)) &&
+        activeTab === 'recap' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-surface-panel/95 backdrop-blur-md border border-primary/40 shadow-xl rounded-2xl px-5 py-3 flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
           <div className="flex items-center gap-2">
             <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold text-text-primary">
-              {selectedEmployeeIds.length} Karyawan Dipilih
+              {recapViewMode === 'detail'
+                ? `${selectedAttendanceIds.length} Log Absensi Dipilih`
+                : `${selectedEmployeeIds.length} Karyawan Dipilih`}
             </span>
             <span className="text-[11px] text-text-muted hidden sm:inline">
               (Laporan {filterType === 'sp' ? selectedSp : selectedDate})
@@ -5019,11 +5064,13 @@ export const AdminAttendancePage: React.FC = () => {
               onClick={() => handleExportAttendance('xlsx')}
               disabled={exportingAttendanceType !== null}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
-              title="Export Laporan Excel untuk karyawan yang dipilih"
+              title="Export Laporan Excel untuk data yang dipilih"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>
-                {exportingAttendanceType === 'xlsx' ? 'Mengekspor...' : `Export Excel (${selectedEmployeeIds.length})`}
+                {exportingAttendanceType === 'xlsx'
+                  ? 'Mengekspor...'
+                  : `Export Excel (${recapViewMode === 'detail' ? selectedAttendanceIds.length : selectedEmployeeIds.length})`}
               </span>
             </button>
             <button
@@ -5031,16 +5078,18 @@ export const AdminAttendancePage: React.FC = () => {
               onClick={() => handleExportAttendance('csv')}
               disabled={exportingAttendanceType !== null}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-text-primary bg-surface-container hover:bg-surface-container/80 border border-border-subtle rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
-              title="Export Laporan CSV untuk karyawan yang dipilih"
+              title="Export Laporan CSV untuk data yang dipilih"
             >
               <Download className="w-3.5 h-3.5 text-text-muted" />
               <span>
-                {exportingAttendanceType === 'csv' ? '...' : `CSV (${selectedEmployeeIds.length})`}
+                {exportingAttendanceType === 'csv'
+                  ? '...'
+                  : `CSV (${recapViewMode === 'detail' ? selectedAttendanceIds.length : selectedEmployeeIds.length})`}
               </span>
             </button>
             <button
               type="button"
-              onClick={handleClearSelectedEmployees}
+              onClick={recapViewMode === 'detail' ? handleClearSelectedAttendance : handleClearSelectedEmployees}
               className="p-1.5 text-text-muted hover:text-text-primary hover:bg-surface-container rounded-lg transition-all cursor-pointer ml-1"
               title="Batalkan Pilihan"
             >

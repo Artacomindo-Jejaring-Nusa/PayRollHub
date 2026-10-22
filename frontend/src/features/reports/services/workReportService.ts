@@ -23,11 +23,24 @@ export const workReportService = {
   },
 
   async exportReports(
-    params?: { status?: string; search?: string; date?: string },
+    params?: {
+      status?: string;
+      search?: string;
+      date?: string;
+      start_date?: string;
+      end_date?: string;
+      company?: string;
+      ids?: number[] | string;
+    },
     format: 'xlsx' | 'pdf' = 'xlsx'
   ): Promise<void> {
+    const queryParams: any = { ...params, format };
+    if (Array.isArray(params?.ids)) {
+      queryParams.ids = params.ids.join(',');
+    }
+
     const res = await api.get('/admin/work-reports/export', {
-      params: { ...params, format },
+      params: queryParams,
       responseType: 'blob',
     });
 
@@ -41,7 +54,11 @@ export const workReportService = {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `rekap_laporan_kerja_${new Date().toISOString().slice(0, 10)}.${format}`;
+    const selectedSuffix =
+      params?.ids && (Array.isArray(params.ids) ? params.ids.length > 0 : String(params.ids).length > 0)
+        ? '_terpilih'
+        : '';
+    link.download = `rekap_laporan_kerja_${new Date().toISOString().slice(0, 10)}${selectedSuffix}.${format}`;
     document.body.appendChild(link);
     link.click();
     link.remove();

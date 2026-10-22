@@ -122,7 +122,7 @@ class ActivityLogController extends Controller
         // Global metrics before pagination
         $metricQuery = clone $baseQuery;
         if ($roleFilter === 'all_admin') {
-            $metricQuery->whereIn('role', ['admin', 'super_admin']);
+            $metricQuery->whereIn('role', ['admin', 'super_admin', 'lord_admin']);
         } elseif ($roleFilter && $roleFilter !== 'all') {
             $metricQuery->where('role', $roleFilter);
         }
@@ -139,7 +139,7 @@ class ActivityLogController extends Controller
         $query = clone $baseQuery;
 
         if ($roleFilter === 'all_admin') {
-            $query->whereIn('role', ['admin', 'super_admin']);
+            $query->whereIn('role', ['admin', 'super_admin', 'lord_admin']);
         } elseif ($roleFilter && $roleFilter !== 'all') {
             $query->where('role', $roleFilter);
         }

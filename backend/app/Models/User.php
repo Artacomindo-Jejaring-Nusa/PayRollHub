@@ -81,19 +81,27 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user is admin (admin or super_admin).
+     * Check if user is admin (admin, super_admin, or lord_admin).
      */
     public function isAdmin(): bool
     {
-        return $this->role === 'admin' || $this->role === 'super_admin';
+        return in_array($this->role, ['admin', 'super_admin', 'lord_admin']);
     }
 
     /**
-     * Check if user is super admin.
+     * Check if user is super admin or lord admin (highest access).
      */
     public function isSuperAdmin(): bool
     {
-        return $this->role === 'super_admin';
+        return in_array($this->role, ['super_admin', 'lord_admin']);
+    }
+
+    /**
+     * Check if user is lord admin (owner / highest authority).
+     */
+    public function isLordAdmin(): bool
+    {
+        return $this->role === 'lord_admin';
     }
 
     /**

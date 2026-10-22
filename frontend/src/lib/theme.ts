@@ -131,7 +131,7 @@ export const detectInitialTenant = (): TenantId => {
       const userStr = localStorage.getItem('payrollhub_user');
       if (userStr) {
         const u = JSON.parse(userStr);
-        if (u && u.role !== 'super_admin' && u.company) {
+        if (u && u.role !== 'super_admin' && u.role !== 'lord_admin' && u.company) {
           const comp = u.company.toLowerCase();
           const lockedTenant: TenantId = comp.includes('riama') || comp.includes('rimamandiri') ? 'rimamandiri' : 'rbs';
           localStorage.setItem('payrollhub_active_tenant', lockedTenant);
@@ -207,7 +207,7 @@ export const useTenantTheme = () => {
         const userStr = localStorage.getItem('payrollhub_user');
         if (userStr) {
           const u = JSON.parse(userStr);
-          if (u && u.role !== 'super_admin' && u.company) {
+          if (u && u.role !== 'super_admin' && u.role !== 'lord_admin' && u.company) {
             const comp = u.company.toLowerCase();
             const lockedTenant: TenantId = comp.includes('riama') || comp.includes('rimamandiri') ? 'rimamandiri' : 'rbs';
             setTenantId(lockedTenant);
@@ -238,12 +238,12 @@ export const useTenantTheme = () => {
   }, [tenantId]);
 
   const switchTenant = (newTenant: TenantId) => {
-    // Hanya Super Admin yang berhak memindahkan tenant secara aktif
+    // Super Admin & Lord Admin berhak memindahkan tenant secara aktif
     try {
       const userStr = localStorage.getItem('payrollhub_user');
       if (userStr) {
         const u = JSON.parse(userStr);
-        if (u && u.role !== 'super_admin') {
+        if (u && u.role !== 'super_admin' && u.role !== 'lord_admin') {
           return; // Blocked for normal admin / employee
         }
       }

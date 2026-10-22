@@ -327,8 +327,10 @@ export const ActivityLogsPage: React.FC = () => {
 
   const getRoleBadge = (role: string) => {
     switch (role) {
+      case 'lord_admin':
+        return <Badge variant="lord_admin">👑 Lord Admin</Badge>;
       case 'super_admin':
-        return <Badge variant="super_admin">Super Admin</Badge>;
+        return <Badge variant="super_admin">⭐ Super Admin</Badge>;
       case 'admin':
         return <Badge variant="admin">Admin</Badge>;
       case 'karyawan':
@@ -517,8 +519,9 @@ export const ActivityLogsPage: React.FC = () => {
                   className="w-full h-10 px-3 bg-surface-panel rounded-lg text-body-default text-text-primary border border-border-subtle outline-none focus:ring-2 focus:ring-primary text-[13px] appearance-none cursor-pointer"
                 >
                   <option value="all">Semua Role</option>
-                  <option value="all_admins">⭐ Semua Admin</option>
-                  <option value="super_admin">Super Admin Saja</option>
+                  <option value="all_admins">⭐ Semua Admin & Lord Admin</option>
+                  <option value="lord_admin">👑 Lord Admin Saja</option>
+                  <option value="super_admin">⭐ Super Admin Saja</option>
                   <option value="admin">Admin Saja</option>
                   <option value="karyawan">Karyawan Saja</option>
                 </select>

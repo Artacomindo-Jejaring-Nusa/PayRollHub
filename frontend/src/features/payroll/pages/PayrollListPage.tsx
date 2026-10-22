@@ -45,7 +45,7 @@ export const PayrollListPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
   const { tenant } = useTenantTheme();
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'lord_admin';
 
   // State
   const [payrolls, setPayrolls] = useState<PayrollItem[]>([]);

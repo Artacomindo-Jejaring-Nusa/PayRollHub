@@ -253,7 +253,7 @@ class AdminShiftController extends Controller
         ]);
 
         $shift = Shift::findOrFail($validated['shift_id']);
-        $query = User::whereNotIn('role', ['admin', 'super_admin']);
+        $query = User::whereNotIn('role', ['admin', 'super_admin', 'lord_admin']);
 
         // Multi-tenant check
         if (!$currentUser->isSuperAdmin()) {
@@ -310,7 +310,7 @@ class AdminShiftController extends Controller
     public function employees(Request $request): JsonResponse
     {
         $currentUser = $request->user();
-        $query = User::whereNotIn('role', ['admin', 'super_admin'])
+        $query = User::whereNotIn('role', ['admin', 'super_admin', 'lord_admin'])
             ->with(['shift', 'attendanceLocation']);
 
         if (!$currentUser->isSuperAdmin()) {

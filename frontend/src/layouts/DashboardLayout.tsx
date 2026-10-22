@@ -166,7 +166,8 @@ export const DashboardLayout: React.FC = () => {
     },
   ];
 
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isLordAdmin = user?.role === 'lord_admin';
+  const isSuperAdmin = user?.role === 'super_admin' || isLordAdmin;
   const isAdmin = user?.role === 'admin' || isSuperAdmin;
   const isUserOnly = user?.role === 'user' || user?.role === 'viewer';
 
@@ -762,8 +763,8 @@ export const DashboardLayout: React.FC = () => {
                 {user?.email || '-'}
               </div>
             </div>
-            <Badge variant={isSuperAdmin ? 'super_admin' : (isAdmin ? 'admin' : 'user')}>
-              {isSuperAdmin ? '⭐ Super Admin' : (isAdmin ? 'Admin' : 'User')}
+            <Badge variant={isLordAdmin ? 'lord_admin' : (isSuperAdmin ? 'super_admin' : (isAdmin ? 'admin' : 'user'))}>
+              {isLordAdmin ? '👑 Lord Admin' : (isSuperAdmin ? '⭐ Super Admin' : (isAdmin ? 'Admin' : 'User'))}
             </Badge>
           </div>
 

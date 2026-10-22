@@ -422,7 +422,7 @@ class EmployeeAttendanceController extends Controller
         $locationId = $matchedLocation->id;
 
         if (!$isWithinRadius) {
-            $failMsg = ($user->role === 'admin' || $user->role === 'super_admin')
+            $failMsg = $user->isAdmin()
                 ? "Gagal Absen: Sebagai Admin, Anda wajib melakukan absensi di Kantor Pusat ({$locationName}) yang telah ditetapkan oleh Super Admin! Jarak Anda saat ini: {$distance} meter dari Kantor Pusat (Batas radius kantor: {$radiusLimit} meter). Presensi di unit sekolah atau lokasi lain tidak diizinkan untuk akun Admin."
                 : "Gagal Absen: Anda berada di luar radius lokasi penugasan Anda ({$locationName})! Jarak Anda saat ini: {$distance} meter (Batas radius lokasi: {$radiusLimit} meter). Presensi wajib dilakukan di area penugasan.";
 
@@ -432,7 +432,7 @@ class EmployeeAttendanceController extends Controller
                 'distance_meters' => $distance,
                 'max_radius_meters' => $radiusLimit,
                 'nearest_location' => $locationName,
-                'is_admin_violation' => ($user->role === 'admin' || $user->role === 'super_admin'),
+                'is_admin_violation' => $user->isAdmin(),
             ], 422);
         }
 
@@ -788,8 +788,8 @@ class EmployeeAttendanceController extends Controller
      */
     protected function resolveUserAssignedLocation($user, string $targetCompany, $setting, $hqLocation): \App\Models\AttendanceLocation
     {
-        // 1. Admin wajib terkunci di Kantor Pusat
-        if ($user->role === 'admin' || $user->role === 'super_admin') {
+        // 1. Admin & Super Admin & Lord Admin wajib terkunci di Kantor Pusat
+        if ($user->isAdmin()) {
             return $hqLocation;
         }
 

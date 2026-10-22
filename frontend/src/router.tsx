@@ -54,19 +54,19 @@ const EmployeeRoute: React.FC<{ children: React.ReactElement }> = ({ children })
   return children;
 };
 
-// Guard: Must be Admin or Super Admin
+// Guard: Must be Admin, Super Admin, or Lord Admin
 const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { user } = useAuthStore();
-  if (user?.role !== 'admin' && user?.role !== 'super_admin') {
+  if (user?.role !== 'admin' && user?.role !== 'super_admin' && user?.role !== 'lord_admin') {
     return <Navigate to="/dashboard" replace />;
   }
   return children;
 };
 
-// Guard: Must be Super Admin
+// Guard: Must be Super Admin or Lord Admin
 const SuperAdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { user } = useAuthStore();
-  if (user?.role !== 'super_admin') {
+  if (user?.role !== 'super_admin' && user?.role !== 'lord_admin') {
     return <Navigate to="/dashboard" replace />;
   }
   return children;

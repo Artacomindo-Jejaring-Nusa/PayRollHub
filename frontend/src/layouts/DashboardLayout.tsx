@@ -531,14 +531,26 @@ export const DashboardLayout: React.FC = () => {
                     <div className="font-semibold text-[12.5px] text-text-primary leading-tight truncate max-w-[120px]">
                       {user?.name}
                     </div>
-                    <div className="text-[10.5px] text-text-muted leading-tight">
-                      {isSuperAdmin ? 'Super Admin' : (isAdmin ? 'Admin' : 'Staf')}
+                    <div className="text-[10.5px] leading-tight">
+                      {isLordAdmin ? (
+                        <span className="font-black text-amber-600 dark:text-amber-400 tracking-wide">
+                          👑 Lord Admin
+                        </span>
+                      ) : (
+                        <span className="text-text-muted">
+                          {isSuperAdmin ? 'Super Admin' : (isAdmin ? 'Admin' : 'Staf')}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div
-                    className="w-8 h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-2 ring-emerald-100 shrink-0"
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm shrink-0 ${
+                      isLordAdmin
+                        ? 'bg-gradient-to-tr from-purple-950 via-indigo-950 to-slate-900 text-amber-300 ring-2 ring-amber-400/80 shadow-amber-500/20'
+                        : 'bg-emerald-700 text-white ring-2 ring-emerald-100'
+                    }`}
                   >
-                    {user?.name?.charAt(0).toUpperCase() || 'U'}
+                    {isLordAdmin ? '👑' : (user?.name?.charAt(0).toUpperCase() || 'U')}
                   </div>
                   <ChevronDown
                     className={`w-3.5 h-3.5 text-text-muted transition-transform duration-150 ${
@@ -559,15 +571,21 @@ export const DashboardLayout: React.FC = () => {
                         {user?.email || '-'}
                       </div>
                       <div className="mt-1.5">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          isSuperAdmin
-                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                            : (isAdmin
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-700 border border-slate-200')
-                        }`}>
-                          {isSuperAdmin ? '⭐ Super Administrator' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
-                        </span>
+                        {isLordAdmin ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10.5px] font-black bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-amber-300 border border-amber-400/60 ring-1 ring-amber-400/40 shadow-xs">
+                            👑 Lord Admin (Owner)
+                          </span>
+                        ) : (
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            isSuperAdmin
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                              : (isAdmin
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200')
+                          }`}>
+                            {isSuperAdmin ? '⭐ Super Administrator' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -818,12 +836,26 @@ export const DashboardLayout: React.FC = () => {
                   <div className="font-semibold text-[13px] text-text-primary">
                     {user?.name}
                   </div>
-                  <div className="text-[11px] text-text-muted">
-                    {isSuperAdmin ? 'Super Admin' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
+                  <div className="text-[11px] leading-tight">
+                    {isLordAdmin ? (
+                      <span className="font-black text-amber-600 dark:text-amber-400 tracking-wide">
+                        👑 Lord Admin
+                      </span>
+                    ) : (
+                      <span className="text-text-muted">
+                        {isSuperAdmin ? 'Super Admin' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-primary-container text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white shrink-0">
-                  {user?.name?.charAt(0).toUpperCase() || 'U'}
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shrink-0 ${
+                    isLordAdmin
+                      ? 'bg-gradient-to-tr from-purple-950 via-indigo-950 to-slate-900 text-amber-300 ring-2 ring-amber-400/80 shadow-amber-500/20'
+                      : 'bg-primary-container text-white ring-2 ring-white'
+                  }`}
+                >
+                  {isLordAdmin ? '👑' : (user?.name?.charAt(0).toUpperCase() || 'U')}
                 </div>
                 <ChevronDown className={`w-3.5 h-3.5 text-text-muted transition-transform duration-150 ${profileDropdownOpen ? 'rotate-180 text-primary' : ''}`} />
               </button>
@@ -838,15 +870,21 @@ export const DashboardLayout: React.FC = () => {
                       {user?.email || '-'}
                     </div>
                     <div className="mt-1.5">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                        isSuperAdmin
-                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                          : (isAdmin
-                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                            : 'bg-slate-100 text-slate-700 border border-slate-200')
-                      }`}>
-                        {isSuperAdmin ? '⭐ Super Administrator' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
-                      </span>
+                      {isLordAdmin ? (
+                        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10.5px] font-black bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-amber-300 border border-amber-400/60 ring-1 ring-amber-400/40 shadow-xs">
+                          👑 Lord Admin (Owner)
+                        </span>
+                      ) : (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          isSuperAdmin
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : (isAdmin
+                              ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200')
+                        }`}>
+                          {isSuperAdmin ? '⭐ Super Administrator' : (isAdmin ? 'Admin Perusahaan' : 'Staf User')}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="p-1">

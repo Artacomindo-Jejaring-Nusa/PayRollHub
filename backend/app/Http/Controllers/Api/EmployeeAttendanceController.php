@@ -44,6 +44,28 @@ class EmployeeAttendanceController extends Controller
 
         $attendance = $this->resolveActiveAttendance($user, $today, $tzData['carbon']);
 
+        // Cek apakah ada sesi shift malam / lintas hari kemarin yang baru saja selesai di-checkout hari ini
+        $yesterday = Carbon::parse($today)->subDay()->toDateString();
+        $recentCompletedShift = null;
+        if (!$attendance || empty($attendance->check_in_time)) {
+            $yesterdayAttendance = Attendance::with(['location', 'approver', 'shift'])
+                ->where('user_id', $user->id)
+                ->where('date', $yesterday)
+                ->whereNotNull('check_in_time')
+                ->whereNotNull('check_out_time')
+                ->whereNotIn('attendance_type', ['libur', 'sakit', 'izin'])
+                ->first();
+
+            if ($yesterdayAttendance) {
+                $yShift = $yesterdayAttendance->shift ?: $user->shift;
+                $isYCrossDay = $yShift && ($yShift->cross_day || $yShift->start_time > $yShift->end_time);
+                $isYNightCheckIn = $yesterdayAttendance->check_in_time >= '17:00:00';
+                if ($isYCrossDay || $isYNightCheckIn) {
+                    $recentCompletedShift = $yesterdayAttendance;
+                }
+            }
+        }
+
         // POINT 10 & Note Bang Maun: Karyawan tidak perlu memilih lokasi karena sudah terdaftar dan terkunci
         // sesuai penugasannya (Admin wajib di Kantor Pusat, Karyawan di unit sekolah / kantor).
         $isAdmin = $user->role === 'admin';
@@ -75,6 +97,7 @@ class EmployeeAttendanceController extends Controller
                 'timezone_label' => $tzData['timezone_label'],
                 'timezone_offset' => $tzData['timezone_offset'],
                 'attendance' => $attendance,
+                'recent_completed_shift' => $recentCompletedShift,
                 'assigned_location' => $assignedLocation,
                 'is_location_locked' => true,
                 'assigned_shift' => $assignedShift,
@@ -128,7 +151,9 @@ class EmployeeAttendanceController extends Controller
             $activeShift = $user->shift;
         }
 
-        if ($activeShift && ($activeShift->cross_day || $activeShift->start_time > $activeShift->end_time)) {
+        // Penentuan tanggal kemarin subuh hanya berlaku untuk absen kerja (masuk / dinas luar),
+        // JANGAN PERNAH mundurkan tanggal ke kemarin jika karyawan sedang mengajukan ABSEN LIBUR hari ini!
+        if (in_array($attendanceType, ['masuk', 'dinas_luar']) && $activeShift && ($activeShift->cross_day || $activeShift->start_time > $activeShift->end_time)) {
             $currentTimeStr = $now->format('H:i:s');
             // Jika check-in subuh / dini hari (00:00 - 08:00) dan kemarin belum ada catatan absensi:
             if ($currentTimeStr < $activeShift->end_time && $currentTimeStr < '08:00:00') {
@@ -141,7 +166,7 @@ class EmployeeAttendanceController extends Controller
 
         // 2. DI-LOSS-KAN: Auto-close shift masa lalu (Shift 3 Malam & Shift 24 Jam) yang lupa checkout
         // Jika ada shift sebelumnya yang belum ditutup (belum absen pulang), sistem otomatis menutupnya
-        // agar karyawan tidak diblokir dan bisa langsung absen masuk untuk shift baru.
+        // agar karyawan tidak diblokir dan bisa langsung absen masuk atau absen libur untuk shift baru.
         $unclosedPast = Attendance::with('shift')->where('user_id', $user->id)
             ->where('date', '<', $attendanceDate)
             ->whereNotNull('check_in_time')
@@ -151,12 +176,13 @@ class EmployeeAttendanceController extends Controller
             ->latest('date')
             ->first();
 
-        if ($unclosedPast && in_array($attendanceType, ['masuk', 'dinas_luar'])) {
+        if ($unclosedPast && in_array($attendanceType, ['masuk', 'dinas_luar', 'libur'])) {
             $pastShift = $unclosedPast->shift ?: $user->shift;
             $autoOutTime = $pastShift ? $pastShift->end_time : '07:00:00';
+            $noteAction = ($attendanceType === 'libur') ? 'mencatat hari libur' : 'memulai shift baru';
             $unclosedPast->update([
                 'check_out_time' => $autoOutTime,
-                'notes' => trim(($unclosedPast->notes ?: '') . ' [Auto-checkout sistem: Sesi shift ditutup otomatis saat karyawan memulai shift baru]'),
+                'notes' => trim(($unclosedPast->notes ?: '') . " [Auto-checkout sistem: Sesi shift ditutup otomatis saat karyawan {$noteAction}]"),
             ]);
         }
 
@@ -174,14 +200,37 @@ class EmployeeAttendanceController extends Controller
             if ($isExistingHoliday && $isRequestingWork) {
                 // Diizinkan override
             } elseif (!empty($existing->check_out_time)) {
-                // DI-LOSS-KAN: KASUS ABSEN 2x SEHARI (Sesi sebelumnya sudah checkout / pulang)
-                // Arsipkan sesi sebelumnya ke notes dan izinkan absen masuk sesi kedua
-                $existing->update([
-                    'notes' => trim(($existing->notes ?: '') . " | [Sesi 1: Masuk {$existing->check_in_time}, Pulang {$existing->check_out_time}]"),
-                    'check_out_time' => null,
-                    'check_out_lat' => null,
-                    'check_out_lng' => null,
-                ]);
+                // DI-LOSS-KAN: KASUS ABSEN SETELAH CHECKOUT
+                if ($attendanceType === 'libur') {
+                    // Jika sesi sebelumnya sudah checkout (misal checkout shift subuh/pagi atau multi-shift),
+                    // izinkan menetapkan status hari ini sebagai Libur/Off tanpa error!
+                    $archiveNote = "[Sesi Kerja Selesai: Masuk {$existing->check_in_time}, Pulang {$existing->check_out_time}]";
+                    $holidayNotes = $request->input('notes') ?: 'Hari Libur Terjadwal / Off Rutin';
+                    $existing->update([
+                        'attendance_type' => 'libur',
+                        'status' => 'holiday',
+                        'approval_status' => 'approved',
+                        'location_name' => 'Hari Libur / Off',
+                        'notes' => trim(($existing->notes ?: '') . " | {$archiveNote} | {$holidayNotes}"),
+                    ]);
+
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => "Absen Libur berhasil tercatat pada {$currentTime} {$tzData['timezone']}. Anda tidak perlu absen pulang. Selamat beristirahat!",
+                        'data' => $existing->fresh(['shift', 'location']),
+                        'timezone' => $tzData['timezone'],
+                        'timezone_label' => $tzData['timezone_label'],
+                    ]);
+                } else {
+                    // KASUS ABSEN MASUK SESI 2 (Multi-shift / 2x Absen Sehari)
+                    // Arsipkan sesi sebelumnya ke notes dan izinkan absen masuk sesi kedua
+                    $existing->update([
+                        'notes' => trim(($existing->notes ?: '') . " | [Sesi 1: Masuk {$existing->check_in_time}, Pulang {$existing->check_out_time}]"),
+                        'check_out_time' => null,
+                        'check_out_lat' => null,
+                        'check_out_lng' => null,
+                    ]);
+                }
             } else {
                 $jenis = match ($existing->attendance_type) {
                     'libur' => 'absen libur',

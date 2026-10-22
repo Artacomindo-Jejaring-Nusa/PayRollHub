@@ -2222,6 +2222,71 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                       const SizedBox(height: 22),
 
+                      // Banner Notifikasi Shift Malam Kemarin Telah Selesai Checkout
+                      if (_todayAttendance?.recentCompletedShift != null && !hasCheckedIn) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF2FF),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFC7D2FE)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.check_circle_rounded, color: Color(0xFF4338CA), size: 18),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Shift Malam Selesai (Pulang: ${_formatTimeDisplay(_todayAttendance!.recentCompletedShift!.checkOutTime)})',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF312E81),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Checkout shift malam kemarin telah berhasil tercatat. Jika hari ini Anda libur / off, silakan catat status libur di bawah.',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  color: const Color(0xFF3730A3),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _performLiburCheckIn,
+                                  icon: const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFFD97706)),
+                                  label: Text(
+                                    'Catat Hari Ini Libur / Off Shift',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFFD97706),
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: Color(0xFFF59E0B)),
+                                    backgroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+
                       // Action Button 1: Absen Masuk (Check-In)
                       if (!hasCheckedIn || isHoliday)
                         ElevatedButton(
@@ -2337,33 +2402,53 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                         ),
 
-                      // Action Button Tambahan: Absen Masuk Sesi 2 / Shift Berikutnya (Multi-shift / 2x Absen Sehari)
+                      // Action Button Tambahan: Absen Masuk Sesi 2 atau Absen Libur / Off (Multi-shift / Selesai Checkout)
                       if (hasCheckedIn && hasCheckedOut && !isHoliday) ...[
                         const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: _openCheckInModal,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: secondaryAccentColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            elevation: 4,
-                            shadowColor: secondaryAccentColor.withValues(alpha: 0.4),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.fingerprint_rounded, size: 22),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Absen Masuk Sesi 2 / Shift Baru',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _performLiburCheckIn,
+                                icon: const Icon(Icons.event_available_rounded, size: 16, color: Color(0xFFD97706)),
+                                label: Text(
+                                  'Absen Libur',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    color: const Color(0xFFD97706),
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: Color(0xFFF59E0B), width: 1.5),
+                                  backgroundColor: const Color(0xFFFFFBEB),
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _openCheckInModal,
+                                icon: const Icon(Icons.fingerprint_rounded, size: 16),
+                                label: Text(
+                                  'Sesi 2 / Shift Baru',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: secondaryAccentColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  elevation: 2,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
 

@@ -111,6 +111,7 @@ export interface TodayAttendanceData {
   timezone_label?: string;
   timezone_offset?: string;
   attendance: AttendanceRecord | null;
+  recent_completed_shift?: AttendanceRecord | null;
   assigned_location: AttendanceLocation | null;
   is_location_locked?: boolean;
   assigned_shift?: Shift | null;

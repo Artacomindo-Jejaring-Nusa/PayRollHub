@@ -86,19 +86,38 @@ export const LiveCameraModal: React.FC<LiveCameraModalProps> = ({
 
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error('Browser Anda tidak mendukung akses live kamera (getUserMedia).');
+          throw new Error('Browser Anda tidak mendukung akses live kamera (getUserMedia). Pastikan Anda membuka situs ini melalui koneksi HTTPS yang aman.');
         }
 
-        const constraints: MediaStreamConstraints = {
-          audio: false,
-          video: {
-            facingMode: { ideal: mode },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        };
+        let mediaStream: MediaStream;
+        try {
+          // Tahap 1: Coba resolusi ideal HD
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              facingMode: { ideal: mode },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          });
+        } catch (firstErr) {
+          console.warn('HD camera constraint failed, attempting fallback to standard video:', firstErr);
+          try {
+            // Tahap 2: Coba dengan facingMode saja tanpa batasan resolusi
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: { facingMode: mode },
+            });
+          } catch (secondErr) {
+            console.warn('FacingMode camera constraint failed, attempting default video:', secondErr);
+            // Tahap 3: Coba default video paling fleksibel (misal webcam eksternal PC)
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: true,
+            });
+          }
+        }
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
         setStream(mediaStream);
 
         if (videoRef.current) {

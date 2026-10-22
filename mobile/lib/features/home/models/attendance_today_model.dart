@@ -119,6 +119,7 @@ class TodayAttendanceDataModel {
   final String? timezoneName;
   final String? timezoneLabel;
   final AttendanceRecordModel? attendance;
+  final AttendanceRecordModel? recentCompletedShift;
   final AttendanceLocationModel? assignedLocation;
   final ShiftModel? assignedShift;
   final List<ShiftModel> availableShifts;
@@ -131,6 +132,7 @@ class TodayAttendanceDataModel {
     this.timezoneName,
     this.timezoneLabel,
     this.attendance,
+    this.recentCompletedShift,
     this.assignedLocation,
     this.assignedShift,
     this.availableShifts = const [],
@@ -155,6 +157,9 @@ class TodayAttendanceDataModel {
       timezoneLabel: json['timezone_label']?.toString(),
       attendance: json['attendance'] != null
           ? AttendanceRecordModel.fromJson(json['attendance'])
+          : null,
+      recentCompletedShift: json['recent_completed_shift'] != null
+          ? AttendanceRecordModel.fromJson(json['recent_completed_shift'])
           : null,
       assignedLocation: json['assigned_location'] != null
           ? AttendanceLocationModel.fromJson(json['assigned_location'])

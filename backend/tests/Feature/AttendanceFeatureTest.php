@@ -1277,4 +1277,216 @@ class AttendanceFeatureTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_shift_3_employee_who_checked_out_this_morning_can_check_in_holiday_for_today(): void
+    {
+        $shift3 = Shift::create([
+            'company' => 'all',
+            'name' => 'Shift 3 Malam',
+            'code' => 'SHIFT-3-MALAM',
+            'start_time' => '23:00:00',
+            'end_time' => '07:00:00',
+            'late_tolerance_minutes' => 15,
+            'work_hours' => 8.0,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'shift_id' => $shift3->id,
+        ]);
+
+        // Yesterday 2026-10-21: Check in 23:00
+        $yesterdayAtt = Attendance::create([
+            'user_id' => $employee->id,
+            'date' => '2026-10-21',
+            'check_in_time' => '23:00:00',
+            'check_out_time' => null,
+            'attendance_type' => 'masuk',
+            'shift_id' => $shift3->id,
+        ]);
+
+        // Today 2026-10-22 at 07:00: Check out
+        Carbon::setTestNow(Carbon::parse('2026-10-22 07:00:00', 'Asia/Jakarta'));
+        $checkoutRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-out', []);
+        $checkoutRes->assertStatus(200);
+
+        $yesterdayAtt->refresh();
+        $this->assertEquals('07:00:00', $yesterdayAtt->check_out_time);
+
+        // At 07:05: Employee records Libur for today (Off shift)
+        Carbon::setTestNow(Carbon::parse('2026-10-22 07:05:00', 'Asia/Jakarta'));
+        $liburRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'libur',
+            'notes' => 'Hari Libur Terjadwal / Off Shift 3',
+        ]);
+
+        $liburRes->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+            ]);
+
+        // Assert database has today 2026-10-22 as libur
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-22',
+            'attendance_type' => 'libur',
+            'status' => 'holiday',
+        ]);
+
+        // Yesterday's work shift remains intact
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-21',
+            'check_in_time' => '23:00:00',
+            'check_out_time' => '07:00:00',
+            'attendance_type' => 'masuk',
+        ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_shift_3_employee_unclosed_yesterday_is_auto_closed_when_checking_in_as_libur(): void
+    {
+        $shift3 = Shift::create([
+            'company' => 'all',
+            'name' => 'Shift 3 Malam Test 2',
+            'code' => 'SHIFT-3-TEST-2',
+            'start_time' => '23:00:00',
+            'end_time' => '07:00:00',
+            'late_tolerance_minutes' => 15,
+            'work_hours' => 8.0,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'shift_id' => $shift3->id,
+        ]);
+
+        // Yesterday 2026-10-21: Check in 23:00, forgot to checkout
+        Attendance::create([
+            'user_id' => $employee->id,
+            'date' => '2026-10-21',
+            'check_in_time' => '23:00:00',
+            'check_out_time' => null,
+            'attendance_type' => 'masuk',
+            'shift_id' => $shift3->id,
+        ]);
+
+        // Today 2026-10-22 at 11:00: Employee records Libur directly without previous checkout
+        Carbon::setTestNow(Carbon::parse('2026-10-22 11:00:00', 'Asia/Jakarta'));
+        $liburRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'libur',
+            'notes' => 'Hari Libur / Off',
+        ]);
+
+        $liburRes->assertStatus(200);
+
+        // Yesterday should be auto-closed
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-21',
+            'check_out_time' => '07:00:00',
+        ]);
+
+        // Today is recorded as libur
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $employee->id,
+            'date' => '2026-10-22',
+            'attendance_type' => 'libur',
+            'status' => 'holiday',
+        ]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_employee_who_checked_in_and_out_today_can_switch_to_holiday(): void
+    {
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-22 07:01:00', 'Asia/Jakarta'));
+
+        // Accidental check in and out
+        $att = Attendance::create([
+            'user_id' => $employee->id,
+            'date' => '2026-10-22',
+            'check_in_time' => '07:01:00',
+            'check_out_time' => '07:02:00',
+            'attendance_type' => 'masuk',
+            'status' => 'present',
+        ]);
+
+        // Employee switches to Libur
+        Carbon::setTestNow(Carbon::parse('2026-10-22 07:05:00', 'Asia/Jakarta'));
+        $liburRes = $this->actingAs($employee, 'sanctum')->postJson('/api/employee/attendance/check-in', [
+            'attendance_type' => 'libur',
+            'notes' => 'Ternyata libur hari ini',
+        ]);
+
+        $liburRes->assertStatus(200);
+
+        $att->refresh();
+        $this->assertEquals('libur', $att->attendance_type);
+        $this->assertEquals('holiday', $att->status);
+        $this->assertStringContainsString('07:01:00', $att->notes);
+        $this->assertStringContainsString('07:02:00', $att->notes);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_today_endpoint_returns_recent_completed_shift_when_shift_3_checked_out_today(): void
+    {
+        $shift3 = Shift::create([
+            'company' => 'all',
+            'name' => 'Shift 3 Malam Test 3',
+            'code' => 'SHIFT-3-TEST-3',
+            'start_time' => '23:00:00',
+            'end_time' => '07:00:00',
+            'work_hours' => 8.0,
+            'cross_day' => true,
+            'is_active' => true,
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'karyawan',
+            'company' => 'rbs',
+            'shift_id' => $shift3->id,
+        ]);
+
+        // Yesterday checked in and checked out
+        Attendance::create([
+            'user_id' => $employee->id,
+            'date' => '2026-10-21',
+            'check_in_time' => '23:00:00',
+            'check_out_time' => '07:00:00',
+            'attendance_type' => 'masuk',
+            'shift_id' => $shift3->id,
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-22 07:10:00', 'Asia/Jakarta'));
+
+        $todayRes = $this->actingAs($employee, 'sanctum')->getJson('/api/employee/attendance/today');
+        $todayRes->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'attendance' => null,
+                    'recent_completed_shift' => [
+                        'date' => '2026-10-21',
+                        'check_in_time' => '23:00:00',
+                        'check_out_time' => '07:00:00',
+                    ],
+                ],
+            ]);
+
+        Carbon::setTestNow();
+    }
 }

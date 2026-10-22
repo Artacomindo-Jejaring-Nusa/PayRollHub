@@ -58,6 +58,13 @@ export const EmployeeAttendancePage: React.FC = () => {
   const [leaveSubtype, setLeaveSubtype] = useState<'sakit' | 'izin'>('sakit');
   const [leaveNotes, setLeaveNotes] = useState<string>('');
 
+  // Deteksi jika browser dibuka dari In-App Webview (misal WhatsApp / Telegram / Instagram)
+  const isInAppBrowser = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+    return /FBAN|FBAV|Instagram|WhatsApp|Line|Messenger/i.test(ua);
+  }, []);
+
   // Camera & Photo State (Live Camera Sensor Only)
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -227,7 +234,7 @@ export const EmployeeAttendancePage: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  // Request & Update GPS Location
+  // Request & Update GPS Location with Automatic Fallback (High Accuracy -> Standard Accuracy)
   const requestLocation = useCallback(() => {
     setIsDetectingGps(true);
     setGpsError(null);
@@ -238,33 +245,54 @@ export const EmployeeAttendancePage: React.FC = () => {
       return;
     }
 
+    const handleSuccess = (position: GeolocationPosition) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setCoords({ lat, lng });
+      setGpsError(null);
+      setIsDetectingGps(false);
+    };
+
+    const handleFinalError = (error: GeolocationPositionError) => {
+      setIsDetectingGps(false);
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          setGpsError('Izin akses lokasi (GPS) ditolak. Silakan klik ikon gembok / setelan di bilah alamat browser Anda dan ubah izin Lokasi menjadi "Izinkan" (Allow).');
+          break;
+        case error.POSITION_UNAVAILABLE:
+          setGpsError('Informasi lokasi GPS tidak tersedia pada perangkat saat ini. Pastikan setelan lokasi perangkat aktif.');
+          break;
+        case error.TIMEOUT:
+          setGpsError('Waktu deteksi sinyal GPS habis. Silakan periksa koneksi internet atau klik "Cek Ulang GPS".');
+          break;
+        default:
+          setGpsError('Gagal mendeteksi lokasi GPS. Silakan coba klik tombol "Cek Ulang GPS".');
+      }
+    };
+
+    // Tahap 1: Coba ambil koordinat satelit presisi tinggi (High Accuracy)
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        setCoords({ lat, lng });
-        setGpsError(null);
-        setIsDetectingGps(false);
-      },
+      handleSuccess,
       (error) => {
-        setIsDetectingGps(false);
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            setGpsError('Izin akses lokasi (GPS) ditolak. Silakan izinkan browser mengakses lokasi perangkat.');
-            break;
-          case error.POSITION_UNAVAILABLE:
-            setGpsError('Informasi lokasi GPS tidak tersedia pada perangkat saat ini.');
-            break;
-          case error.TIMEOUT:
-            setGpsError('Waktu deteksi lokasi GPS habis. Silakan coba lagi.');
-            break;
-          default:
-            setGpsError('Gagal mendeteksi lokasi GPS.');
+        // Jika gagal karena timeout atau sinyal satelit tidak tersedia (umum terjadi di dalam ruangan gedung):
+        // Lakukan otomatis fallback ke Tahap 2: Akurasi jaringan / WiFi tanpa memblokir karyawan
+        if (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE) {
+          navigator.geolocation.getCurrentPosition(
+            handleSuccess,
+            handleFinalError,
+            {
+              enableHighAccuracy: false,
+              timeout: 15000,
+              maximumAge: 60000,
+            }
+          );
+        } else {
+          handleFinalError(error);
         }
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
+        timeout: 10000,
         maximumAge: 10000,
       }
     );
@@ -643,6 +671,16 @@ export const EmployeeAttendancePage: React.FC = () => {
           </div>
         </div>
       </div>
+ 
+      {/* Banner Rekomendasi Browser Eksternal jika Terbuka di WhatsApp Webview */}
+      {isInAppBrowser && (
+        <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs animate-in fade-in">
+          <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="leading-relaxed">
+            <strong>Buka Lewat WhatsApp?</strong> Beberapa peramban internal WhatsApp membatasi sensor GPS & Kamera. Jika mengalami kendala, ketuk <strong>ikon titik tiga (⋮)</strong> di pojok kanan atas lalu pilih <strong>"Buka di Browser / Chrome"</strong>.
+          </div>
+        </div>
+      )}
 
       {/* Alert Notification */}
       {message && (
@@ -662,8 +700,45 @@ export const EmployeeAttendancePage: React.FC = () => {
         </div>
       )}
 
+      {/* Banner Sesi Shift Malam Selesai */}
+      {todayData?.recent_completed_shift && !hasCheckedIn && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 via-sky-50 to-amber-50 border border-indigo-200/90 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/10 border border-indigo-200 flex items-center justify-center shrink-0 mt-0.5">
+              <CheckCircle2 className="w-5 h-5 text-indigo-700" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-indigo-900">
+                  Sesi Shift Malam Telah Selesai
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white font-mono">
+                  {todayData.recent_completed_shift.shift?.name || 'Shift 3 Malam'}
+                </span>
+              </div>
+              <p className="text-xs text-indigo-950/80 mt-0.5 leading-relaxed">
+                Absen pulang Anda tercatat pukul{' '}
+                <strong>{todayData.recent_completed_shift.check_out_time?.substring(0, 5)} {todayData.timezone || 'WIB'}</strong>.
+                Jika hari ini Anda libur / off, silakan catat status libur agar terdata resmi di sistem.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setAttendanceMode('libur');
+              handleResetPhoto();
+            }}
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-all cursor-pointer active:scale-95 shrink-0 flex items-center justify-center gap-1.5"
+          >
+            <SunMedium className="w-4 h-4" />
+            <span>Catat Hari Ini Libur / Off</span>
+          </button>
+        </div>
+      )}
+
       {/* Navigation Switch Mode: Absen Masuk vs Perjalanan Dinas vs Absen Libur vs Sakit/Izin */}
-      {(!hasCheckedIn || isHolidayCheckedIn) && (
+      {(!hasCheckedIn || isHolidayCheckedIn || hasCheckedOut) && (
         <div className="bg-surface-panel border border-border-subtle p-1 sm:p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-1 sm:gap-2 shadow-2xs">
           <button
             type="button"
@@ -1204,6 +1279,25 @@ export const EmployeeAttendancePage: React.FC = () => {
                     ⚠️ Ambil foto selfie kehadiran di atas terlebih dahulu untuk mengaktifkan tombol {isHolidayCheckedIn ? 'Ganti ke Absen Masuk' : 'Absen Masuk'}.
                   </p>
                 )}
+
+                {hasCheckedOut && !isHolidayCheckedIn && (
+                  <div className="mt-3.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-amber-900 animate-in fade-in">
+                    <div className="flex items-center gap-2">
+                      <SunMedium className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Ingin mencatat sisa hari ini sebagai <strong>Hari Libur / Off Terjadwal</strong>?</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttendanceMode('libur');
+                        handleResetPhoto();
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer transition-all shrink-0"
+                    >
+                      Catat Hari Libur / Off
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1382,8 +1476,16 @@ export const EmployeeAttendancePage: React.FC = () => {
                   </ul>
                 </div>
 
-                {!hasCheckedIn ? (
+                {!isHolidayCheckedIn ? (
                   <div className="space-y-3">
+                    {hasCheckedOut && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-start gap-2 animate-in fade-in">
+                        <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Sesi Kerja Sebelumnya Selesai:</strong> Anda telah melakukan absensi pulang pada pukul {todayData?.attendance?.check_out_time?.substring(0, 5)} {todayData?.timezone || 'WIB'}. Mengkonfirmasi libur akan mencatat sisa hari ini sebagai Hari Libur / Off Terjadwal tanpa menghapus riwayat jam kerja shift Anda.
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="text-xs font-semibold text-text-secondary block mb-1">
                         Keterangan Libur:
@@ -1404,7 +1506,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                       className="w-full h-12 bg-amber-600 hover:bg-amber-700 active:scale-98 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
                     >
                       <SunMedium className="w-4 h-4" />
-                      <span>{actionLoading ? 'Mencatat Absen...' : 'Konfirmasi Absen Libur Hari Ini'}</span>
+                      <span>{actionLoading ? 'Mencatat Absen...' : hasCheckedOut ? 'Konfirmasi Catat Sisa Hari Ini Sebagai Libur / Off' : 'Konfirmasi Absen Libur Hari Ini'}</span>
                     </button>
                   </div>
                 ) : (

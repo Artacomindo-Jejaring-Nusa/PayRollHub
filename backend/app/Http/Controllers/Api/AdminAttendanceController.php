@@ -32,22 +32,19 @@ class AdminAttendanceController extends Controller
             return null;
         }
 
-        // Prioritas 1: Ambil dari database payroll_periods
+        // Ambil dari database payroll_periods jika ada konfigurasi cut-off tanggal eksplisit (bukan mapping bulan kalender)
         $dbRange = PayrollPeriod::resolveDateRange($sp);
         if ($dbRange) {
-            return $dbRange;
-        }
-
-        // Fallback: mapping bulan kalender (backward compat jika belum ada di DB)
-        $clean = trim($sp);
-        if (preg_match('/(?:SP|Surat\s+Pesanan)?\s*(\d+)/i', $clean, $matches)) {
-            $monthNum = (int) $matches[1];
-            if ($monthNum >= 1 && $monthNum <= 12) {
-                $year = 2026;
-                $start = Carbon::create($year, $monthNum, 1)->startOfMonth()->toDateString();
-                $end = Carbon::create($year, $monthNum, 1)->endOfMonth()->toDateString();
-                return [$start, $end];
+            // Jika tanggal persis mapping awal bulan kalender (SP 1 = Jan, SP 2 = Feb, dll), abaikan karena SP bukan bulan kalender
+            if (preg_match('/^SP\s*(\d+)$/i', trim($sp), $m)) {
+                $spNum = (int) $m[1];
+                $fakeStart = sprintf('2026-%02d-01', $spNum);
+                $fakeEnd = date('Y-m-t', strtotime($fakeStart));
+                if ($dbRange[0] === $fakeStart && $dbRange[1] === $fakeEnd) {
+                    return null;
+                }
             }
+            return $dbRange;
         }
 
         return null;
@@ -106,11 +103,30 @@ class AdminAttendanceController extends Controller
             $query->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
 
-        // Filter rentang: SP Periode > Spesifik Tanggal > Bulan
+        // Filter karyawan berdasarkan Surat Pesanan (SP) jika dipilih (SP adalah kategori kontrak karyawan)
+        if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+            $spClean = trim($spPeriod);
+            $query->whereHas('user', function ($uq) use ($targetCompany, $spClean, $role) {
+                $uq->where(function ($sub) use ($targetCompany, $spClean, $role) {
+                    $sub->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                        $sq->select('employee_name')
+                            ->from('payrolls')
+                            ->where('period', $spClean)
+                            ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                            ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                    });
+                    if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                        $sub->orWhereIn('role', ['admin', 'super_admin', 'lord_admin']);
+                    }
+                });
+            });
+        }
+
+        // Filter rentang tanggal: SP cut-off khusus (jika ada) > Spesifik Tanggal > Bulan
         $spRange = $this->getSpDateRange($spPeriod);
         if ($spRange) {
             $query->whereBetween('date', $spRange);
-        } elseif ($date && !$month) {
+        } elseif ($date && $date !== 'all' && !$month) {
             $query->where('date', $date);
         } elseif ($month) {
             $query->where('date', 'like', "{$month}%");
@@ -225,14 +241,40 @@ class AdminAttendanceController extends Controller
 
         $totalRegistered = 0;
         $totalOff = 0;
-
+        $spClean = ($spPeriod && strtolower(trim($spPeriod)) !== 'all') ? trim($spPeriod) : null;
         $spRange = $this->getSpDateRange($spPeriod);
-        if ($spRange && $spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+
+        // Tentukan filter tanggal untuk presensi:
+        // Jika SP memiliki cut-off tanggal khusus di database, gunakan cut-off tersebut.
+        // Jika tidak, gunakan tanggal harian yang dipilih ($date, default hari ini).
+        if ($spRange) {
             $attendanceQuery->whereBetween('date', $spRange);
             $label = "Periode {$spPeriod}";
+        } elseif ($date && $date !== 'all') {
+            $attendanceQuery->where('date', $date);
+            $label = $spClean ? "{$date} ({$spClean})" : $date;
+        } else {
+            $label = $spClean ?: 'Semua Tanggal';
+        }
 
-            // Filter karyawan yang terdaftar dan aktif di periode SP tersebut
-            $spClean = trim($spPeriod);
+        if ($spClean) {
+            // Saring absensi HANYA untuk karyawan di SP tersebut
+            $attendanceQuery->whereHas('user', function ($uq) use ($targetCompany, $spClean, $role) {
+                $uq->where(function ($sub) use ($targetCompany, $spClean, $role) {
+                    $sub->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                        $sq->select('employee_name')
+                            ->from('payrolls')
+                            ->where('period', $spClean)
+                            ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                            ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                    });
+                    if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                        $sub->orWhereIn('role', ['admin', 'super_admin', 'lord_admin']);
+                    }
+                });
+            });
+
+            // Hitung total karyawan aktif di SP tersebut dari master data payrolls
             $payrollQuery = \App\Models\Payroll::where('period', $spClean)
                 ->when($targetCompany, fn ($sq) => $sq->where('company', $targetCompany));
 
@@ -252,9 +294,6 @@ class AdminAttendanceController extends Controller
 
             $totalEmployees = $totalActivePayroll > 0 ? $totalActivePayroll : $usersQuery->count();
         } else {
-            $attendanceQuery->where('date', $date);
-            $label = $date;
-
             // Untuk absensi harian / global: sinkronkan patokan dengan master data payroll resmi
             if ($targetCompany) {
                 $payrollQuery = \App\Models\Payroll::where('company', $targetCompany);
@@ -339,10 +378,25 @@ class AdminAttendanceController extends Controller
             : ($currentUser->company ?: 'rbs');
 
         $spPeriod = $request->query('sp_period') ?: $request->query('sp');
-        $spRange = $this->getSpDateRange($spPeriod) ?: [
-            Carbon::today('Asia/Jakarta')->startOfMonth()->toDateString(),
-            Carbon::today('Asia/Jakarta')->endOfMonth()->toDateString(),
-        ];
+        $month = $request->query('month');
+        $spRange = $this->getSpDateRange($spPeriod);
+
+        // Jika SP tidak memiliki cut-off tanggal eksplisit, gunakan bulan yang dipilih atau bulan berjalan
+        if (!$spRange) {
+            if ($month) {
+                $spRange = [
+                    Carbon::parse($month)->startOfMonth()->toDateString(),
+                    Carbon::parse($month)->endOfMonth()->toDateString(),
+                ];
+            } elseif ($request->query('start_date') && $request->query('end_date')) {
+                $spRange = [$request->query('start_date'), $request->query('end_date')];
+            } else {
+                $spRange = [
+                    Carbon::today('Asia/Jakarta')->startOfMonth()->toDateString(),
+                    Carbon::today('Asia/Jakarta')->endOfMonth()->toDateString(),
+                ];
+            }
+        }
 
         $search = $request->query('search');
         $role = $request->query('role');
@@ -1222,6 +1276,25 @@ class AdminAttendanceController extends Controller
             $query->whereHas('user', fn ($u) => $u->whereIn('role', ['user', 'karyawan']));
         }
 
+        // Filter karyawan berdasarkan Surat Pesanan (SP) jika dipilih (SP adalah kategori kontrak karyawan)
+        if ($spPeriod && strtolower(trim($spPeriod)) !== 'all' && empty($selectedAttendanceIds)) {
+            $spClean = trim($spPeriod);
+            $query->whereHas('user', function ($uq) use ($targetCompany, $spClean, $role) {
+                $uq->where(function ($sub) use ($targetCompany, $spClean, $role) {
+                    $sub->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                        $sq->select('employee_name')
+                            ->from('payrolls')
+                            ->where('period', $spClean)
+                            ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                            ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                    });
+                    if ($role === 'super_admin' || $role === 'admin' || empty($role) || $role === 'all') {
+                        $sub->orWhereIn('role', ['admin', 'super_admin', 'lord_admin']);
+                    }
+                });
+            });
+        }
+
         if (!empty($selectedAttendanceIds)) {
             $filterLabel = "terpilih_" . count($selectedAttendanceIds);
         } elseif ($spRange) {
@@ -1230,15 +1303,18 @@ class AdminAttendanceController extends Controller
             $filterLabel = "SP_{$cleanSp}";
         } elseif ($date && !$month) {
             $query->where('date', $date);
-            $filterLabel = "tanggal_{$date}";
+            $cleanSp = ($spPeriod && strtolower(trim($spPeriod)) !== 'all') ? str_replace(' ', '_', trim($spPeriod)) . '_' : '';
+            $filterLabel = "{$cleanSp}tanggal_{$date}";
         } elseif ($month) {
             $query->where('date', 'like', "{$month}%");
-            $filterLabel = "bulan_{$month}";
+            $cleanSp = ($spPeriod && strtolower(trim($spPeriod)) !== 'all') ? str_replace(' ', '_', trim($spPeriod)) . '_' : '';
+            $filterLabel = "{$cleanSp}bulan_{$month}";
         } elseif (empty($selectedUserIds)) {
             // Default to today if neither IDs, SP, date, nor month specified, preventing full database dump
             $today = Carbon::today('Asia/Jakarta')->toDateString();
             $query->where('date', $today);
-            $filterLabel = "tanggal_{$today}";
+            $cleanSp = ($spPeriod && strtolower(trim($spPeriod)) !== 'all') ? str_replace(' ', '_', trim($spPeriod)) . '_' : '';
+            $filterLabel = "{$cleanSp}tanggal_{$today}";
         } else {
             $filterLabel = "karyawan_terpilih";
         }

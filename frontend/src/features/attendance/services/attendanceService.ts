@@ -280,6 +280,9 @@ export const attendanceService = {
     search?: string;
     company?: string;
     role?: string;
+    month?: string;
+    start_date?: string;
+    end_date?: string;
   }): Promise<{ sp_period: string; date_range: string[]; items: any[]; total_employees: number }> => {
     const response = await api.get('/admin/attendances/recap-by-employee', { params });
     return response.data.data;

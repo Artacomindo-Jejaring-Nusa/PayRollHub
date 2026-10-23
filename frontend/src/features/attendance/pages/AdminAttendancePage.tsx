@@ -62,7 +62,6 @@ export const AdminAttendancePage: React.FC = () => {
   // Recap & Filter State
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
-  const [filterType, setFilterType] = useState<'sp' | 'daily'>('daily');
   const [selectedSp, setSelectedSp] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
@@ -351,17 +350,18 @@ export const AdminAttendancePage: React.FC = () => {
         page: attendancePage,
         per_page: attendancePerPage,
       };
-      if (filterType === 'sp') {
+      if (selectedSp && selectedSp !== 'all') {
         params.sp_period = selectedSp;
-      } else {
+      }
+      if (selectedDate && selectedDate !== 'all') {
         params.date = selectedDate;
       }
 
       const [listRes, sumRes] = await Promise.allSettled([
         attendanceService.getAdminAttendances(params),
         attendanceService.getAdminSummary(
-          filterType === 'daily' ? selectedDate : undefined,
-          filterType === 'sp' ? selectedSp : undefined,
+          selectedDate && selectedDate !== 'all' ? selectedDate : undefined,
+          selectedSp && selectedSp !== 'all' ? selectedSp : undefined,
           roleFilter !== 'all' ? roleFilter : undefined
         ),
       ]);
@@ -397,13 +397,13 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, selectedSp, selectedDate, statusFilter, roleFilter, searchQuery, attendancePage, attendancePerPage]);
+  }, [selectedSp, selectedDate, statusFilter, roleFilter, searchQuery, attendancePage, attendancePerPage]);
 
   // Reset page to 1 & clear selections on filter changes
   useEffect(() => {
     setAttendancePage(1);
     setSelectedAttendanceIds([]);
-  }, [filterType, selectedSp, selectedDate, statusFilter, roleFilter, searchQuery]);
+  }, [selectedSp, selectedDate, statusFilter, roleFilter, searchQuery]);
 
   useEffect(() => {
     setSelectedAttendanceIds([]);
@@ -412,16 +412,17 @@ export const AdminAttendancePage: React.FC = () => {
   useEffect(() => {
     setEmployeeRecapPage(1);
     setSelectedEmployeeIds([]);
-  }, [selectedSp, roleFilter, searchQuery]);
+  }, [selectedSp, roleFilter, searchQuery, selectedDate]);
 
   // Point 6: Rekapitulasi Presensi per Karyawan
   const fetchEmployeeRecap = useCallback(async () => {
     try {
       setEmployeeRecapLoading(true);
       const res = await attendanceService.getRecapByEmployee({
-        sp_period: selectedSp,
+        sp_period: selectedSp !== 'all' ? selectedSp : undefined,
         search: searchQuery || undefined,
         role: roleFilter !== 'all' ? roleFilter : undefined,
+        month: selectedDate ? selectedDate.substring(0, 7) : undefined,
       });
       setEmployeeRecapData(res.items || []);
     } catch (err: any) {
@@ -429,7 +430,7 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setEmployeeRecapLoading(false);
     }
-  }, [selectedSp, roleFilter, searchQuery]);
+  }, [selectedSp, roleFilter, searchQuery, selectedDate]);
 
   const paginatedEmployeeRecap = useMemo(() => {
     const start = (employeeRecapPage - 1) * employeeRecapPerPage;
@@ -449,7 +450,7 @@ export const AdminAttendancePage: React.FC = () => {
   const handleOpenCreateAttendance = async (defaultUserId?: number) => {
     setCreateForm({
       user_id: defaultUserId || '',
-      date: filterType === 'daily' ? selectedDate : new Date().toISOString().split('T')[0],
+      date: selectedDate || new Date().toISOString().split('T')[0],
       attendance_type: 'masuk',
       location_name: '',
       check_in_time: '08:00',
@@ -1080,8 +1081,9 @@ export const AdminAttendancePage: React.FC = () => {
       await attendanceService.downloadAttendanceExport({
         format,
         mode: recapViewMode,
-        sp_period: filterType === 'sp' ? selectedSp : undefined,
-        date: filterType === 'daily' ? selectedDate : undefined,
+        sp_period: selectedSp !== 'all' ? selectedSp : undefined,
+        date: selectedDate && selectedDate !== 'all' ? selectedDate : undefined,
+        month: recapViewMode === 'employee_recap' && selectedDate ? selectedDate.substring(0, 7) : undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         role: roleFilter !== 'all' ? roleFilter : undefined,
         search: searchQuery.trim() || undefined,
@@ -1497,60 +1499,43 @@ export const AdminAttendancePage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Left: Filter Periode & Tanggal */}
               <div className="flex flex-wrap items-center gap-3">
-                {/* Switcher Filter Mode: SP 1-9 vs Harian */}
-                <div className="flex items-center p-0.5 bg-surface-container rounded-lg border border-border-subtle">
-                  <button
-                    type="button"
-                    onClick={() => setFilterType('sp')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                      filterType === 'sp'
-                        ? 'bg-surface-panel text-primary shadow-2xs'
-                        : 'text-text-muted hover:text-text-primary'
-                    }`}
+                {/* Surat Pesanan (SP 1-12) */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-text-muted font-medium">Surat Pesanan:</span>
+                  <select
+                    value={selectedSp}
+                    onChange={(e) => setSelectedSp(e.target.value)}
+                    className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-semibold focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
                   >
-                    Periode SP (1-12)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFilterType('daily')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                      filterType === 'daily'
-                        ? 'bg-surface-panel text-primary shadow-2xs'
-                        : 'text-text-muted hover:text-text-primary'
-                    }`}
-                  >
-                    Tanggal Harian
-                  </button>
+                    <option value="all">Semua Periode SP (1-12)</option>
+                    {SP_PERIOD_LIST.map((sp) => (
+                      <option key={sp.code} value={sp.code}>
+                        {sp.fullLabel}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Dropdown SP 1 - 9 jika mode SP */}
-                {filterType === 'sp' ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-text-muted font-medium">Surat Pesanan:</span>
-                    <select
-                      value={selectedSp}
-                      onChange={(e) => setSelectedSp(e.target.value)}
-                      className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-semibold focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                {/* Tanggal Harian */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-text-muted font-medium">Tanggal:</span>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  />
+                  {selectedDate !== new Date().toISOString().split('T')[0] && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                      className="text-[11px] text-primary hover:underline font-semibold cursor-pointer px-1.5 py-1 rounded bg-primary/10"
+                      title="Setel ke Tanggal Hari Ini"
                     >
-                      <option value="all">Semua Periode SP (1-12)</option>
-                      {SP_PERIOD_LIST.map((sp) => (
-                        <option key={sp.code} value={sp.code}>
-                          {sp.fullLabel}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-text-muted font-medium">Tanggal:</span>
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                    />
-                  </div>
-                )}
+                      Hari Ini
+                    </button>
+                  )}
+                </div>
 
                 {/* Status Filter */}
                 <div className="flex items-center gap-1.5">
@@ -1730,7 +1715,7 @@ export const AdminAttendancePage: React.FC = () => {
                     ) : attendances.length === 0 ? (
                       <tr>
                         <td colSpan={16} className="py-10 text-center text-text-muted">
-                          Tidak ada data absensi untuk filter {filterType === 'sp' ? selectedSp : selectedDate}.
+                          Tidak ada data absensi untuk filter {selectedSp !== 'all' ? `${selectedSp} (${selectedDate})` : selectedDate}.
                         </td>
                       </tr>
                     ) : (
@@ -5054,7 +5039,7 @@ export const AdminAttendancePage: React.FC = () => {
                 : `${selectedEmployeeIds.length} Karyawan Dipilih`}
             </span>
             <span className="text-[11px] text-text-muted hidden sm:inline">
-              (Laporan {filterType === 'sp' ? selectedSp : selectedDate})
+              (Laporan {selectedSp !== 'all' ? `${selectedSp} • ${selectedDate}` : selectedDate})
             </span>
           </div>
           <div className="h-4 w-px bg-border-subtle hidden sm:block" />

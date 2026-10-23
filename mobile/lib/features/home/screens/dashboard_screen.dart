@@ -5284,7 +5284,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     String dateDisplay = dateRaw;
     try {
-      final parsedDate = DateTime.parse(dateRaw);
+      final parsedDate = DateTime.parse(dateRaw).toLocal();
       dateDisplay = DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(parsedDate);
     } catch (_) {}
 
@@ -6242,7 +6242,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 // Date formatting
                 String dateDisplay = dateRaw;
                 try {
-                  final parsedDate = DateTime.parse(dateRaw);
+                  final parsedDate = DateTime.parse(dateRaw).toLocal();
                   dateDisplay = DateFormat('EEEE, d MMM yyyy', 'id_ID').format(parsedDate);
                 } catch (_) {}
 

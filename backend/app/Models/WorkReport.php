@@ -31,7 +31,7 @@ class WorkReport extends Model
     ];
 
     protected $casts = [
-        'report_date' => 'date',
+        'report_date' => 'date:Y-m-d',
         'reviewed_at' => 'datetime',
     ];
 

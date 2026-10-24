@@ -15,6 +15,7 @@ import '../models/announcement_model.dart';
 import '../models/attendance_today_model.dart';
 import '../services/announcement_service.dart';
 import '../services/attendance_service.dart';
+import '../services/attendance_offline_service.dart';
 import '../services/employee_portal_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/storage/token_storage.dart';
@@ -52,6 +53,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   List<dynamic>? _workReportsList;
   Map<String, dynamic>? _profileData;
   DateTime _historySelectedMonth = DateTime.now();
+
+  // Offline-First Attendance Queue States
+  Map<String, dynamic>? _pendingOfflineCheckIn;
+  Map<String, dynamic>? _pendingOfflineCheckOut;
+  bool _isSyncingOffline = false;
+  Timer? _offlineAutoSyncTimer;
 
   bool _isLoadingAttendance = true;
   bool _isLoadingAnnouncements = true;
@@ -98,7 +105,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void initState() {
     super.initState();
     _restoreStatusBar();
+    _checkPendingOfflineAttendances();
     _loadAllRealtimeData();
+
+    // Auto-sync periodic timer setiap 45 detik jika ada absensi pending
+    _offlineAutoSyncTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      _tryBackgroundOfflineSync();
+    });
+
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         final tz = _todayAttendance?.timezone ?? 'WIB';
@@ -157,6 +171,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   void dispose() {
+    _offlineAutoSyncTimer?.cancel();
     _clockTimer.cancel();
     _descAbsenController.dispose();
     _descKegiatan1Controller.dispose();
@@ -165,11 +180,96 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     super.dispose();
   }
 
+  /// Memeriksa status antrean absensi offline yang tersimpan di HP
+  Future<void> _checkPendingOfflineAttendances() async {
+    try {
+      final pendingIn = await AttendanceOfflineService.getPendingCheckIn();
+      final pendingOut = await AttendanceOfflineService.getPendingCheckOut();
+      if (mounted) {
+        setState(() {
+          _pendingOfflineCheckIn = pendingIn;
+          _pendingOfflineCheckOut = pendingOut;
+        });
+      }
+    } catch (_) {}
+  }
+
+  /// Mencoba mengirim absensi offline ke server secara hening di latar belakang
+  Future<void> _tryBackgroundOfflineSync() async {
+    if (_isSyncingOffline) return;
+    final hasPending = await AttendanceOfflineService.hasPending();
+    if (!hasPending) return;
+
+    _isSyncingOffline = true;
+    try {
+      final res = await AttendanceOfflineService.syncAll();
+      final int synced = (res['synced'] is int) ? res['synced'] as int : 0;
+      if (synced > 0) {
+        await _checkPendingOfflineAttendances();
+        if (mounted) {
+          await _loadAllRealtimeData();
+        }
+      }
+    } catch (_) {
+    } finally {
+      _isSyncingOffline = false;
+    }
+  }
+
+  /// Pemicu manual sinkronisasi data absensi offline dari banner UI
+  Future<void> _manualSyncOffline() async {
+    if (_isSyncingOffline) return;
+    setState(() => _isSyncingOffline = true);
+
+    try {
+      final res = await AttendanceOfflineService.syncAll();
+      final int synced = (res['synced'] is int) ? res['synced'] as int : 0;
+      final int failed = (res['failed'] is int) ? res['failed'] as int : 0;
+
+      await _checkPendingOfflineAttendances();
+      if (mounted) {
+        if (synced > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$synced data absensi offline berhasil dikirim ke server!'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          await _loadAllRealtimeData();
+        } else if (failed > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Koneksi internet belum stabil. Data absensi tetap aman di HP dan akan dicoba lagi otomatis.'),
+              backgroundColor: Color(0xFFD97706),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Semua data absensi sudah sinkron di server.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal sinkronisasi: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncingOffline = false);
+      }
+    }
+  }
+
   Future<void> _loadAllRealtimeData() async {
     setState(() {
       _isLoadingAttendance = true;
       _isLoadingAnnouncements = true;
     });
+
+    await _checkPendingOfflineAttendances();
+    _tryBackgroundOfflineSync();
 
     try {
       final results = await Future.wait([
@@ -560,7 +660,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             _buildCheckInOptionTile(
               icon: Icons.event_available_rounded,
               title: 'Absen Libur / Off Shift',
-              subtitle: 'Catat hari libur atau cuti yang telah disetujui',
+              subtitle: 'Catat jadwal hari libur atau off shift resmi',
               color: const Color(0xFFD97706),
               onTap: () {
                 Navigator.pop(ctx);
@@ -672,13 +772,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       if (res['success'] == true) {
         if (mounted) {
+          final isOffline = res['is_offline'] == true;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(res['message']?.toString() ?? 'Absen masuk berhasil!'),
-              backgroundColor: AppColors.success,
+              content: Row(
+                children: [
+                  Icon(
+                    isOffline ? Icons.cloud_done_rounded : Icons.check_circle_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      res['message']?.toString() ?? (isOffline ? 'Absen masuk tersimpan di HP (Offline)!' : 'Absen masuk berhasil!'),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: isOffline ? const Color(0xFFD97706) : AppColors.success,
+              duration: Duration(seconds: isOffline ? 5 : 3),
             ),
           );
         }
+        await _checkPendingOfflineAttendances();
         await _loadAllRealtimeData();
       } else {
         if (mounted) {
@@ -832,9 +950,612 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
+  Future<void> _showIzinSakitModal() async {
+    String selectedType = 'sakit'; // 'sakit' or 'izin'
+    final notesController = TextEditingController();
+    File? attachedPhoto;
+    bool isSubmitting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (bottomSheetContext) {
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(modalContext).viewInsets.bottom,
+              ),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(modalContext).size.height * 0.9,
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Top drag handle
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 12, bottom: 8),
+                        width: 44,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: AppColors.neutral300,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE11D48).withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.assignment_turned_in_rounded,
+                              color: Color(0xFFE11D48),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Pengajuan Izin / Sakit Bersurat',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.neutral900,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Wajib melampirkan foto surat dokter (SKD) atau surat izin resmi',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: AppColors.neutral500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: AppColors.neutral400),
+                            onPressed: () => Navigator.pop(modalContext),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(height: 1, color: Color(0xFFF1F3F8)),
+
+                    // Form Body (Scrollable)
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Jenis Pengajuan
+                            Text(
+                              'Pilih Jenis Pengajuan *',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.neutral800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => setModalState(() => selectedType = 'sakit'),
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                      decoration: BoxDecoration(
+                                        color: selectedType == 'sakit'
+                                            ? const Color(0xFFFDF2F8)
+                                            : const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: selectedType == 'sakit'
+                                              ? const Color(0xFFE11D48)
+                                              : AppColors.neutral200,
+                                          width: selectedType == 'sakit' ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            selectedType == 'sakit'
+                                                ? Icons.radio_button_checked_rounded
+                                                : Icons.radio_button_off_rounded,
+                                            size: 18,
+                                            color: selectedType == 'sakit'
+                                                ? const Color(0xFFE11D48)
+                                                : AppColors.neutral400,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Sakit',
+                                                  style: GoogleFonts.plusJakartaSans(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: selectedType == 'sakit'
+                                                        ? const Color(0xFF9D174D)
+                                                        : AppColors.neutral800,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Surat SKD Dokter',
+                                                  style: GoogleFonts.plusJakartaSans(
+                                                    fontSize: 10.5,
+                                                    color: AppColors.neutral500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () => setModalState(() => selectedType = 'izin'),
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                      decoration: BoxDecoration(
+                                        color: selectedType == 'izin'
+                                            ? const Color(0xFFF5F3FF)
+                                            : const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: selectedType == 'izin'
+                                              ? const Color(0xFF7C3AED)
+                                              : AppColors.neutral200,
+                                          width: selectedType == 'izin' ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            selectedType == 'izin'
+                                                ? Icons.radio_button_checked_rounded
+                                                : Icons.radio_button_off_rounded,
+                                            size: 18,
+                                            color: selectedType == 'izin'
+                                                ? const Color(0xFF7C3AED)
+                                                : AppColors.neutral400,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  'Izin',
+                                                  style: GoogleFonts.plusJakartaSans(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: selectedType == 'izin'
+                                                        ? const Color(0xFF5B21B6)
+                                                        : AppColors.neutral800,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Surat Izin Resmi',
+                                                  style: GoogleFonts.plusJakartaSans(
+                                                    fontSize: 10.5,
+                                                    color: AppColors.neutral500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            // 2. Keterangan / Alasan
+                            Text(
+                              selectedType == 'sakit' ? 'Keluhan Sakit & Catatan Dokter *' : 'Alasan / Keperluan Izin *',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.neutral800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: notesController,
+                              maxLines: 3,
+                              style: GoogleFonts.plusJakartaSans(fontSize: 13),
+                              decoration: InputDecoration(
+                                hintText: selectedType == 'sakit'
+                                    ? 'Contoh: Mengalami demam tinggi, istirahat dokter 2 hari...'
+                                    : 'Contoh: Izin urusan keluarga mendesak / dinas tertentu...',
+                                hintStyle: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.neutral400),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.neutral300),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(color: AppColors.neutral200),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide(
+                                    color: selectedType == 'sakit' ? const Color(0xFFE11D48) : const Color(0xFF7C3AED),
+                                    width: 1.5,
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.all(14),
+                              ),
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            // 3. Foto Bukti Surat (Wajib)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Foto Bukti Surat (Wajib) *',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.neutral800,
+                                  ),
+                                ),
+                                if (attachedPhoto != null)
+                                  InkWell(
+                                    onTap: () => setModalState(() => attachedPhoto = null),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFE11D48)),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Hapus Foto',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: const Color(0xFFE11D48),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+
+                            if (attachedPhoto == null)
+                              InkWell(
+                                onTap: () {
+                                  _showPhotoSourceBottomSheet(
+                                    title: selectedType == 'sakit' ? 'Surat Dokter (SKD)' : 'Surat Izin Resmi',
+                                    onPhotoPicked: (photo) {
+                                      setModalState(() => attachedPhoto = photo);
+                                    },
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: AppColors.neutral300,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: (selectedType == 'sakit' ? const Color(0xFFE11D48) : const Color(0xFF7C3AED))
+                                              .withValues(alpha: 0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.add_a_photo_rounded,
+                                          size: 26,
+                                          color: selectedType == 'sakit' ? const Color(0xFFE11D48) : const Color(0xFF7C3AED),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        selectedType == 'sakit' ? 'Ambil Foto Surat Keterangan Dokter' : 'Ambil Foto Surat Izin',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.neutral800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Bisa melalui kamera langsung atau pilih dari galeri',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 11,
+                                          color: AppColors.neutral500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            else
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Stack(
+                                  alignment: Alignment.topRight,
+                                  children: [
+                                    Container(
+                                      width: double.infinity,
+                                      height: 180,
+                                      color: Colors.black12,
+                                      child: Image.file(
+                                        attachedPhoto!,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: InkWell(
+                                        onTap: () {
+                                          _showPhotoSourceBottomSheet(
+                                            title: selectedType == 'sakit' ? 'Surat Dokter (SKD)' : 'Surat Izin Resmi',
+                                            onPhotoPicked: (photo) {
+                                              setModalState(() => attachedPhoto = photo);
+                                            },
+                                          );
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.65),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.cached_rounded, size: 14, color: Colors.white),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Ganti Foto',
+                                                style: GoogleFonts.plusJakartaSans(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                            const SizedBox(height: 18),
+
+                            // 4. Alert / Info notice
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: const Color(0xFFBFDBFE)),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFF2563EB)),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Pengajuan izin/sakit bersurat wajib menyertakan foto surat resmi dan akan diverifikasi oleh Admin. Anda tidak perlu melakukan absen pulang.',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11,
+                                        height: 1.4,
+                                        color: const Color(0xFF1E40AF),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Bottom Action Button
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                                  final notes = notesController.text.trim();
+                                  if (notes.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Keterangan ${selectedType == 'sakit' ? 'sakit' : 'izin'} wajib diisi!'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  if (attachedPhoto == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Foto bukti surat ${selectedType == 'sakit' ? 'keterangan dokter (SKD)' : 'izin'} wajib dilampirkan!'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  setModalState(() => isSubmitting = true);
+                                  Navigator.pop(modalContext);
+
+                                  setState(() => _isSubmittingAction = true);
+
+                                  final position = await _determinePosition();
+                                  final res = await AttendanceService.checkIn(
+                                    attendanceType: selectedType,
+                                    latitude: position?.latitude,
+                                    longitude: position?.longitude,
+                                    shiftId: _todayAttendance?.assignedShift?.id,
+                                    notes: notes,
+                                    photoFile: attachedPhoto,
+                                  );
+
+                                  setState(() => _isSubmittingAction = false);
+
+                                  if (res['success'] == true) {
+                                    if (mounted) {
+                                      final isOffline = res['is_offline'] == true;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Row(
+                                            children: [
+                                              Icon(
+                                                isOffline ? Icons.cloud_done_rounded : Icons.check_circle_rounded,
+                                                color: Colors.white,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  res['message']?.toString() ??
+                                                      'Pengajuan berhasil dikirim. Menunggu verifikasi admin.',
+                                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          backgroundColor: isOffline ? const Color(0xFFD97706) : AppColors.success,
+                                          duration: Duration(seconds: isOffline ? 5 : 4),
+                                        ),
+                                      );
+                                    }
+                                    await _loadAllRealtimeData();
+                                  } else {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(res['message']?.toString() ?? 'Gagal mengirim pengajuan.'),
+                                          backgroundColor: AppColors.error,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: selectedType == 'sakit' ? const Color(0xFFE11D48) : const Color(0xFF7C3AED),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 2,
+                          ),
+                          child: isSubmitting
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.send_rounded, size: 18),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Kirim Pengajuan ${selectedType == 'sakit' ? 'Sakit' : 'Izin'}',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _handleCheckOutAction() async {
     final attendance = _todayAttendance?.attendance;
-    if (attendance == null || attendance.checkInTime == null) {
+    final isHoliday = attendance != null && (attendance.attendanceType == 'libur' || attendance.status == 'holiday');
+    final isPermit = attendance != null && (attendance.attendanceType == 'sakit' || attendance.attendanceType == 'izin' || attendance.status == 'permit');
+
+    if (isHoliday) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Status hari ini adalah Libur / Off Shift. Anda tidak perlu melakukan Absen Keluar.'),
+          backgroundColor: AppColors.neutral800,
+        ),
+      );
+      return;
+    }
+
+    if (isPermit) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Status hari ini adalah Izin / Sakit Bersurat. Anda tidak perlu melakukan Absen Keluar.'),
+          backgroundColor: AppColors.neutral800,
+        ),
+      );
+      return;
+    }
+
+    final hasCheckInRecord = (attendance != null && attendance.checkInTime != null) || _pendingOfflineCheckIn != null;
+    if (!hasCheckInRecord) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Silakan lakukan Absen Masuk terlebih dahulu sebelum Absen Keluar.'),
@@ -844,10 +1565,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return;
     }
 
-    if (attendance.checkOutTime != null) {
+    if ((attendance != null && attendance.checkOutTime != null) || _pendingOfflineCheckOut != null) {
+      final outTime = attendance?.checkOutTime != null
+          ? _formatTimeDisplay(attendance!.checkOutTime)
+          : '${_pendingOfflineCheckOut?['time_display']} (Tersimpan di HP)';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Anda sudah melakukan Absen Keluar pada ${_formatTimeDisplay(attendance.checkOutTime)}.'),
+          content: Text('Anda sudah melakukan Absen Keluar pada $outTime.'),
           backgroundColor: AppColors.neutral800,
         ),
       );
@@ -893,13 +1617,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     if (res['success'] == true) {
       if (mounted) {
+        final isOffline = res['is_offline'] == true;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(res['message']?.toString() ?? 'Absen pulang berhasil dicatat.'),
-            backgroundColor: AppColors.success,
+            content: Row(
+              children: [
+                Icon(
+                  isOffline ? Icons.cloud_done_rounded : Icons.check_circle_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    res['message']?.toString() ?? (isOffline ? 'Absen pulang tersimpan di HP (Offline)!' : 'Absen pulang berhasil dicatat.'),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: isOffline ? const Color(0xFFD97706) : AppColors.success,
+            duration: Duration(seconds: isOffline ? 5 : 3),
           ),
         );
       }
+      await _checkPendingOfflineAttendances();
       await _loadAllRealtimeData();
     } else {
       if (mounted) {
@@ -1771,8 +2513,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Real Attendance Records
     final attendance = _todayAttendance?.attendance;
     final isHoliday = attendance != null && (attendance.attendanceType == 'libur' || attendance.status == 'holiday');
-    final hasCheckedIn = attendance != null && attendance.checkInTime != null;
-    final hasCheckedOut = attendance != null && attendance.checkOutTime != null;
+    final isSakit = attendance != null && (attendance.attendanceType == 'sakit' || attendance.status == 'sakit');
+    final isIzin = attendance != null && (attendance.attendanceType == 'izin' || attendance.status == 'permit');
+    final isPermit = isSakit || isIzin;
+    final hasCheckedIn = (attendance != null && attendance.checkInTime != null) || _pendingOfflineCheckIn != null;
+    final hasCheckedOut = (attendance != null && attendance.checkOutTime != null) || _pendingOfflineCheckOut != null;
 
     // Check-in status badge calculation
     String checkInBadgeText = 'Belum Masuk';
@@ -1780,15 +2525,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     Color checkInBadgeColor = AppColors.neutral600;
 
     if (hasCheckedIn) {
-      if (attendance.attendanceType == 'libur') {
+      if (_pendingOfflineCheckIn != null && (attendance == null || attendance.checkInTime == null)) {
+        checkInBadgeText = 'Pending Sync (HP)';
+        checkInBadgeBg = const Color(0xFFFEF3C7);
+        checkInBadgeColor = const Color(0xFFB45309);
+      } else if (attendance?.attendanceType == 'libur') {
         checkInBadgeText = 'Libur / Off';
         checkInBadgeBg = const Color(0xFFFEF3C7);
         checkInBadgeColor = const Color(0xFFB45309);
-      } else if (attendance.attendanceType == 'dinas_luar') {
+      } else if (attendance?.attendanceType == 'sakit') {
+        checkInBadgeText = 'Sakit (Surat Dokter)';
+        checkInBadgeBg = const Color(0xFFFCE7F3);
+        checkInBadgeColor = const Color(0xFFBE185D);
+      } else if (attendance?.attendanceType == 'izin' || attendance?.status == 'permit') {
+        checkInBadgeText = 'Izin Bersurat';
+        checkInBadgeBg = const Color(0xFFEDE9FE);
+        checkInBadgeColor = const Color(0xFF6D28D9);
+      } else if (attendance?.attendanceType == 'dinas_luar') {
         checkInBadgeText = 'Dinas Luar';
         checkInBadgeBg = const Color(0xFFDBEAFE);
         checkInBadgeColor = const Color(0xFF1D4ED8);
-      } else if (attendance.checkInStatus == 'late') {
+      } else if (attendance?.checkInStatus == 'late') {
         checkInBadgeText = 'Terlambat';
         checkInBadgeBg = const Color(0xFFFFEDD5);
         checkInBadgeColor = const Color(0xFFC2410C);
@@ -1805,9 +2562,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     Color checkOutBadgeColor = AppColors.neutral600;
 
     if (hasCheckedOut) {
-      checkOutBadgeText = 'Sudah Pulang';
-      checkOutBadgeBg = AppColors.success.withValues(alpha: 0.15);
-      checkOutBadgeColor = const Color(0xFF047857);
+      if (_pendingOfflineCheckOut != null && (attendance == null || attendance.checkOutTime == null)) {
+        checkOutBadgeText = 'Pending Sync (HP)';
+        checkOutBadgeBg = const Color(0xFFFEF3C7);
+        checkOutBadgeColor = const Color(0xFFB45309);
+      } else {
+        checkOutBadgeText = 'Sudah Pulang';
+        checkOutBadgeBg = AppColors.success.withValues(alpha: 0.15);
+        checkOutBadgeColor = const Color(0xFF047857);
+      }
+    } else if (isHoliday) {
+      checkOutBadgeText = 'Hari Libur';
+      checkOutBadgeBg = const Color(0xFFFEF3C7);
+      checkOutBadgeColor = const Color(0xFFB45309);
+    } else if (isPermit) {
+      checkOutBadgeText = 'Tidak Perlu Pulang';
+      checkOutBadgeBg = const Color(0xFFEDE9FE);
+      checkOutBadgeColor = const Color(0xFF6D28D9);
     } else if (hasCheckedIn) {
       checkOutBadgeText = 'Belum Pulang';
       checkOutBadgeBg = const Color(0xFFFEF3C7);
@@ -2222,6 +2993,83 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
                       const SizedBox(height: 22),
 
+                      // Banner Offline Attendance Pending Sync (Menunggu Sinyal)
+                      if (_pendingOfflineCheckIn != null || _pendingOfflineCheckOut != null) ...[
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.cloud_sync_rounded, color: Color(0xFFD97706), size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Absensi Tersimpan di HP (Offline)',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF92400E),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Tersimpan aman & otomatis dikirim saat ada sinyal. Anda tidak perlu absen ulang.',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 10.5,
+                                        color: const Color(0xFFB45309),
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              ElevatedButton(
+                                onPressed: _isSyncingOffline ? null : _manualSyncOffline,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFF59E0B),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: _isSyncingOffline
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : Text(
+                                        'Kirim',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       // Banner Notifikasi Shift Malam Kemarin Telah Selesai Checkout
                       if (_todayAttendance?.recentCompletedShift != null && !hasCheckedIn) ...[
                         Container(
@@ -2288,7 +3136,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ],
 
                       // Action Button 1: Absen Masuk (Check-In)
-                      if (!hasCheckedIn || isHoliday)
+                      if (_pendingOfflineCheckIn != null && (attendance == null || attendance.checkInTime == null))
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFF59E0B)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.cloud_done_rounded, color: Color(0xFFB45309), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Sudah Absen Masuk (${_pendingOfflineCheckIn!['time_display']} - Tersimpan di HP)',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: const Color(0xFF92400E),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (!hasCheckedIn || isHoliday)
                         ElevatedButton(
                           onPressed: _openCheckInModal,
                           style: ElevatedButton.styleFrom(
@@ -2314,6 +3190,61 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ],
                           ),
                         )
+                      else if (attendance?.attendanceType == 'sakit' || attendance?.attendanceType == 'izin' || attendance?.status == 'permit')
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: attendance?.attendanceType == 'sakit' ? const Color(0xFFFDF2F8) : const Color(0xFFF5F3FF),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: attendance?.attendanceType == 'sakit' ? const Color(0xFFF472B6) : const Color(0xFFA78BFA),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    attendance?.attendanceType == 'sakit'
+                                        ? Icons.medical_services_rounded
+                                        : Icons.assignment_turned_in_rounded,
+                                    color: attendance?.attendanceType == 'sakit'
+                                        ? const Color(0xFFBE185D)
+                                        : const Color(0xFF6D28D9),
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    attendance?.attendanceType == 'sakit'
+                                        ? 'Pengajuan Sakit (Surat Dokter)'
+                                        : 'Pengajuan Izin Bersurat',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: attendance?.attendanceType == 'sakit'
+                                          ? const Color(0xFF9D174D)
+                                          : const Color(0xFF5B21B6),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                (attendance?.approvalStatus == 'pending')
+                                    ? 'Status: Menunggu Verifikasi Admin • Tidak perlu absen pulang'
+                                    : 'Pengajuan telah tercatat resmi • Tidak perlu absen pulang',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  color: AppColors.neutral600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
                       else
                         Container(
                           width: double.infinity,
@@ -2329,7 +3260,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               Icon(Icons.check_circle_rounded, color: secondaryDarkColor, size: 20),
                               const SizedBox(width: 8),
                               Text(
-                                'Sudah Absen Masuk (${_formatTimeDisplay(attendance.checkInTime)})',
+                                'Sudah Absen Masuk (${_formatTimeDisplay(attendance?.checkInTime)})',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
@@ -2343,7 +3274,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       const SizedBox(height: 12),
 
                       // Action Button 2: Absen Keluar (Check-Out)
-                      if (!hasCheckedOut)
+                      if (_pendingOfflineCheckOut != null && (attendance == null || attendance.checkOutTime == null))
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFF59E0B)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.cloud_done_rounded, color: Color(0xFFB45309), size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Sudah Absen Pulang (${_pendingOfflineCheckOut!['time_display']} - Tersimpan di HP)',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                    color: const Color(0xFF92400E),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (attendance?.attendanceType == 'sakit' || attendance?.attendanceType == 'izin' || attendance?.status == 'permit' || isHoliday)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.neutral200),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.info_outline_rounded, color: AppColors.neutral400, size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                isHoliday ? 'Hari Libur (Tidak Ada Absen Pulang)' : 'Absen Pulang Tidak Diperlukan',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                  color: AppColors.neutral500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (!hasCheckedOut)
                         OutlinedButton(
                           onPressed: _handleCheckOutAction,
                           style: OutlinedButton.styleFrom(
@@ -2391,7 +3375,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               const Icon(Icons.task_alt_rounded, color: AppColors.neutral700, size: 18),
                               const SizedBox(width: 8),
                               Text(
-                                'Sudah Absen Pulang (${_formatTimeDisplay(attendance.checkOutTime)})',
+                                'Sudah Absen Pulang (${_formatTimeDisplay(attendance?.checkOutTime)})',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12.5,
@@ -2403,7 +3387,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
 
                       // Action Button Tambahan: Absen Masuk Sesi 2 atau Absen Libur / Off (Multi-shift / Selesai Checkout)
-                      if (hasCheckedIn && hasCheckedOut && !isHoliday) ...[
+                      if (hasCheckedIn && hasCheckedOut && !isHoliday && !isPermit) ...[
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -2485,7 +3469,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    hasCheckedIn ? _formatTimeDisplay(attendance.checkInTime) : '--:-- ${_todayAttendance?.timezone ?? 'WIB'}',
+                                    hasCheckedIn
+                                        ? (attendance?.checkInTime != null
+                                            ? _formatTimeDisplay(attendance!.checkInTime)
+                                            : '${_pendingOfflineCheckIn?['time_display'] ?? '--:--'} ${_todayAttendance?.timezone ?? 'WIB'}')
+                                        : '--:-- ${_todayAttendance?.timezone ?? 'WIB'}',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w800,
@@ -2535,7 +3523,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      hasCheckedOut ? _formatTimeDisplay(attendance.checkOutTime) : '--:-- ${_todayAttendance?.timezone ?? 'WIB'}',
+                                      hasCheckedOut
+                                          ? (attendance?.checkOutTime != null
+                                              ? _formatTimeDisplay(attendance!.checkOutTime)
+                                              : '${_pendingOfflineCheckOut?['time_display'] ?? '--:--'} ${_todayAttendance?.timezone ?? 'WIB'}')
+                                          : '--:-- ${_todayAttendance?.timezone ?? 'WIB'}',
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,
@@ -2765,6 +3757,118 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ),
                     ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Quick Card: Pengajuan Izin / Sakit Bersurat (Menu Cepat Mandiri)
+                  InkWell(
+                    onTap: _showIzinSakitModal,
+                    borderRadius: BorderRadius.circular(18),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: isPermit ? const Color(0xFFF472B6) : AppColors.neutral200,
+                          width: isPermit ? 1.5 : 1,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2)),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDF2F8),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.assignment_turned_in_rounded,
+                              size: 20,
+                              color: Color(0xFFE11D48),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Izin / Sakit Bersurat',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        color: primaryBrandColor,
+                                      ),
+                                    ),
+                                    if (isPermit) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: isSakit ? const Color(0xFFFCE7F3) : const Color(0xFFEDE9FE),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          isSakit ? 'Sakit' : 'Izin',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: isSakit ? const Color(0xFFBE185D) : const Color(0xFF6D28D9),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  isSakit
+                                      ? 'Status: Sakit (Surat Dokter Terlampir)'
+                                      : isIzin
+                                          ? 'Status: Izin Bersurat Terkirim'
+                                          : 'Pengajuan izin resmi atau sakit dengan surat dokter',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: isPermit ? const Color(0xFFBE185D) : AppColors.neutral500,
+                                    fontWeight: isPermit ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDF2F8),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFF472B6).withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isPermit ? 'Lihat' : 'Ajukan',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFFE11D48),
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFFE11D48)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 12),
@@ -3440,6 +4544,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     int hadirCount = 0;
     int terlambatCount = 0;
     int izinCount = 0;
+    int liburCount = 0;
     int alpaCount = 0;
 
     if (_historyList != null) {
@@ -3448,7 +4553,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         final checkInStatus = (item['check_in_status'] ?? '').toString().toLowerCase();
         final attendanceType = (item['attendance_type'] ?? '').toString().toLowerCase();
 
-        if (status == 'libur' || attendanceType == 'libur' || status == 'holiday' || status == 'izin' || status == 'cuti') {
+        if (status == 'libur' || attendanceType == 'libur' || status == 'holiday') {
+          liburCount++;
+        } else if (status == 'izin' || status == 'sakit' || status == 'permit' || attendanceType == 'izin' || attendanceType == 'sakit') {
           izinCount++;
         } else if (status == 'alpa' || status == 'alpha' || status == 'absent') {
           alpaCount++;
@@ -3583,7 +4690,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(height: 12),
 
-            // 2. Attendance Statistics Metric Cards (4 Cards Horizontal Grid)
+            // 2. Attendance Statistics Metric Cards (5 Cards in 2 Rows)
             Row(
               children: [
                 _buildHistoryMetricCard(
@@ -3603,19 +4710,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 const SizedBox(width: 8),
                 _buildHistoryMetricCard(
-                  label: 'Izin/Cuti',
-                  value: izinCount.toString(),
-                  valueColor: secondaryAccentColor,
-                  badgeBg: const Color(0xFFE0E2FE),
-                  badgeTextColor: secondaryAccentColor,
-                ),
-                const SizedBox(width: 8),
-                _buildHistoryMetricCard(
                   label: 'Alpa',
                   value: alpaCount.toString(),
                   valueColor: AppColors.neutral500,
                   badgeBg: const Color(0xFFF1F3F8),
                   badgeTextColor: AppColors.neutral600,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildHistoryMetricCard(
+                  label: 'Izin / Sakit',
+                  value: izinCount.toString(),
+                  valueColor: const Color(0xFFE11D48),
+                  badgeBg: const Color(0xFFFFE4E6),
+                  badgeTextColor: const Color(0xFFBE123C),
+                ),
+                const SizedBox(width: 8),
+                _buildHistoryMetricCard(
+                  label: 'Libur / Off',
+                  value: liburCount.toString(),
+                  valueColor: const Color(0xFFD97706),
+                  badgeBg: const Color(0xFFFEF3C7),
+                  badgeTextColor: const Color(0xFFB45309),
                 ),
               ],
             ),
@@ -3826,8 +4945,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       badgeText = lateMinutes != null ? 'Terlambat ${lateMinutes}m' : 'Terlambat';
       badgeBg = const Color(0xFFFFEDD5);
       badgeTextColor = const Color(0xFFC2410C);
-    } else if (status == 'izin' || status == 'cuti') {
-      badgeText = 'Izin / Cuti';
+    } else if (status == 'sakit' || attendanceType == 'sakit') {
+      badgeText = 'Sakit (Surat Dokter)';
+      badgeBg = const Color(0xFFFCE7F3);
+      badgeTextColor = const Color(0xFFBE185D);
+    } else if (status == 'izin' || attendanceType == 'izin' || status == 'permit') {
+      badgeText = 'Izin Bersurat';
       badgeBg = const Color(0xFFEDE9FE);
       badgeTextColor = const Color(0xFF6D28D9);
     } else if (status == 'alpa' || status == 'alpha') {
@@ -4015,6 +5138,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
               ],
+            ),
+          ],
+
+          // Approval Status / Notes if present
+          if (item['approval_status'] == 'pending') ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.access_time_rounded, size: 13, color: Color(0xFFB45309)),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Menunggu Verifikasi Admin',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF92400E),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (item['notes'] != null && item['notes'].toString().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Ket: ${item['notes']}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+                color: AppColors.neutral600,
+              ),
             ),
           ],
         ],
@@ -6310,7 +7474,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 ? Image.network(
                                     fullImageUrl,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Icon(
+                                    errorBuilder: (_, _, _) => Icon(
                                       Icons.photo_rounded,
                                       size: 26,
                                       color: AppColors.neutral400,

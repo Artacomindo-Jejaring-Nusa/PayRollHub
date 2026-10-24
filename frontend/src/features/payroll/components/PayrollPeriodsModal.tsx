@@ -642,7 +642,7 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
           isOpen={!!editingPeriod}
           onClose={() => setEditingPeriod(null)}
           title={`Atur Rentang Tanggal Absensi — ${editingPeriod.code}`}
-          description="Rentang tanggal ini digunakan otomatis untuk menarik rekap kehadiran (absen, dinas, cuti, libur) pada periode terkait."
+          description="Rentang tanggal ini digunakan otomatis untuk menarik rekap kehadiran (absen, dinas, izin/sakit, libur) pada periode terkait."
           maxWidth="lg"
         >
           <form onSubmit={handleSaveEdit} className="space-y-4">

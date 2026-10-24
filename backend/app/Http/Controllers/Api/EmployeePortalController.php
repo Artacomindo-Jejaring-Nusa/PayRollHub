@@ -184,12 +184,19 @@ class EmployeePortalController extends Controller
                 'user' => new UserResource($user),
                 'job_details' => $latestPayroll ? [
                     'position' => $latestPayroll->position,
-                    'school_unit' => $latestPayroll->school_unit,
+                    'school_unit' => $latestPayroll->school_unit ?: $user->school_unit,
                     'province' => $latestPayroll->province,
                     'status' => $latestPayroll->status,
                     'join_date' => $latestPayroll->join_date,
-                    'company' => $latestPayroll->company,
-                ] : null,
+                    'company' => $latestPayroll->company ?: $user->company,
+                ] : [
+                    'position' => '-',
+                    'school_unit' => $user->school_unit,
+                    'province' => null,
+                    'status' => $user->status === 'off' ? 'off' : 'active',
+                    'join_date' => null,
+                    'company' => $user->company ?: 'rbs',
+                ],
             ],
         ]);
     }
@@ -453,10 +460,17 @@ class EmployeePortalController extends Controller
         if (!empty($user->nik)) {
             $cleanNik = trim(ltrim((string) $user->nik, "'"));
             if ($cleanNik !== '') {
-                return $query->where(function ($q) use ($cleanNik) {
+                $hasNikMatch = (clone $query)->where(function ($q) use ($cleanNik) {
                     $q->where('nik', $cleanNik)
                       ->orWhere('nik', "'{$cleanNik}");
-                });
+                })->exists();
+
+                if ($hasNikMatch) {
+                    return $query->where(function ($q) use ($cleanNik) {
+                        $q->where('nik', $cleanNik)
+                          ->orWhere('nik', "'{$cleanNik}");
+                    });
+                }
             }
         }
 
@@ -489,9 +503,12 @@ class EmployeePortalController extends Controller
                 }
 
                 return $query->where('employee_name', $cleanName)
-                    ->where(function ($q) use ($rawAccount) {
+                    ->where(function ($q) use ($rawAccount, $payrollByBank) {
                         $q->where('bank_account', $rawAccount)
                           ->orWhere('bank_account', 'like', "%{$rawAccount}%");
+                        if (!empty($payrollByBank->nik)) {
+                            $q->orWhere('nik', $payrollByBank->nik);
+                        }
                     });
             }
         }
@@ -519,7 +536,12 @@ class EmployeePortalController extends Controller
                 }
 
                 return $query->where('employee_name', $cleanName)
-                    ->where('school_unit', $userUnit);
+                    ->where(function ($q) use ($userUnit, $payrollByUnit) {
+                        $q->where('school_unit', $userUnit);
+                        if (!empty($payrollByUnit->nik)) {
+                            $q->orWhere('nik', $payrollByUnit->nik);
+                        }
+                    });
             }
         }
 

@@ -139,6 +139,25 @@ class EmployeeAttendanceController extends Controller
         $currentTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
 
+        // Dukungan Offline-First: jika ada captured_at dari perangkat Android saat sinyal putus
+        $isOfflineSync = false;
+        $capturedAtRaw = $request->input('captured_at');
+        if (!empty($capturedAtRaw)) {
+            try {
+                $capturedCarbon = Carbon::parse($capturedAtRaw)->setTimezone($tzData['timezone']);
+                $diffHours = $now->diffInHours($capturedCarbon, false);
+                // Sanity check: waktu foto tidak boleh di masa depan (> 10 menit) dan tidak lebih dari 7 hari lalu
+                if ($diffHours <= 0.2 && $diffHours >= -168) {
+                    $now = $capturedCarbon;
+                    $today = $capturedCarbon->toDateString();
+                    $currentTime = $capturedCarbon->format('H:i:s');
+                    $isOfflineSync = true;
+                }
+            } catch (\Exception $e) {
+                // Fallback ke server time
+            }
+        }
+
         $yesterday = Carbon::parse($today)->subDay()->toDateString();
 
         // 1. Tentukan tanggal shift yang sesuai (mendukung check-in dini hari untuk shift lintas hari)
@@ -388,6 +407,8 @@ class EmployeeAttendanceController extends Controller
             'location_id' => 'nullable|integer',
             'shift_id' => 'nullable|integer',
             'notes' => 'nullable|string|max:500',
+            'captured_at' => 'nullable|string',
+            'is_offline_sync' => 'nullable|boolean',
         ]);
 
         // Simpan foto selfie absen masuk
@@ -492,7 +513,9 @@ class EmployeeAttendanceController extends Controller
                 'check_in_distance_meters' => $distance,
                 'check_in_status' => $checkInStatus,
                 'status' => $overallStatus,
-                'notes' => !empty($existing?->notes) ? trim($existing->notes . (!empty($validated['notes']) ? ' | ' . $validated['notes'] : '')) : ($validated['notes'] ?? null),
+                'notes' => !empty($existing?->notes)
+                    ? trim($existing->notes . (!empty($validated['notes']) ? ' | ' . $validated['notes'] : '') . ($isOfflineSync ? " [Offline Sync: Diambil {$currentTime}]" : ''))
+                    : (!empty($validated['notes']) ? $validated['notes'] . ($isOfflineSync ? " [Offline Sync: Diambil {$currentTime}]" : '') : ($isOfflineSync ? "[Offline Sync: Diambil {$currentTime}]" : null)),
                 'photo_url' => $photoPath,
                 'check_out_time' => null,
                 'check_out_lat' => null,
@@ -527,6 +550,8 @@ class EmployeeAttendanceController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
             'notes' => 'nullable|string|max:500',
+            'captured_at' => 'nullable|string',
+            'is_offline_sync' => 'nullable|boolean',
         ]);
 
         $user = $request->user();
@@ -539,6 +564,23 @@ class EmployeeAttendanceController extends Controller
         $today = $tzData['today'];
         $currentTime = $tzData['time'];
         $targetCompany = $user->company ?: 'rbs';
+
+        // Dukungan Offline-First: jika ada captured_at dari perangkat Android saat sinyal putus
+        $isOfflineSyncOut = false;
+        $capturedAtRawOut = $request->input('captured_at');
+        if (!empty($capturedAtRawOut)) {
+            try {
+                $capturedCarbon = Carbon::parse($capturedAtRawOut)->setTimezone($tzData['timezone']);
+                $diffHours = $now->diffInHours($capturedCarbon, false);
+                if ($diffHours <= 0.2 && $diffHours >= -168) {
+                    $now = $capturedCarbon;
+                    $currentTime = $capturedCarbon->format('H:i:s');
+                    $isOfflineSyncOut = true;
+                }
+            } catch (\Exception $e) {
+                // fallback
+            }
+        }
 
         // Cek absensi aktif (mendukung shift malam lintas hari)
         $attendance = $this->resolveActiveAttendance($user, $today, $now);
@@ -615,6 +657,9 @@ class EmployeeAttendanceController extends Controller
         $notesUpdate = $attendance->notes;
         if (!empty($validated['notes'])) {
             $notesUpdate = $attendance->notes ? $attendance->notes . ' | ' . $validated['notes'] : $validated['notes'];
+        }
+        if ($isOfflineSyncOut) {
+            $notesUpdate = trim(($notesUpdate ?: '') . " [Offline Sync Pulang: Diambil {$currentTime}]");
         }
 
         $attendance->update([

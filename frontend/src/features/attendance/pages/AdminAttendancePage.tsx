@@ -4614,7 +4614,7 @@ export const AdminAttendancePage: React.FC = () => {
                       <option value="present">Hadir Normal</option>
                       <option value="late">Terlambat</option>
                       <option value="absent">Alpa / Tidak Hadir</option>
-                      <option value="permit">Izin / Cuti</option>
+                      <option value="permit">Izin / Sakit (Bersurat)</option>
                     </select>
                   </div>
                 </div>
@@ -4800,7 +4800,7 @@ export const AdminAttendancePage: React.FC = () => {
                       <option value="present">Hadir Normal</option>
                       <option value="late">Terlambat</option>
                       <option value="absent">Alpa / Tidak Hadir</option>
-                      <option value="permit">Izin / Cuti</option>
+                      <option value="permit">Izin / Sakit (Bersurat)</option>
                     </select>
                   </div>
                 </div>

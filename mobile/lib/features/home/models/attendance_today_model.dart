@@ -80,6 +80,7 @@ class AttendanceRecordModel {
   final String? photoUrl;
   final String? notes;
   final String? workDurationFormatted;
+  final String? approvalStatus;
 
   AttendanceRecordModel({
     required this.id,
@@ -93,6 +94,7 @@ class AttendanceRecordModel {
     this.photoUrl,
     this.notes,
     this.workDurationFormatted,
+    this.approvalStatus,
   });
 
   factory AttendanceRecordModel.fromJson(Map<String, dynamic> json) {
@@ -108,6 +110,7 @@ class AttendanceRecordModel {
       photoUrl: json['photo_url']?.toString(),
       notes: json['notes']?.toString(),
       workDurationFormatted: json['work_duration_formatted']?.toString(),
+      approvalStatus: json['approval_status']?.toString(),
     );
   }
 }

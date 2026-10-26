@@ -30,6 +30,35 @@ void main() async {
     ),
   );
 
+  // Global Error Widget: Mencegah red screen of death atau kebocoran path internal sistem
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return const Material(
+      color: Colors.white,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFEF4444)),
+              SizedBox(height: 12),
+              Text(
+                'Terjadi Kendala Tampilan',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B)),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Silakan muat ulang atau buka kembali halaman ini.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
   runApp(
     const ProviderScope(
       child: HcAttendanceApp(),

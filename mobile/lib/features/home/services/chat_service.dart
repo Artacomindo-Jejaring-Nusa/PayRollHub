@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../models/chat_model.dart';
 
 class ChatService {
@@ -36,9 +37,9 @@ class ChatService {
       }
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] ?? 'Gagal memuat sesi live chat.';
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};
+      return {'success': false, 'message': ErrorSanitizer.clean(e)};
     }
 
     return {'success': false, 'message': 'Gagal terhubung ke server.'};
@@ -100,9 +101,9 @@ class ChatService {
       }
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] ?? 'Gagal mengirim pesan.';
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Gagal mengirim pesan: $e'};
+      return {'success': false, 'message': ErrorSanitizer.clean(e, fallback: 'Gagal mengirim pesan.')};
     }
 
     return {'success': false, 'message': 'Gagal memproses pengiriman.'};
@@ -135,9 +136,9 @@ class ChatService {
       }
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] ?? 'Gagal menghubungkan ke agen CS.';
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan: $e'};
+      return {'success': false, 'message': ErrorSanitizer.clean(e)};
     }
 
     return {'success': false};

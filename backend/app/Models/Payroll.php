@@ -206,7 +206,14 @@ class Payroll extends Model
             return $query;
         }
 
-        return $query->where('province', $province);
+        $variations = \App\Http\Controllers\Api\ProvincePayrollSettingController::getProvinceVariations($province);
+
+        return $query->where(function ($q) use ($variations) {
+            foreach ($variations as $var) {
+                $q->orWhere('province', $var)
+                  ->orWhereRaw('LOWER(TRIM(province)) = ?', [strtolower(trim($var))]);
+            }
+        });
     }
 
     /**

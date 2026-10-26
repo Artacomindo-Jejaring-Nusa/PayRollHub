@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/error_sanitizer.dart';
 
 class EmployeePortalService {
   /// Mengambil riwayat slip gaji karyawan
@@ -86,9 +87,9 @@ class EmployeePortalService {
           (e.response?.data?['errors'] != null
               ? (e.response!.data['errors'] as Map).values.first.toString()
               : 'Gagal mengirim laporan kerja.');
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};
+      return {'success': false, 'message': ErrorSanitizer.clean(e)};
     }
   }
 
@@ -105,6 +106,26 @@ class EmployeePortalService {
     String? descKegiatanLain,
   }) async {
     try {
+      // 1. Validasi keberadaan file di HP sebelum dikirim
+      if (!photoAbsen.existsSync()) {
+        return {
+          'success': false,
+          'message': 'Foto Absen Masuk tidak ditemukan di memori HP. Silakan ambil ulang foto.',
+        };
+      }
+      if (!photoKegiatan1.existsSync()) {
+        return {
+          'success': false,
+          'message': 'Foto Kegiatan 1 tidak ditemukan di memori HP. Silakan ambil ulang foto.',
+        };
+      }
+      if (!photoKegiatan2.existsSync()) {
+        return {
+          'success': false,
+          'message': 'Foto Kegiatan 2 tidak ditemukan di memori HP. Silakan ambil ulang foto.',
+        };
+      }
+
       final dio = await ApiClient.getInstance();
 
       final map = <String, dynamic>{
@@ -126,7 +147,7 @@ class EmployeePortalService {
         ),
       };
 
-      if (photoKegiatanLain != null && await photoKegiatanLain.exists()) {
+      if (photoKegiatanLain != null && photoKegiatanLain.existsSync()) {
         map['photo_kegiatan_lain'] = await MultipartFile.fromFile(
           photoKegiatanLain.path,
           filename: photoKegiatanLain.path.split(Platform.pathSeparator).last,
@@ -137,7 +158,14 @@ class EmployeePortalService {
       }
 
       final formData = FormData.fromMap(map);
-      final response = await dio.post('/employee/work-reports', data: formData);
+      final response = await dio.post(
+        '/employee/work-reports',
+        data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 120),
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
 
       return {
         'success': response.statusCode == 200 || response.statusCode == 201,
@@ -145,13 +173,22 @@ class EmployeePortalService {
         'data': response.data['data'],
       };
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.sendTimeout) {
+        return {
+          'success': false,
+          'message': 'Koneksi internet lambat / timeout. Mohon pastikan sinyal stabil lalu coba kirim kembali.',
+        };
+      }
       final msg = e.response?.data?['message'] ??
           (e.response?.data?['errors'] != null
               ? (e.response!.data['errors'] as Map).values.first.toString()
               : 'Gagal mengirim laporan kerja.');
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};
+      return {
+        'success': false,
+        'message': ErrorSanitizer.clean(e, fallback: 'Gagal memproses pengiriman laporan.'),
+      };
     }
   }
 
@@ -213,9 +250,9 @@ class EmployeePortalService {
           (e.response?.data?['errors'] != null
               ? (e.response!.data['errors'] as Map).values.first.toString()
               : 'Gagal memperbarui profil.');
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};
+      return {'success': false, 'message': ErrorSanitizer.clean(e)};
     }
   }
 }

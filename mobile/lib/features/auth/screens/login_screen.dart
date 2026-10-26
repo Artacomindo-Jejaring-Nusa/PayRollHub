@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../../home/screens/dashboard_screen.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/login_illustration.dart';
@@ -220,7 +221,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    authState.errorMessage!,
+                                    ErrorSanitizer.clean(authState.errorMessage!),
                                     style: GoogleFonts.plusJakartaSans(
                                       color: const Color(0xFFB91C1C),
                                       fontSize: 12,

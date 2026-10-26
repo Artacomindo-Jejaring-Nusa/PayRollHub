@@ -8,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../auth/models/user_model.dart';
 import '../models/complaint_model.dart';
 import '../services/complaint_service.dart';
+import '../../../core/utils/error_sanitizer.dart';
 
 class ComplaintsScreen extends StatefulWidget {
   final UserModel user;
@@ -783,7 +784,7 @@ class _CreateComplaintModalState extends State<_CreateComplaintModal> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengambil gambar: $e')),
+          SnackBar(content: Text(ErrorSanitizer.clean(e, fallback: 'Gagal mengambil gambar.'))),
         );
       }
     }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../models/complaint_model.dart';
 
 class ComplaintService {
@@ -36,9 +37,9 @@ class ComplaintService {
       }
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] ?? 'Gagal memuat daftar keluhan.';
-      return {'success': false, 'message': msg, 'complaints': <ComplaintModel>[]};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg), 'complaints': <ComplaintModel>[]};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e', 'complaints': <ComplaintModel>[]};
+      return {'success': false, 'message': ErrorSanitizer.clean(e), 'complaints': <ComplaintModel>[]};
     }
 
     return {'success': false, 'complaints': <ComplaintModel>[]};
@@ -84,9 +85,9 @@ class ComplaintService {
           (e.response?.data?['errors'] != null
               ? (e.response!.data['errors'] as Map).values.first.toString()
               : 'Gagal mengirim keluhan.');
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};
+      return {'success': false, 'message': ErrorSanitizer.clean(e)};
     }
 
     return {'success': false, 'message': 'Gagal mengirim keluhan.'};

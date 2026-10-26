@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../auth/models/user_model.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -19,6 +20,7 @@ import '../services/attendance_offline_service.dart';
 import '../services/employee_portal_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../widgets/onboarding_tutorial_dialog.dart';
 import 'complaints_screen.dart';
 import 'live_chat_screen.dart';
@@ -252,7 +254,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal sinkronisasi: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text(ErrorSanitizer.clean(e, fallback: 'Gagal sinkronisasi offline.')), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -427,7 +429,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal memperoleh posisi GPS: $e'),
+            content: Text(ErrorSanitizer.clean(e, fallback: 'Gagal memperoleh posisi GPS. Pastikan GPS aktif.')),
             backgroundColor: AppColors.error,
           ),
         );
@@ -814,7 +816,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Terjadi kesalahan saat memproses kamera/GPS: $e'),
+            content: Text(ErrorSanitizer.clean(e, fallback: 'Terjadi kesalahan saat memproses kamera/GPS.')),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1264,6 +1266,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 onTap: () {
                                   _showPhotoSourceBottomSheet(
                                     title: selectedType == 'sakit' ? 'Surat Dokter (SKD)' : 'Surat Izin Resmi',
+                                    slotKey: 'surat_izin_sakit',
                                     onPhotoPicked: (photo) {
                                       setModalState(() => attachedPhoto = photo);
                                     },
@@ -1338,6 +1341,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                         onTap: () {
                                           _showPhotoSourceBottomSheet(
                                             title: selectedType == 'sakit' ? 'Surat Dokter (SKD)' : 'Surat Izin Resmi',
+                                            slotKey: 'surat_izin_sakit',
                                             onPhotoPicked: (photo) {
                                               setModalState(() => attachedPhoto = photo);
                                             },
@@ -6170,12 +6174,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // -------------------------------------------------------------
   String _getFileSizeString(File file) {
     try {
+      if (!file.existsSync()) return '0 KB';
       final bytes = file.lengthSync();
       if (bytes < 1024) return '$bytes B';
       if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     } catch (_) {
-      return '1.2 MB';
+      return '0 KB';
     }
   }
 
@@ -6190,8 +6195,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return '$baseDomain/storage/$cleanPath';
   }
 
+  /// Menyimpan bytes foto ke direktori dokumen lokal permanen agar tidak terhapus OS Android saat di background
+  Future<File> _persistPickedPhoto(XFile picked, String slotKey) async {
+    final bytes = await picked.readAsBytes();
+    final appDir = await getApplicationDocumentsDirectory();
+    final reportsDir = Directory('${appDir.path}/work_reports_secure');
+    if (!reportsDir.existsSync()) {
+      reportsDir.createSync(recursive: true);
+    }
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final cleanSlot = slotKey.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+    final targetFile = File('${reportsDir.path}/report_${cleanSlot}_$timestamp.jpg');
+    await targetFile.writeAsBytes(bytes, flush: true);
+    return targetFile;
+  }
+
+  Future<void> _cleanupPersistentPhotos() async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final reportsDir = Directory('${appDir.path}/work_reports_secure');
+      if (reportsDir.existsSync()) {
+        final list = reportsDir.listSync();
+        for (final item in list) {
+          if (item is File) {
+            try {
+              item.deleteSync();
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   void _showPhotoSourceBottomSheet({
     required String title,
+    String slotKey = 'photo',
     required Function(File) onPhotoPicked,
   }) {
     showModalBottomSheet(
@@ -6232,7 +6270,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Ambil foto langsung atau pilih file dari galeri ponsel Anda.',
+                'Foto otomatis dikompresi ringan (~50 KB) agar cepat terkirim di sinyal lemah/NTT.',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 12,
                   color: AppColors.neutral500,
@@ -6242,10 +6280,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ListTile(
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final picker = ImagePicker();
-                  final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 75, maxWidth: 1280);
-                  if (picked != null) {
-                    onPhotoPicked(File(picked.path));
+                  try {
+                    final picker = ImagePicker();
+                    // Kompresi optimal: maxWidth & maxHeight 800px, quality 35% menghasilkan file ~35 - 65 KB
+                    final picked = await picker.pickImage(
+                      source: ImageSource.camera,
+                      imageQuality: 35,
+                      maxWidth: 800,
+                      maxHeight: 800,
+                    );
+                    if (picked != null) {
+                      final persistent = await _persistPickedPhoto(picked, slotKey);
+                      onPhotoPicked(persistent);
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ErrorSanitizer.clean(e, fallback: 'Gagal memproses foto kamera.')),
+                          backgroundColor: const Color(0xFFBA1A1A),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
                   }
                 },
                 leading: Container(
@@ -6263,10 +6320,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ListTile(
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final picker = ImagePicker();
-                  final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75, maxWidth: 1280);
-                  if (picked != null) {
-                    onPhotoPicked(File(picked.path));
+                  try {
+                    final picker = ImagePicker();
+                    // Kompresi optimal: maxWidth & maxHeight 800px, quality 35% menghasilkan file ~35 - 65 KB
+                    final picked = await picker.pickImage(
+                      source: ImageSource.gallery,
+                      imageQuality: 35,
+                      maxWidth: 800,
+                      maxHeight: 800,
+                    );
+                    if (picked != null) {
+                      final persistent = await _persistPickedPhoto(picked, slotKey);
+                      onPhotoPicked(persistent);
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ErrorSanitizer.clean(e, fallback: 'Gagal memproses foto galeri.')),
+                          backgroundColor: const Color(0xFFBA1A1A),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
                   }
                 },
                 leading: Container(
@@ -6299,6 +6375,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _descKegiatanLainController.clear();
       _reportSelectedDate = DateTime.now();
     });
+    _cleanupPersistentPhotos();
   }
 
   Future<void> _submitReportFromForm() async {
@@ -6419,7 +6496,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(res['message']?.toString() ?? 'Gagal mengirim laporan harian.'),
+            content: Text(ErrorSanitizer.clean(res['message'], fallback: 'Gagal mengirim laporan harian.')),
             backgroundColor: const Color(0xFFBA1A1A),
             behavior: SnackBarBehavior.floating,
           ),
@@ -7203,6 +7280,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     placeholder: 'Contoh: Hadir di lokasi tepat waktu, bersiap menjalankan tugas...',
                     onPickPhoto: () => _showPhotoSourceBottomSheet(
                       title: 'Absen Masuk',
+                      slotKey: 'absen',
                       onPhotoPicked: (f) => setState(() => _photoAbsen = f),
                     ),
                     onRemovePhoto: () => setState(() => _photoAbsen = null),
@@ -7220,6 +7298,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     placeholder: 'Contoh: Melakukan pembersihan dan perapihan area kerja...',
                     onPickPhoto: () => _showPhotoSourceBottomSheet(
                       title: 'Kegiatan 1',
+                      slotKey: 'kegiatan1',
                       onPhotoPicked: (f) => setState(() => _photoKegiatan1 = f),
                     ),
                     onRemovePhoto: () => setState(() => _photoKegiatan1 = null),
@@ -7237,6 +7316,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     placeholder: 'Contoh: Melakukan pengecekan inventaris dan patroli area...',
                     onPickPhoto: () => _showPhotoSourceBottomSheet(
                       title: 'Kegiatan 2',
+                      slotKey: 'kegiatan2',
                       onPhotoPicked: (f) => setState(() => _photoKegiatan2 = f),
                     ),
                     onRemovePhoto: () => setState(() => _photoKegiatan2 = null),
@@ -7254,6 +7334,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     placeholder: 'Opsional: Catatan kegiatan lain bila ada...',
                     onPickPhoto: () => _showPhotoSourceBottomSheet(
                       title: 'Kegiatan Lain',
+                      slotKey: 'kegiatan_lain',
                       onPhotoPicked: (f) => setState(() => _photoKegiatanLain = f),
                     ),
                     onRemovePhoto: () => setState(() => _photoKegiatanLain = null),

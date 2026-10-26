@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/error_sanitizer.dart';
 
 class LiveAttendanceCameraScreen extends StatefulWidget {
   final String title;
@@ -99,7 +100,7 @@ class _LiveAttendanceCameraScreenState extends State<LiveAttendanceCameraScreen>
       if (mounted) {
         setState(() {
           _isInitializing = false;
-          _errorMessage = 'Gagal membuka kamera depan: $e\nPastikan izin kamera telah diberikan di pengaturan HP.';
+          _errorMessage = 'Gagal membuka kamera depan: ${ErrorSanitizer.clean(e)}\nPastikan izin kamera telah diberikan di pengaturan HP.';
         });
       }
     }
@@ -149,7 +150,7 @@ class _LiveAttendanceCameraScreenState extends State<LiveAttendanceCameraScreen>
         setState(() => _isTakingPicture = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal mengambil foto: $e'),
+            content: Text(ErrorSanitizer.clean(e, fallback: 'Gagal mengambil foto.')),
             backgroundColor: AppColors.error,
           ),
         );

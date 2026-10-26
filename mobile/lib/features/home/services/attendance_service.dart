@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 import '../models/attendance_today_model.dart';
 import 'attendance_offline_service.dart';
+import '../../../core/utils/error_sanitizer.dart';
 
 class AttendanceService {
   /// Mengambil data absensi hari ini, lokasi penugasan terkunci, dan shift aktif.
@@ -91,9 +92,9 @@ class AttendanceService {
       final msg = e.response?.data?['message'] ??
           e.message ??
           'Koneksi gagal saat melakukan absensi.';
-      return {'success': false, 'message': msg, 'is_offline': false};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg), 'is_offline': false};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e', 'is_offline': false};
+      return {'success': false, 'message': ErrorSanitizer.clean(e), 'is_offline': false};
     }
   }
 
@@ -112,9 +113,9 @@ class AttendanceService {
       };
     } on DioException catch (e) {
       final msg = e.response?.data?['message'] ?? e.message ?? 'Gagal mengubah shift.';
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg)};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e'};
+      return {'success': false, 'message': ErrorSanitizer.clean(e)};
     }
   }
 
@@ -131,8 +132,8 @@ class AttendanceService {
     try {
       final dio = await ApiClient.getInstance();
       final payload = <String, dynamic>{
-        'latitude': ?latitude,
-        'longitude': ?longitude,
+        'latitude': latitude,
+        'longitude': longitude,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
         'captured_at': snapTime.toIso8601String(),
       };
@@ -163,9 +164,9 @@ class AttendanceService {
       }
 
       final msg = e.response?.data?['message'] ?? 'Gagal melakukan absen pulang.';
-      return {'success': false, 'message': msg, 'is_offline': false};
+      return {'success': false, 'message': ErrorSanitizer.clean(msg), 'is_offline': false};
     } catch (e) {
-      return {'success': false, 'message': 'Terjadi kesalahan sistem: $e', 'is_offline': false};
+      return {'success': false, 'message': ErrorSanitizer.clean(e), 'is_offline': false};
     }
   }
 

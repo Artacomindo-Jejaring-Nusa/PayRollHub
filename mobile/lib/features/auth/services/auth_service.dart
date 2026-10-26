@@ -4,6 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/error_sanitizer.dart';
 import '../models/user_model.dart';
 
 class AuthResponse {
@@ -180,7 +181,7 @@ class AuthService {
         );
       }
     } on DioException catch (e) {
-      String errorMessage = 'Terjadi kesalahan koneksi server ($apiUrl).';
+      String errorMessage = 'Terjadi kesalahan koneksi server.';
       if (e.response != null && e.response?.data != null) {
         final responseData = e.response?.data;
         if (responseData is Map && responseData['message'] != null) {
@@ -188,17 +189,23 @@ class AuthService {
         } else if (e.response?.statusCode == 422) {
           errorMessage = 'NIK atau kata sandi tidak cocok. Silakan coba lagi.';
         } else if (e.response?.statusCode == 403) {
-          errorMessage = responseData['message'] ?? 'Akses portal tidak diizinkan.';
+          errorMessage = responseData['message']?.toString() ?? 'Akses portal tidak diizinkan.';
         }
       } else if (e.type == DioExceptionType.connectionTimeout ||
                  e.type == DioExceptionType.receiveTimeout) {
-        errorMessage = 'Batas waktu koneksi habis ke $apiUrl. Periksa jaringan Anda.';
+        errorMessage = 'Batas waktu koneksi habis. Periksa kestabilan jaringan Anda.';
       } else if (e.type == DioExceptionType.connectionError) {
-        errorMessage = 'Tidak dapat terhubung ke server $apiUrl.';
+        errorMessage = 'Tidak dapat terhubung ke server. Periksa jaringan Anda.';
       }
-      return AuthResponse(success: false, message: errorMessage);
+      return AuthResponse(
+        success: false,
+        message: ErrorSanitizer.clean(errorMessage, fallback: 'Gagal terhubung ke server.'),
+      );
     } catch (e) {
-      return AuthResponse(success: false, message: 'Kesalahan tak terduga: ${e.toString()}');
+      return AuthResponse(
+        success: false,
+        message: ErrorSanitizer.clean(e, fallback: 'Terjadi kesalahan saat masuk.'),
+      );
     }
   }
 

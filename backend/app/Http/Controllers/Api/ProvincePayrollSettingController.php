@@ -149,9 +149,13 @@ class ProvincePayrollSettingController extends Controller
 
         if (!$setting) {
             $province = $identifier;
-            $setting = ProvincePayrollSetting::where(function ($q) use ($province) {
-                $q->where('province', $province)
-                  ->orWhereRaw('LOWER(TRIM(province)) = ?', [strtolower(trim($province))]);
+            $variations = static::getProvinceVariations($province);
+
+            $setting = ProvincePayrollSetting::where(function ($q) use ($variations) {
+                foreach ($variations as $var) {
+                    $q->orWhere('province', $var)
+                      ->orWhereRaw('LOWER(TRIM(province)) = ?', [strtolower(trim($var))]);
+                }
             })
             ->whereIn('company', array_filter(['all', $targetCompany]))
             ->orderByRaw("CASE WHEN company = ? THEN 0 ELSE 1 END", [$targetCompany ?: 'rbs'])
@@ -224,17 +228,94 @@ class ProvincePayrollSettingController extends Controller
     }
 
     /**
+     * Dapatkan daftar variasi dan singkatan nama provinsi (misal: NTT <-> NUSA TENGGARA TIMUR).
+     * Memastikan sinkronisasi perhitungan gaji tetap menemukan seluruh karyawan walaupun
+     * di satu tabel tertulis singkatan dan di tabel lain tertulis nama panjang.
+     */
+    public static function getProvinceVariations(string $province): array
+    {
+        $norm = strtoupper(trim($province));
+        $variations = [$norm, trim($province)];
+
+        $aliases = [
+            'NTT' => ['NUSA TENGGARA TIMUR', 'NTT'],
+            'NUSA TENGGARA TIMUR' => ['NUSA TENGGARA TIMUR', 'NTT'],
+            'NTB' => ['NUSA TENGGARA BARAT', 'NTB'],
+            'NUSA TENGGARA BARAT' => ['NUSA TENGGARA BARAT', 'NTB'],
+            'DKI' => ['DKI JAKARTA', 'DKI', 'DAERAH KHUSUS IBUKOTA JAKARTA', 'JAKARTA'],
+            'DKI JAKARTA' => ['DKI JAKARTA', 'DKI', 'DAERAH KHUSUS IBUKOTA JAKARTA', 'JAKARTA'],
+            'JAKARTA' => ['DKI JAKARTA', 'DKI', 'DAERAH KHUSUS IBUKOTA JAKARTA', 'JAKARTA'],
+            'DIY' => ['DI YOGYAKARTA', 'DIY', 'DAERAH ISTIMEWA YOGYAKARTA', 'YOGYAKARTA'],
+            'DI YOGYAKARTA' => ['DI YOGYAKARTA', 'DIY', 'DAERAH ISTIMEWA YOGYAKARTA', 'YOGYAKARTA'],
+            'YOGYAKARTA' => ['DI YOGYAKARTA', 'DIY', 'DAERAH ISTIMEWA YOGYAKARTA', 'YOGYAKARTA'],
+            'ACEH' => ['ACEH', 'NANGGROE ACEH DARUSSALAM', 'NAD', 'DARUSSALAM'],
+            'DARUSSALAM' => ['ACEH', 'NANGGROE ACEH DARUSSALAM', 'NAD', 'DARUSSALAM'],
+            'NAD' => ['ACEH', 'NANGGROE ACEH DARUSSALAM', 'NAD', 'DARUSSALAM'],
+            'SUMUT' => ['SUMATERA UTARA', 'SUMATRA UTARA', 'SUMUT'],
+            'SUMATERA UTARA' => ['SUMATERA UTARA', 'SUMATRA UTARA', 'SUMUT'],
+            'SUMATRA UTARA' => ['SUMATERA UTARA', 'SUMATRA UTARA', 'SUMUT'],
+            'SUMBAR' => ['SUMATERA BARAT', 'SUMATRA BARAT', 'SUMBAR'],
+            'SUMATERA BARAT' => ['SUMATERA BARAT', 'SUMATRA BARAT', 'SUMBAR'],
+            'SUMATRA BARAT' => ['SUMATERA BARAT', 'SUMATRA BARAT', 'SUMBAR'],
+            'SUMSEL' => ['SUMATERA SELATAN', 'SUMATRA SELATAN', 'SUMSEL'],
+            'SUMATERA SELATAN' => ['SUMATERA SELATAN', 'SUMATRA SELATAN', 'SUMSEL'],
+            'SUMATRA SELATAN' => ['SUMATERA SELATAN', 'SUMATRA SELATAN', 'SUMSEL'],
+            'JABAR' => ['JAWA BARAT', 'JABAR'],
+            'JAWA BARAT' => ['JAWA BARAT', 'JABAR'],
+            'JATENG' => ['JAWA TENGAH', 'JATENG'],
+            'JAWA TENGAH' => ['JAWA TENGAH', 'JATENG'],
+            'JATIM' => ['JAWA TIMUR', 'JATIM'],
+            'JAWA TIMUR' => ['JAWA TIMUR', 'JATIM'],
+            'KALBAR' => ['KALIMANTAN BARAT', 'KALBAR'],
+            'KALIMANTAN BARAT' => ['KALIMANTAN BARAT', 'KALBAR'],
+            'KALTENG' => ['KALIMANTAN TENGAH', 'KALTENG'],
+            'KALIMANTAN TENGAH' => ['KALIMANTAN TENGAH', 'KALTENG'],
+            'KALSEL' => ['KALIMANTAN SELATAN', 'KALSEL'],
+            'KALIMANTAN SELATAN' => ['KALIMANTAN SELATAN', 'KALSEL'],
+            'KALTIM' => ['KALIMANTAN TIMUR', 'KALTIM'],
+            'KALIMANTAN TIMUR' => ['KALIMANTAN TIMUR', 'KALTIM'],
+            'KALTARA' => ['KALIMANTAN UTARA', 'KALTARA'],
+            'KALIMANTAN UTARA' => ['KALIMANTAN UTARA', 'KALTARA'],
+            'SULUT' => ['SULAWESI UTARA', 'SULUT'],
+            'SULAWESI UTARA' => ['SULAWESI UTARA', 'SULUT'],
+            'SULTENG' => ['SULAWESI TENGAH', 'SULTENG'],
+            'SULAWESI TENGAH' => ['SULAWESI TENGAH', 'SULTENG'],
+            'SULSEL' => ['SULAWESI SELATAN', 'SULSEL'],
+            'SULAWESI SELATAN' => ['SULAWESI SELATAN', 'SULSEL'],
+            'SULTRA' => ['SULAWESI TENGGARA', 'SULTRA'],
+            'SULAWESI TENGGARA' => ['SULAWESI TENGGARA', 'SULTRA'],
+            'SULBAR' => ['SULAWESI BARAT', 'SULBAR'],
+            'SULAWESI BARAT' => ['SULAWESI BARAT', 'SULBAR'],
+            'BABEL' => ['BANGKA BELITUNG', 'KEPULAUAN BANGKA BELITUNG', 'BABEL'],
+            'KEPULAUAN BANGKA BELITUNG' => ['BANGKA BELITUNG', 'KEPULAUAN BANGKA BELITUNG', 'BABEL'],
+            'BANGKA BELITUNG' => ['BANGKA BELITUNG', 'KEPULAUAN BANGKA BELITUNG', 'BABEL'],
+            'KEPRI' => ['KEPULAUAN RIAU', 'KEPRI'],
+            'KEPULAUAN RIAU' => ['KEPULAUAN RIAU', 'KEPRI'],
+            'PAPUA' => ['PAPUA', 'JAYAPURA', 'PAPUA SELATAN', 'PAPUA TENGAH'],
+            'JAYAPURA' => ['PAPUA', 'JAYAPURA', 'PAPUA SELATAN', 'PAPUA TENGAH'],
+        ];
+
+        if (isset($aliases[$norm])) {
+            $variations = array_merge($variations, $aliases[$norm]);
+        }
+
+        return array_values(array_unique(array_filter($variations)));
+    }
+
+    /**
      * Helper internal untuk mengupdate seluruh data karyawan di provinsi tertentu.
      * Mengupdate Gaji Pokok (sesuai UMP jika diset > 0), BPJS Kesehatan, dan BPJS TK,
      * lalu menghitung ulang Take Home Pay (THP).
      */
     protected function applySettingToEmployeesInternal(ProvincePayrollSetting $setting, ?string $company): int
     {
-        $normalizedProvince = trim($setting->province);
+        $variations = static::getProvinceVariations($setting->province);
 
-        $query = Payroll::where(function ($q) use ($normalizedProvince) {
-            $q->where('province', $normalizedProvince)
-              ->orWhereRaw('LOWER(TRIM(province)) = ?', [strtolower($normalizedProvince)]);
+        $query = Payroll::where(function ($q) use ($variations) {
+            foreach ($variations as $var) {
+                $q->orWhere('province', $var)
+                  ->orWhereRaw('LOWER(TRIM(province)) = ?', [strtolower(trim($var))]);
+            }
         });
 
         if ($company && $company !== 'all') {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Complaint;
+use App\Services\ImageCompressionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -62,7 +63,7 @@ class EmployeeComplaintController extends Controller
         $photoName = null;
         if ($request->hasFile('photo')) {
             $file = $request->file('photo');
-            $photoPath = $file->store('complaints', 'public');
+            $photoPath = ImageCompressionService::compressAndStore($file, 'complaints');
             $photoName = $file->getClientOriginalName();
         }
 

@@ -9,6 +9,7 @@ use App\Models\Announcement;
 use App\Models\Complaint;
 use App\Models\Payroll;
 use App\Models\WorkReport;
+use App\Services\ImageCompressionService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -346,11 +347,11 @@ class EmployeePortalController extends Controller
                 'desc_kegiatan2.required' => 'Rincian laporan Kegiatan 2 wajib diisi.',
             ]);
 
-            $photoAbsen = $request->file('photo_absen')->store('work_reports', 'public');
-            $photoKegiatan1 = $request->file('photo_kegiatan1')->store('work_reports', 'public');
-            $photoKegiatan2 = $request->file('photo_kegiatan2')->store('work_reports', 'public');
+            $photoAbsen = ImageCompressionService::compressAndStore($request->file('photo_absen'), 'work_reports');
+            $photoKegiatan1 = ImageCompressionService::compressAndStore($request->file('photo_kegiatan1'), 'work_reports');
+            $photoKegiatan2 = ImageCompressionService::compressAndStore($request->file('photo_kegiatan2'), 'work_reports');
             $photoKegiatanLain = $request->hasFile('photo_kegiatan_lain')
-                ? $request->file('photo_kegiatan_lain')->store('work_reports', 'public')
+                ? ImageCompressionService::compressAndStore($request->file('photo_kegiatan_lain'), 'work_reports')
                 : null;
 
             $combinedDesc = "1. Absen Masuk: {$validated['desc_absen']}\n"
@@ -393,7 +394,7 @@ class EmployeePortalController extends Controller
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
-            $attachmentPath = $request->file('attachment')->store('work_reports', 'public');
+            $attachmentPath = ImageCompressionService::compressAndStore($request->file('attachment'), 'work_reports');
         }
 
         $report = WorkReport::create([

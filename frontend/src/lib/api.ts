@@ -17,6 +17,8 @@ export const api = axios.create({
   baseURL: getBaseURL(),
   headers: {
     'Accept': 'application/json',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
   },
 });
 

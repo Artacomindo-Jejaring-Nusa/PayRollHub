@@ -586,6 +586,29 @@ class EmployeeAttendanceController extends Controller
         $attendance = $this->resolveActiveAttendance($user, $today, $now);
 
         if (!$attendance || !$attendance->check_in_time) {
+            // Cek apakah ada sesi shift malam / lintas hari kemarin yang SUDAH selesai di-checkout
+            $yesterday = Carbon::parse($today)->subDay()->toDateString();
+            $yesterdayAttendance = Attendance::with(['location', 'approver', 'shift'])
+                ->where('user_id', $user->id)
+                ->where('date', $yesterday)
+                ->whereNotNull('check_in_time')
+                ->whereNotNull('check_out_time')
+                ->whereNotIn('attendance_type', ['libur', 'sakit', 'izin'])
+                ->first();
+
+            if ($yesterdayAttendance) {
+                $yShift = $yesterdayAttendance->shift ?: $user->shift;
+                $isYCrossDay = $yShift && ($yShift->cross_day || $yShift->start_time > $yShift->end_time);
+                $isYNightCheckIn = $yesterdayAttendance->check_in_time >= '17:00:00';
+                if ($isYCrossDay || $isYNightCheckIn) {
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => "Absen pulang untuk sesi shift malam Anda sudah berhasil tercatat sebelumnya pada pukul {$yesterdayAttendance->check_out_time}. Selamat beristirahat!",
+                        'data' => $yesterdayAttendance,
+                    ], 200);
+                }
+            }
+
             return response()->json([
                 'status' => 'error',
                 'message' => 'Anda belum melakukan absen masuk hari ini.',
@@ -601,9 +624,10 @@ class EmployeeAttendanceController extends Controller
 
         if ($attendance->check_out_time) {
             return response()->json([
-                'status' => 'error',
-                'message' => "Anda sudah melakukan absen pulang hari ini pada pukul {$attendance->check_out_time}.",
-            ], 422);
+                'status' => 'success',
+                'message' => "Anda sudah melakukan absen pulang hari ini pada pukul {$attendance->check_out_time}. Selamat beristirahat!",
+                'data' => $attendance,
+            ], 200);
         }
 
         // POINT 8: Absensi pulang di-los (Bebas radius geofence, yang terpenting durasi 8 jam kerja)
@@ -952,17 +976,11 @@ class EmployeeAttendanceController extends Controller
 
                 // Sesi kemarin valid sebagai sesi aktif jika:
                 // 1) Merupakan shift lintas hari atau check-in malam kemarin (>= 17:00), DAN
-                // 2) Masih berada dalam batas jam aktif kerja shift.
-                $maxHours = max(18.0, $shiftWorkHours + 6.0);
+                // 2) Masih berada dalam batas jam aktif kerja shift (hingga 24 jam sejak check-in).
+                $maxHours = max(24.0, $shiftWorkHours + 10.0);
 
-                if ($shiftWorkHours >= 20.0) {
-                    // Shift 24 jam: berlaku sampai toleransi batas waktu shift (misal 30 jam sejak check-in)
-                    $isWithinActiveWindow = ($hoursSinceCheckIn <= $maxHours);
-                } else {
-                    $isWithinActiveWindow = ($isCrossDayShift || $isNightCheckIn)
-                        && $hoursSinceCheckIn <= $maxHours
-                        && $now->format('H:i:s') < '16:00:00';
-                }
+                $isWithinActiveWindow = ($isCrossDayShift || $isNightCheckIn)
+                    && $hoursSinceCheckIn <= $maxHours;
 
                 if ($isWithinActiveWindow) {
                     // Jika hari ini belum ada check-in baru, utamakan sesi shift kemarin yang belum selesai!

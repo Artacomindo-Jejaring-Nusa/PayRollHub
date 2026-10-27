@@ -232,6 +232,24 @@ export const EmployeeAttendancePage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+
+    // Auto-refresh data saat user membuka kembali tab di browser HP (Mobile Chrome / Safari)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    };
+    const handleFocus = () => {
+      fetchData();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [fetchData]);
 
   // Request & Update GPS Location with Automatic Fallback (High Accuracy -> Standard Accuracy)
@@ -374,6 +392,7 @@ export const EmployeeAttendancePage: React.FC = () => {
   const hasRealWorkCheckedIn = hasCheckedIn && !isHolidayCheckedIn;
   const isDinasCheckedIn = todayData?.attendance?.attendance_type === 'dinas_luar';
   const isSakitIzinCheckedIn = todayData?.attendance?.attendance_type === 'sakit' || todayData?.attendance?.attendance_type === 'izin';
+  const hasRecentCompletedShift = !hasCheckedIn && !!todayData?.recent_completed_shift;
 
   // Handle Absen Masuk (Validasi Radius 100+ Lokasi + Wajib Foto Selfie)
   const handleCheckInMasuk = async () => {
@@ -541,9 +560,10 @@ export const EmployeeAttendancePage: React.FC = () => {
   const elapsedWorkMinutes = useMemo(() => {
     if (!todayData?.attendance?.check_in_time) return null;
     try {
-      const inDate = todayData.attendance.date || todayData.today || new Date().toISOString().slice(0, 10);
+      const inDateRaw = todayData.attendance.date || todayData.today || new Date().toISOString().slice(0, 10);
+      const cleanInDate = inDateRaw.includes(' ') ? inDateRaw.split(' ')[0] : (inDateRaw.includes('T') ? inDateRaw.split('T')[0] : inDateRaw);
       const inTime = todayData.attendance.check_in_time.substring(0, 8);
-      const checkInDateTime = new Date(`${inDate}T${inTime}`);
+      const checkInDateTime = new Date(`${cleanInDate}T${inTime}`);
 
       const now = new Date();
       if (!isNaN(checkInDateTime.getTime())) {
@@ -568,6 +588,32 @@ export const EmployeeAttendancePage: React.FC = () => {
   }, [todayData?.attendance?.check_in_time, todayData?.attendance?.date, todayData?.today, currentTime]);
 
   const isEightHoursMet = elapsedWorkMinutes !== null && elapsedWorkMinutes >= targetWorkMinutes;
+
+  // Cek apakah jam kerja shift secara jadwal sudah berakhir (misal shift malam selesai pagi 07:00 / 07:30)
+  const isShiftScheduleFinished = useMemo(() => {
+    if (!assignedShift) return false;
+    const isCrossDay = assignedShift.cross_day || (assignedShift.start_time > assignedShift.end_time);
+    const cleanCurrentTime = currentTime ? currentTime.substring(0, 8) : '';
+    if (!cleanCurrentTime) return false;
+
+    if (!isCrossDay) {
+      return cleanCurrentTime >= assignedShift.end_time.substring(0, 8);
+    }
+
+    // Shift lintas hari (misal 22:00 - 07:30 atau 23:00 - 07:00):
+    // Jika waktu sekarang berada di pagi hari (< 14:00) dan sudah melewati jam selesai shift:
+    const currentH = parseInt(cleanCurrentTime.substring(0, 2), 10);
+    const endH = parseInt(assignedShift.end_time.substring(0, 2), 10);
+    if (currentH < 14) {
+      if (currentH > endH || (currentH === endH && cleanCurrentTime >= assignedShift.end_time.substring(0, 8))) {
+        return true;
+      }
+    } else {
+      // Jika sudah siang / sore (> 14:00) di hari berikutnya, jadwal shift kemarin pasti sudah selesai
+      return true;
+    }
+    return false;
+  }, [assignedShift, currentTime]);
 
   const elapsedFormatted = useMemo(() => {
     if (elapsedWorkMinutes === null) return '';
@@ -597,6 +643,13 @@ export const EmployeeAttendancePage: React.FC = () => {
       });
       return;
     }
+    if (hasRecentCompletedShift) {
+      setMessage({
+        text: `Sesi shift malam Anda telah selesai dan absen pulang sudah berhasil tercatat pada pukul ${todayData?.recent_completed_shift?.check_out_time?.substring(0, 5) || ''} ${todayData?.timezone || 'WIB'}. Selamat beristirahat!`,
+        type: 'success',
+      });
+      return;
+    }
     if (!hasCheckedIn) {
       setMessage({
         text: 'Anda belum melakukan absen masuk hari ini. Silakan ambil foto selfie kehadiran dan klik tombol "Absen Masuk" terlebih dahulu.',
@@ -604,8 +657,8 @@ export const EmployeeAttendancePage: React.FC = () => {
       });
       return;
     }
-    // Jika durasi kerja < target jam kerja shift, tampilkan konfirmasi
-    if (elapsedWorkMinutes !== null && elapsedWorkMinutes < targetWorkMinutes) {
+    // Jika durasi kerja < target jam kerja shift DAN jadwal shift belum selesai, tampilkan konfirmasi
+    if (!isShiftScheduleFinished && elapsedWorkMinutes !== null && elapsedWorkMinutes < targetWorkMinutes) {
       setEarlyCheckOutModalOpen(true);
     } else {
       executeCheckOut();
@@ -625,12 +678,14 @@ export const EmployeeAttendancePage: React.FC = () => {
       }
       const res = await attendanceService.checkOut(payload);
       setMessage({ text: res.message || 'Absen pulang berhasil tercatat!', type: 'success' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       fetchData();
     } catch (err: any) {
       setMessage({
         text: err.response?.data?.message || 'Gagal melakukan absen pulang.',
         type: 'error',
       });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setActionLoading(false);
     }
@@ -1254,7 +1309,15 @@ export const EmployeeAttendancePage: React.FC = () => {
                     }`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{hasRealWorkCheckedIn ? '✓ Sudah Absen Masuk' : isHolidayCheckedIn ? 'Konfirmasi Ganti ke Absen Masuk' : 'Absen Masuk (Foto + Radius)'}</span>
+                    <span>
+                      {hasRealWorkCheckedIn
+                        ? '✓ Sudah Absen Masuk'
+                        : isHolidayCheckedIn
+                        ? 'Konfirmasi Ganti ke Absen Masuk'
+                        : hasRecentCompletedShift
+                        ? 'Absen Masuk Shift Baru (Foto + Radius)'
+                        : 'Absen Masuk (Foto + Radius)'}
+                    </span>
                   </button>
 
                   <button
@@ -1262,7 +1325,7 @@ export const EmployeeAttendancePage: React.FC = () => {
                     onClick={handleCheckOutClick}
                     disabled={actionLoading}
                     className={`h-12 rounded-xl text-[13.5px] font-semibold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer ${
-                      hasCheckedOut
+                      hasCheckedOut || hasRecentCompletedShift
                         ? 'bg-blue-100 text-blue-800 border border-blue-200 cursor-not-allowed opacity-90'
                         : hasRealWorkCheckedIn
                         ? 'bg-rose-600 hover:bg-rose-700 text-white active:scale-98'
@@ -1270,7 +1333,13 @@ export const EmployeeAttendancePage: React.FC = () => {
                     }`}
                   >
                     <LogOut className="w-4 h-4" />
-                    <span>{hasCheckedOut ? '✓ Sudah Absen Pulang' : 'Absen Pulang (Bebas Radius)'}</span>
+                    <span>
+                      {hasCheckedOut
+                        ? '✓ Sudah Absen Pulang'
+                        : hasRecentCompletedShift
+                        ? `✓ Sudah Absen Pulang (${todayData?.recent_completed_shift?.check_out_time?.substring(0, 5) || 'Selesai'})`
+                        : 'Absen Pulang (Bebas Radius)'}
+                    </span>
                   </button>
                 </div>
 
@@ -2155,7 +2224,7 @@ export const EmployeeAttendancePage: React.FC = () => {
 
       {/* POINT 8: Modal Konfirmasi Absen Pulang Sebelum Target Jam Kerja Shift */}
       {earlyCheckOutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in">
           <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-start gap-3.5">
               <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">

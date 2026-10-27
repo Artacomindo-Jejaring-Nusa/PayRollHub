@@ -12,7 +12,13 @@ import {
 export const attendanceService = {
   // Employee Portal APIs
   getTodayAttendance: async (): Promise<TodayAttendanceData> => {
-    const response = await api.get('/employee/attendance/today');
+    const response = await api.get('/employee/attendance/today', {
+      params: { _t: Date.now() },
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    });
     return response.data.data;
   },
 

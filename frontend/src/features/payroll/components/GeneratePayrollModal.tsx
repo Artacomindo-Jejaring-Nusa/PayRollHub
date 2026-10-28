@@ -267,18 +267,11 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
                     ))}
                   </optgroup>
                   <optgroup label="📋 Surat Pesanan (SP) / Wilayah Khusus">
-                    {periodOptions
-                      .filter((sp) => {
-                        const m = sp.code.match(/^SP\s*(\d+)$/i);
-                        // Sembunyikan dummy SP 4 s/d SP 12 warisan lama
-                        if (m && parseInt(m[1], 10) > 3) return false;
-                        return true;
-                      })
-                      .map((sp) => (
-                        <option key={sp.code} value={sp.code}>
-                          {sp.fullLabel}
-                        </option>
-                      ))}
+                    {periodOptions.map((sp) => (
+                      <option key={sp.code} value={sp.code}>
+                        {sp.fullLabel}
+                      </option>
+                    ))}
                   </optgroup>
                 </select>
                 <span className="text-[10.5px] text-text-muted block">

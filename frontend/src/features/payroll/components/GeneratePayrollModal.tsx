@@ -6,17 +6,10 @@ import { payrollService } from '../services/payrollService';
 import {
   Sparkles,
   Calendar,
-  Layers,
-  Users,
   CheckCircle2,
   AlertCircle,
   Eye,
-  EyeOff,
-  Building2,
   Clock,
-  ArrowRight,
-  ShieldCheck,
-  RefreshCw,
 } from 'lucide-react';
 
 interface GeneratePayrollModalProps {
@@ -37,7 +30,6 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
 
   // Form states
   const [targetPeriod, setTargetPeriod] = useState<string>('SP 2');
-  const [sourcePeriod, setSourcePeriod] = useState<string>('latest');
   const [syncAttendance, setSyncAttendance] = useState<boolean>(true);
   const [isVisibleToUser, setIsVisibleToUser] = useState<boolean>(true);
   const [duplicateAction, setDuplicateAction] = useState<'update' | 'skip'>('update');
@@ -122,7 +114,7 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
 
       const res = await payrollService.generatePeriod({
         target_period: targetPeriod.trim(),
-        source_period: sourcePeriod,
+        source_period: 'latest', // Otomatis ambil seluruh data karyawan aktif terkini
         company: targetCompany,
         sync_attendance: syncAttendance,
         is_visible_to_user: isVisibleToUser,
@@ -150,7 +142,7 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
       isOpen={isOpen}
       onClose={handleClose}
       title="Generate Payroll Periode Baru"
-      description="Salin master data gaji seluruh karyawan aktif ke periode/SP baru & otomatis langsung tampil di User View (portal karyawan)."
+      description="Buat data gaji seluruh karyawan aktif ke periode/SP baru & otomatis langsung tampil di User View (portal karyawan)."
       maxWidth="lg"
     >
       {successData ? (
@@ -233,12 +225,10 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
             <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
             <div className="space-y-1">
               <span className="font-bold block">
-                Solusi Sekali Klik (Otomatis Tampil di Sisi Karyawan):
+                Solusi Otomatis Sekali Klik (Langsung Tampil di Sisi Karyawan):
               </span>
               <p className="text-blue-800 leading-relaxed">
-                Anda tidak perlu lagi mengedit karyawan satu per satu. Sistem akan menduplikasi
-                karyawan aktif dari periode acuan ke periode baru, menghitung potongan absensi
-                secara otomatis sesuai tanggal cut-off, dan <strong>langsung menerbitkan slip gaji ke User View</strong>.
+                Anda tidak perlu lagi mengedit karyawan satu per satu. Sistem akan secara otomatis menduplikasi seluruh data karyawan aktif ke periode/SP tujuan, menghitung rekap absensi sesuai rentang cut-off, dan <strong>langsung menerbitkan slip gaji ke User View (portal karyawan)</strong>.
               </p>
             </div>
           </div>
@@ -247,7 +237,7 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
             {/* Target Periode Tujuan */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-text-primary">
-                1. Target Periode Baru (SP / Wilayah Tujuan) <span className="text-rose-500">*</span>
+                1. Target Periode Baru (SP / Wilayah) <span className="text-rose-500">*</span>
               </label>
               <select
                 value={targetPeriod}
@@ -262,38 +252,14 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
                 ))}
               </select>
               <span className="text-[11px] text-text-muted">
-                Periode yang akan dibuatkan data gaji barunya.
+                Pilih target SP atau wilayah yang akan dibuatkan data gaji barunya.
               </span>
             </div>
 
-            {/* Periode Sumber (Acuan Master) */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-text-primary">
-                2. Ambil Master Data Dari (Periode Sumber)
-              </label>
-              <select
-                value={sourcePeriod}
-                onChange={(e) => setSourcePeriod(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-border-subtle bg-surface text-xs font-medium text-text-primary outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-              >
-                <option value="latest">⚡ Data Gaji Karyawan Aktif Terakhir</option>
-                {periodOptions.map((sp) => (
-                  <option key={sp.code} value={sp.code}>
-                    {sp.fullLabel}
-                  </option>
-                ))}
-              </select>
-              <span className="text-[11px] text-text-muted">
-                Gaji pokok, tunjangan, BPJS & rekening bank disalin dari sumber ini.
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Filter Perusahaan */}
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-text-primary">
-                3. Entitas Perusahaan
+                2. Entitas Perusahaan
               </label>
               <select
                 value={targetCompany}
@@ -304,22 +270,28 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
                 <option value="rbs">PT. Rimbun Buana Sejahtera (RBS)</option>
                 <option value="rimamandiri">PT. Riama Mandiri Pratama (Riama)</option>
               </select>
+              <span className="text-[11px] text-text-muted">
+                Perusahaan karyawan yang akan diproses ke periode baru.
+              </span>
             </div>
+          </div>
 
-            {/* Tindakan jika data sudah ada di SP target */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-text-primary">
-                4. Jika Karyawan Sudah Ada di Periode Ini
-              </label>
-              <select
-                value={duplicateAction}
-                onChange={(e) => setDuplicateAction(e.target.value as 'update' | 'skip')}
-                className="w-full h-10 px-3 rounded-xl border border-border-subtle bg-surface text-xs font-medium text-text-primary outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
-              >
-                <option value="update">Perbarui Data Penggajian (Update)</option>
-                <option value="skip">Lewati / Pertahankan Data Lama (Skip)</option>
-              </select>
-            </div>
+          {/* Tindakan jika data sudah ada di SP target */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-text-primary">
+              3. Tindakan Jika Karyawan Sudah Ada di Periode Ini
+            </label>
+            <select
+              value={duplicateAction}
+              onChange={(e) => setDuplicateAction(e.target.value as 'update' | 'skip')}
+              className="w-full h-10 px-3 rounded-xl border border-border-subtle bg-surface text-xs font-medium text-text-primary outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            >
+              <option value="update">Perbarui Data Penggajian (Update / Sinkron ulang)</option>
+              <option value="skip">Lewati / Pertahankan Data Lama (Skip)</option>
+            </select>
+            <span className="text-[11px] text-text-muted">
+              Pilih tindakan jika nama karyawan sudah pernah dibuat di periode tujuan tersebut.
+            </span>
           </div>
 
           {/* Pengaturan Cut-off Absensi */}

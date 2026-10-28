@@ -184,5 +184,43 @@ class PayrollGeneratePeriodTest extends TestCase
             'is_visible_to_user' => true,
         ]);
     }
+
+    public function test_admin_can_generate_payroll_without_source_period_takes_active_master(): void
+    {
+        Payroll::create([
+            'employee_name' => 'Budi Santoso',
+            'nik' => '1234567890123456',
+            'company' => 'rbs',
+            'period' => 'SP 1',
+            'province' => 'DKI JAKARTA',
+            'status' => 'active',
+            'basic_salary' => 5000000,
+            'bpjs_kes' => 200000,
+            'allowance' => 0,
+            'deduction' => 0,
+            'take_home_pay' => 5200000,
+            'is_visible_to_user' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/payrolls/generate-period', [
+                'target_period' => 'SP 3',
+                // source_period is omitted!
+                'company' => 'rbs',
+                'sync_attendance' => false,
+                'is_visible_to_user' => true,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.target_period', 'SP 3')
+            ->assertJsonPath('data.created_count', 1);
+
+        $this->assertDatabaseHas('payrolls', [
+            'employee_name' => 'Budi Santoso',
+            'period' => 'SP 3',
+            'is_visible_to_user' => true,
+        ]);
+    }
 }
 

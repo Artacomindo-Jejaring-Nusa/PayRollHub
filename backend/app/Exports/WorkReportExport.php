@@ -19,6 +19,7 @@ class WorkReportExport implements FromCollection, WithHeadings, WithMapping, Sho
     protected ?string $startDate;
     protected ?string $endDate;
     protected ?string $search;
+    protected ?string $spPeriod;
     protected array $ids = [];
     protected ?string $targetCompany = null;
     private int $rowNumber = 0;
@@ -30,6 +31,7 @@ class WorkReportExport implements FromCollection, WithHeadings, WithMapping, Sho
         $this->startDate = $request->input('start_date');
         $this->endDate = $request->input('end_date');
         $this->search = $request->input('search');
+        $this->spPeriod = $request->input('sp_period') ?: $request->input('sp');
 
         if (!empty($ids)) {
             $this->ids = $ids;
@@ -53,6 +55,19 @@ class WorkReportExport implements FromCollection, WithHeadings, WithMapping, Sho
             ->when(!empty($this->ids), fn ($q) => $q->whereIn('id', $this->ids))
             ->when($this->targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $this->targetCompany)))
             ->when($this->status && $this->status !== 'all', fn ($q) => $q->where('status', $this->status))
+            ->when($this->spPeriod && strtolower(trim($this->spPeriod)) !== 'all', function ($q) {
+                $spClean = trim($this->spPeriod);
+                $targetComp = $this->targetCompany;
+                $q->whereHas('user', function ($uq) use ($targetComp, $spClean) {
+                    $uq->whereIn('name', function ($sq) use ($targetComp, $spClean) {
+                        $sq->select('employee_name')
+                            ->from('payrolls')
+                            ->where('period', $spClean)
+                            ->when($targetComp, fn ($ssq) => $ssq->where('company', $targetComp))
+                            ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                    });
+                });
+            })
             ->when($this->startDate && $this->endDate, fn ($q) => $q->whereBetween('report_date', [$this->startDate, $this->endDate]))
             ->when($this->date && !$this->startDate, fn ($q) => $q->whereDate('report_date', $this->date))
             ->when($this->search, function ($q, $s) {

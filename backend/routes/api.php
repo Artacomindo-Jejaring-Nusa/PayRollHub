@@ -66,6 +66,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendance/locations', [\App\Http\Controllers\Api\AttendanceLocationController::class, 'activeList']);
 
     // Admin & HR Review of Work Reports
+    Route::post('/admin/work-reports/bulk-approve', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'bulkApprove']);
     Route::get('/admin/work-reports/export', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'export']);
     Route::get('/admin/work-reports/{workReport}/pdf', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'downloadSinglePdf']);
     Route::get('/admin/work-reports', [\App\Http\Controllers\Api\AdminWorkReportController::class, 'index']);

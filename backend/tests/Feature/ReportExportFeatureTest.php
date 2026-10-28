@@ -186,4 +186,82 @@ class ReportExportFeatureTest extends TestCase
         $responsePdf->assertStatus(200);
         $this->assertEquals('application/pdf', $responsePdf->headers->get('content-type'));
     }
+
+    public function test_admin_can_bulk_approve_work_reports_by_ids(): void
+    {
+        $rep1 = WorkReport::create([
+            'user_id' => $this->employee1->id,
+            'nik' => $this->employee1->nik,
+            'report_date' => '2026-10-25',
+            'title' => 'Laporan 1',
+            'status' => 'pending',
+        ]);
+
+        $rep2 = WorkReport::create([
+            'user_id' => $this->employee2->id,
+            'nik' => $this->employee2->nik,
+            'report_date' => '2026-10-25',
+            'title' => 'Laporan 2',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/admin/work-reports/bulk-approve', [
+                'ids' => [$rep1->id, $rep2->id],
+                'feedback' => 'Disetujui serentak',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'status' => 'success',
+            'count' => 2,
+        ]);
+
+        $this->assertEquals('approved', $rep1->fresh()->status);
+        $this->assertEquals('approved', $rep2->fresh()->status);
+        $this->assertEquals('Disetujui serentak', $rep1->fresh()->feedback);
+    }
+
+    public function test_admin_can_bulk_approve_all_pending_reports_with_filter(): void
+    {
+        $rep1 = WorkReport::create([
+            'user_id' => $this->employee1->id,
+            'nik' => $this->employee1->nik,
+            'report_date' => '2026-10-26',
+            'title' => 'Laporan Pending 1',
+            'status' => 'pending',
+        ]);
+
+        $rep2 = WorkReport::create([
+            'user_id' => $this->employee2->id,
+            'nik' => $this->employee2->nik,
+            'report_date' => '2026-10-26',
+            'title' => 'Laporan Pending 2',
+            'status' => 'pending',
+        ]);
+
+        $repDifferentDate = WorkReport::create([
+            'user_id' => $this->employee1->id,
+            'nik' => $this->employee1->nik,
+            'report_date' => '2026-10-24',
+            'title' => 'Laporan Tanggal Lain',
+            'status' => 'pending',
+        ]);
+
+        // Bulk approve all pending on 2026-10-26 without passing ids
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/admin/work-reports/bulk-approve', [
+                'date' => '2026-10-26',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'status' => 'success',
+            'count' => 2,
+        ]);
+
+        $this->assertEquals('approved', $rep1->fresh()->status);
+        $this->assertEquals('approved', $rep2->fresh()->status);
+        $this->assertEquals('pending', $repDifferentDate->fresh()->status);
+    }
 }

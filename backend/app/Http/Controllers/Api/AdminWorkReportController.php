@@ -29,6 +29,9 @@ class AdminWorkReportController extends Controller
         $status = $request->input('status');
         $search = $request->input('search');
         $date = $request->input('date');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $spPeriod = $request->input('sp_period') ?: $request->input('sp');
 
         $perPage = (int) $request->input('per_page', 15);
         if ($perPage <= 0 || $perPage > 100) {
@@ -39,11 +42,30 @@ class AdminWorkReportController extends Controller
             ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
             : ($currentUser->company ?: 'rbs');
 
-        $reports = WorkReport::with(['user:id,name,nik,company,phone', 'reviewer:id,name'])
+        $query = WorkReport::with(['user:id,name,nik,company,phone', 'reviewer:id,name'])
             ->when($targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $targetCompany)))
-            ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
-            ->when($date, fn ($q) => $q->whereDate('report_date', $date))
-            ->when($search, function ($q, $s) {
+            ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status));
+
+        if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+            $spClean = trim($spPeriod);
+            $query->whereHas('user', function ($uq) use ($targetCompany, $spClean) {
+                $uq->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                    $sq->select('employee_name')
+                        ->from('payrolls')
+                        ->where('period', $spClean)
+                        ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                        ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                });
+            });
+        }
+
+        if ($startDate && $endDate) {
+            $query->whereBetween('report_date', [$startDate, $endDate]);
+        } elseif ($date && $date !== 'all') {
+            $query->whereDate('report_date', $date);
+        }
+
+        $reports = $query->when($search, function ($q, $s) {
                 $q->where(function ($sub) use ($s) {
                     $sub->where('title', 'like', "%{$s}%")
                         ->orWhere('description', 'like', "%{$s}%")
@@ -142,6 +164,135 @@ class AdminWorkReportController extends Controller
     }
 
     /**
+     * Bulk approve work reports (either by selected IDs or all pending under current active filters).
+     */
+    public function bulkApprove(Request $request): JsonResponse
+    {
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->isAdmin()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akses ditolak: Pengguna dengan role User tidak memiliki wewenang mengelola Laporan Kerja.',
+            ], 403);
+        }
+
+        $targetCompany = $currentUser->isSuperAdmin()
+            ? ($request->input('company') && $request->input('company') !== 'all' ? $request->input('company') : null)
+            : ($currentUser->company ?: 'rbs');
+
+        $rawIds = $request->input('ids') ?: $request->input('report_ids');
+        $ids = [];
+        if ($rawIds) {
+            $ids = is_array($rawIds) ? $rawIds : explode(',', (string) $rawIds);
+            $ids = array_filter(array_map('intval', $ids));
+        }
+
+        $query = WorkReport::query()
+            ->when($targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $targetCompany)));
+
+        if (!empty($ids)) {
+            $query->whereIn('id', $ids);
+        } else {
+            // Bulk approve all pending matching the current active filter
+            $status = $request->input('status', 'pending');
+            $date = $request->input('date');
+            $startDate = $request->input('start_date');
+            $endDate = $request->input('end_date');
+            $spPeriod = $request->input('sp_period') ?: $request->input('sp');
+            $search = $request->input('search');
+
+            $query->when($status && $status !== 'all', fn ($q) => $q->where('status', $status), fn ($q) => $q->where('status', 'pending'));
+
+            if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+                $spClean = trim($spPeriod);
+                $query->whereHas('user', function ($uq) use ($targetCompany, $spClean) {
+                    $uq->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                        $sq->select('employee_name')
+                            ->from('payrolls')
+                            ->where('period', $spClean)
+                            ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                            ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                    });
+                });
+            }
+
+            if ($startDate && $endDate) {
+                $query->whereBetween('report_date', [$startDate, $endDate]);
+            } elseif ($date && $date !== 'all') {
+                $query->whereDate('report_date', $date);
+            }
+
+            if ($search) {
+                $query->where(function ($sub) use ($search) {
+                    $sub->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhere('desc_absen', 'like', "%{$search}%")
+                        ->orWhere('desc_kegiatan1', 'like', "%{$search}%")
+                        ->orWhere('desc_kegiatan2', 'like', "%{$search}%")
+                        ->orWhere('desc_kegiatan_lain', 'like', "%{$search}%")
+                        ->orWhere('nik', 'like', "%{$search}%")
+                        ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$search}%"));
+                });
+            }
+        }
+
+        $reportsToApprove = $query->get(['id', 'user_id', 'report_date', 'status']);
+        $count = $reportsToApprove->count();
+
+        if ($count === 0) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Tidak ada laporan kerja yang memenuhi syarat untuk disetujui.',
+                'count' => 0,
+            ]);
+        }
+
+        $feedback = $request->input('feedback') ?: 'Disetujui oleh admin';
+        $reportIds = $reportsToApprove->pluck('id')->toArray();
+
+        WorkReport::whereIn('id', $reportIds)->update([
+            'status' => 'approved',
+            'feedback' => $feedback,
+            'reviewed_by' => $currentUser->id,
+            'reviewed_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Push notification ke karyawan yang laporannya disetujui
+        try {
+            $fcmService = app(\App\Services\FirebaseNotificationService::class);
+            $userReports = $reportsToApprove->groupBy('user_id');
+            foreach ($userReports as $userId => $userReps) {
+                $repCount = $userReps->count();
+                $title = "Laporan Kerja Disetujui ✅";
+                $body = $repCount > 1
+                    ? "Sebanyak {$repCount} laporan kerja Anda telah disetujui oleh {$currentUser->name}."
+                    : "Laporan kerja Anda telah disetujui oleh {$currentUser->name}.";
+
+                $fcmService->sendToUser(
+                    $userId,
+                    $title,
+                    $body,
+                    'work_report_approved',
+                    [
+                        'report_id' => (string) $userReps->first()->id,
+                        'status' => 'approved',
+                        'target_tab' => 'reports',
+                    ]
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[WorkReport BulkApprove Notification] ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Berhasil menyetujui {$count} laporan kerja.",
+            'count' => $count,
+        ]);
+    }
+
+    /**
      * Export all filtered work reports to Excel (.xlsx) or Summary PDF (.pdf).
      */
     public function export(Request $request)
@@ -164,6 +315,7 @@ class AdminWorkReportController extends Controller
         $date = $request->input('date');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
+        $spPeriod = $request->input('sp_period') ?: $request->input('sp');
         $search = $request->input('search');
 
         $rawIds = $request->input('ids') ?: $request->input('report_ids');
@@ -177,10 +329,25 @@ class AdminWorkReportController extends Controller
         $filename = 'rekap_laporan_kerja_' . date('Ymd_His') . $suffixSelected;
 
         if ($format === 'pdf') {
-            $reports = WorkReport::with(['user', 'reviewer'])
+            $reportsQuery = WorkReport::with(['user', 'reviewer'])
                 ->when(!empty($ids), fn ($q) => $q->whereIn('id', $ids))
                 ->when($targetCompany, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('company', $targetCompany)))
-                ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status))
+                ->when($status && $status !== 'all', fn ($q) => $q->where('status', $status));
+
+            if ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+                $spClean = trim($spPeriod);
+                $reportsQuery->whereHas('user', function ($uq) use ($targetCompany, $spClean) {
+                    $uq->whereIn('name', function ($sq) use ($targetCompany, $spClean) {
+                        $sq->select('employee_name')
+                            ->from('payrolls')
+                            ->where('period', $spClean)
+                            ->when($targetCompany, fn ($ssq) => $ssq->where('company', $targetCompany))
+                            ->where(fn ($ssq) => $ssq->where('status', '!=', 'off')->orWhereNull('status'));
+                    });
+                });
+            }
+
+            $reports = $reportsQuery
                 ->when($startDate && $endDate, fn ($q) => $q->whereBetween('report_date', [$startDate, $endDate]))
                 ->when($date && !$startDate, fn ($q) => $q->whereDate('report_date', $date))
                 ->when($search, function ($q, $s) {

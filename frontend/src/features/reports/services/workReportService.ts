@@ -7,6 +7,10 @@ export const workReportService = {
     status?: string;
     search?: string;
     date?: string;
+    start_date?: string;
+    end_date?: string;
+    sp_period?: string;
+    company?: string;
     page?: number;
     per_page?: number;
   }): Promise<{ data: WorkReport[]; meta: PayrollPaginationMeta }> {
@@ -22,6 +26,21 @@ export const workReportService = {
     return res.data.data;
   },
 
+  async bulkApproveReports(payload?: {
+    ids?: number[];
+    sp_period?: string;
+    status?: string;
+    date?: string;
+    start_date?: string;
+    end_date?: string;
+    search?: string;
+    company?: string;
+    feedback?: string;
+  }): Promise<{ count: number; message: string }> {
+    const res = await api.post('/admin/work-reports/bulk-approve', payload);
+    return res.data;
+  },
+
   async exportReports(
     params?: {
       status?: string;
@@ -29,6 +48,7 @@ export const workReportService = {
       date?: string;
       start_date?: string;
       end_date?: string;
+      sp_period?: string;
       company?: string;
       ids?: number[] | string;
     },

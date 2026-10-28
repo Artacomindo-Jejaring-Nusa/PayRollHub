@@ -7,12 +7,14 @@ import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { getStorageUrl } from '../../../lib/utils';
 import { useTenantTheme } from '../../../lib/theme';
+import { SP_PERIOD_LIST } from '../../../lib/period';
 import {
   ClipboardList,
   Search,
   Calendar,
   Image as ImageIcon,
   CheckCircle2,
+  CheckCheck,
   XCircle,
   Clock,
   User,
@@ -120,9 +122,12 @@ export const AdminWorkReportsPage: React.FC = () => {
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedSp, setSelectedSp] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(15);
   const [meta, setMeta] = useState<PayrollPaginationMeta>({
@@ -141,6 +146,12 @@ export const AdminWorkReportsPage: React.FC = () => {
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [downloadingPdfId, setDownloadingPdfId] = useState<number | null>(null);
+
+  // Bulk Approve States
+  const [isBulkApproving, setIsBulkApproving] = useState(false);
+  const [isBulkApproveModalOpen, setIsBulkApproveModalOpen] = useState(false);
+  const [isApproveSelectedOnly, setIsApproveSelectedOnly] = useState(false);
+  const [bulkFeedback, setBulkFeedback] = useState('Disetujui');
 
   // Selected Report IDs for Checklist Selection
   const [selectedReportIds, setSelectedReportIds] = useState<number[]>([]);
@@ -194,11 +205,11 @@ export const AdminWorkReportsPage: React.FC = () => {
   // Reset selected reports when filters or page change
   useEffect(() => {
     setSelectedReportIds([]);
-  }, [page, perPage, statusFilter, dateFilter, debouncedSearch]);
+  }, [page, perPage, statusFilter, dateFilter, startDate, endDate, selectedSp, debouncedSearch]);
 
   useEffect(() => {
     fetchReports();
-  }, [page, perPage, statusFilter, dateFilter, debouncedSearch]);
+  }, [page, perPage, statusFilter, dateFilter, startDate, endDate, selectedSp, debouncedSearch]);
 
   const fetchReports = async () => {
     setIsLoading(true);
@@ -208,6 +219,9 @@ export const AdminWorkReportsPage: React.FC = () => {
         per_page: perPage,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         date: dateFilter || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        sp_period: selectedSp !== 'all' ? selectedSp : undefined,
         search: debouncedSearch.trim() || undefined,
       });
       setReports(res.data);
@@ -228,6 +242,9 @@ export const AdminWorkReportsPage: React.FC = () => {
         {
           status: statusFilter !== 'all' ? statusFilter : undefined,
           date: dateFilter || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          sp_period: selectedSp !== 'all' ? selectedSp : undefined,
           search: search.trim() || undefined,
           ids: selectedReportIds.length > 0 ? selectedReportIds : undefined,
         },
@@ -247,6 +264,9 @@ export const AdminWorkReportsPage: React.FC = () => {
         {
           status: statusFilter !== 'all' ? statusFilter : undefined,
           date: dateFilter || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          sp_period: selectedSp !== 'all' ? selectedSp : undefined,
           search: search.trim() || undefined,
           ids: selectedReportIds.length > 0 ? selectedReportIds : undefined,
         },
@@ -256,6 +276,36 @@ export const AdminWorkReportsPage: React.FC = () => {
       alert('Gagal mengekspor rekap laporan ke PDF.');
     } finally {
       setIsExportingPdf(false);
+    }
+  };
+
+  const handleExecuteBulkApprove = async () => {
+    setIsBulkApproving(true);
+    try {
+      const payload: any = {
+        feedback: bulkFeedback.trim() || 'Disetujui oleh admin',
+      };
+
+      if (isApproveSelectedOnly) {
+        payload.ids = selectedReportIds;
+      } else {
+        payload.sp_period = selectedSp !== 'all' ? selectedSp : undefined;
+        payload.status = statusFilter !== 'all' ? statusFilter : 'pending';
+        payload.date = dateFilter || undefined;
+        payload.start_date = startDate || undefined;
+        payload.end_date = endDate || undefined;
+        payload.search = debouncedSearch.trim() || undefined;
+      }
+
+      const res = await workReportService.bulkApproveReports(payload);
+      alert(res.message || 'Laporan kerja berhasil disetujui.');
+      setIsBulkApproveModalOpen(false);
+      setSelectedReportIds([]);
+      fetchReports();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Gagal menyetujui laporan kerja.');
+    } finally {
+      setIsBulkApproving(false);
     }
   };
 
@@ -314,8 +364,23 @@ export const AdminWorkReportsPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Action Buttons: Export Excel, Cetak PDF, View Mode */}
+        {/* Action Buttons: Terima Semua Laporan, Export Excel, Cetak PDF, View Mode */}
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              setIsApproveSelectedOnly(false);
+              setBulkFeedback('Disetujui');
+              setIsBulkApproveModalOpen(true);
+            }}
+            disabled={isBulkApproving}
+            className="px-3.5 py-2 rounded-xl text-white text-[12.5px] font-semibold flex items-center gap-2 transition-all shadow-xs cursor-pointer bg-teal-600 hover:bg-teal-700 disabled:opacity-50"
+            title="Setujui seluruh laporan berstatus Menunggu (Pending) sesuai filter saat ini tanpa harus ceklis satu per satu"
+          >
+            <CheckCheck className="w-4 h-4" />
+            <span>{isBulkApproving ? 'Memproses...' : 'Terima Semua Laporan'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleExportExcel}
@@ -391,6 +456,26 @@ export const AdminWorkReportsPage: React.FC = () => {
       {/* Filter Row */}
       <div className="bg-surface-panel rounded-xl border border-border-subtle p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Surat Pesanan (SP 1 - 12) */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-text-muted font-medium">Surat Pesanan:</span>
+            <select
+              value={selectedSp}
+              onChange={(e) => {
+                setSelectedSp(e.target.value);
+                setPage(1);
+              }}
+              className="h-9 px-3 rounded-lg border border-border-subtle bg-surface text-[12.5px] text-text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            >
+              <option value="all">Semua Periode SP (1-12)</option>
+              {SP_PERIOD_LIST.map((sp) => (
+                <option key={sp.code} value={sp.code}>
+                  {sp.fullLabel}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Status Filter */}
           <select
             value={statusFilter}
@@ -1112,6 +1197,20 @@ export const AdminWorkReportsPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => {
+                setIsApproveSelectedOnly(true);
+                setBulkFeedback('Disetujui');
+                setIsBulkApproveModalOpen(true);
+              }}
+              disabled={isBulkApproving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              title="Setujui laporan kerja yang dipilih"
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              <span>{isBulkApproving ? 'Memproses...' : `Terima (${selectedReportIds.length}) Laporan`}</span>
+            </button>
+            <button
+              type="button"
               onClick={handleExportExcel}
               disabled={isExportingExcel}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
@@ -1141,6 +1240,80 @@ export const AdminWorkReportsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Konfirmasi Bulk Approve (Terima Semua / Terima Terpilih) */}
+      <Modal
+        isOpen={isBulkApproveModalOpen}
+        onClose={() => !isBulkApproving && setIsBulkApproveModalOpen(false)}
+        title={isApproveSelectedOnly ? 'Konfirmasi Setujui Laporan Terpilih' : 'Konfirmasi Terima Semua Laporan'}
+        description="Persetujuan laporan kerja massal secara otomatis"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 bg-teal-500/10 border border-teal-500/20 rounded-xl text-[12.5px] text-teal-800 dark:text-teal-200 flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-text-primary">
+                {isApproveSelectedOnly
+                  ? `Anda akan menyetujui ${selectedReportIds.length} laporan kerja yang telah dipilih.`
+                  : 'Anda akan menyetujui seluruh laporan berstatus Menunggu (Pending) sesuai filter aktif:'}
+              </p>
+              {!isApproveSelectedOnly && (
+                <ul className="text-[12px] list-disc list-inside space-y-0.5 text-text-muted">
+                  <li>
+                    Periode Surat Pesanan: <strong className="text-text-primary">{selectedSp !== 'all' ? selectedSp : 'Semua SP (1-12)'}</strong>
+                  </li>
+                  {dateFilter && (
+                    <li>
+                      Tanggal: <strong className="text-text-primary">{dateFilter}</strong>
+                    </li>
+                  )}
+                  {debouncedSearch && (
+                    <li>
+                      Pencarian: <strong className="text-text-primary">"{debouncedSearch}"</strong>
+                    </li>
+                  )}
+                </ul>
+              )}
+              <p className="text-[11.5px] text-text-muted mt-1">
+                Status laporan akan berubah menjadi <span className="font-semibold text-emerald-600">Disetujui</span> dan notifikasi dikirimkan ke ponsel karyawan terkait.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-text-muted mb-1.5">
+              Catatan / Evaluasi Persetujuan (Opsional):
+            </label>
+            <textarea
+              value={bulkFeedback}
+              onChange={(e) => setBulkFeedback(e.target.value)}
+              rows={3}
+              placeholder="Contoh: Disetujui, pekerjaan harian telah selesai dengan baik."
+              className="w-full px-3 py-2 text-xs bg-surface border border-border-subtle rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 text-text-primary"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-border-row">
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkApproveModalOpen(false)}
+              disabled={isBulkApproving}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleExecuteBulkApprove}
+              disabled={isBulkApproving}
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              <CheckCheck className="w-4 h-4 mr-1.5" />
+              <span>{isBulkApproving ? 'Menyetujui...' : 'Ya, Setujui Sekarang'}</span>
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

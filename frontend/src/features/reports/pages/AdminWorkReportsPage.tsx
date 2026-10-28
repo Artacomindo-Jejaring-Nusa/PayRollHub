@@ -7,7 +7,7 @@ import { Modal } from '../../../components/ui/Modal';
 import { Button } from '../../../components/ui/Button';
 import { getStorageUrl } from '../../../lib/utils';
 import { useTenantTheme } from '../../../lib/theme';
-import { SP_PERIOD_LIST } from '../../../lib/period';
+import { SP_PERIOD_LIST, usePeriodOptions } from '../../../lib/period';
 import {
   ClipboardList,
   Search,
@@ -124,6 +124,7 @@ export const AdminWorkReportsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedSp, setSelectedSp] = useState<string>('all');
+  const { periodOptions } = usePeriodOptions();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -509,8 +510,8 @@ export const AdminWorkReportsPage: React.FC = () => {
               }}
               className="h-9 px-3 rounded-lg border border-border-subtle bg-surface text-[12.5px] text-text-primary font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
             >
-              <option value="all">Semua Periode SP (1-12)</option>
-              {SP_PERIOD_LIST.map((sp) => (
+              <option value="all">Semua Periode SP</option>
+              {periodOptions.map((sp) => (
                 <option key={sp.code} value={sp.code}>
                   {sp.fullLabel}
                 </option>

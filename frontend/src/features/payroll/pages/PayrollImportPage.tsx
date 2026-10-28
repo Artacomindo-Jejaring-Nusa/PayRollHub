@@ -29,8 +29,10 @@ import {
   Eye,
   FileUp,
   Building2,
+  Layers,
 } from 'lucide-react';
-import { SP_PERIOD_LIST } from '../../../lib/period';
+import { SP_PERIOD_LIST, usePeriodOptions } from '../../../lib/period';
+import { PayrollPeriodsModal } from '../components/PayrollPeriodsModal';
 import { useTenantTheme } from '../../../lib/theme';
 
 export const PayrollImportPage: React.FC = () => {
@@ -43,6 +45,8 @@ export const PayrollImportPage: React.FC = () => {
   const [importCompany, setImportCompany] = useState<string>(tenant.id);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const { periodOptions, refreshPeriods } = usePeriodOptions(importCompany);
+  const [isPeriodsModalOpen, setIsPeriodsModalOpen] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState<'xlsx' | 'csv' | null>(null);
 
   const [previewData, setPreviewData] = useState<PayrollImportPreviewData | null>(null);
@@ -411,14 +415,24 @@ export const PayrollImportPage: React.FC = () => {
                   <Calendar className="w-4 h-4 text-primary" />
                   Target Surat Pesanan (SP) / Periode
                 </span>
-                <span className="text-[11px] font-normal text-text-muted">Kontrak Kemensos</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-normal text-text-muted">Kontrak Kemensos</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsPeriodsModalOpen(true)}
+                    className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>+ Kelola SP</span>
+                  </button>
+                </div>
               </label>
               <select
                 value={importPeriod}
                 onChange={(e) => handlePeriodChange(e.target.value)}
                 className="w-full h-10 px-3.5 bg-surface-container-low rounded-xl border border-border-subtle text-[13.5px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-xs cursor-pointer"
               >
-                {SP_PERIOD_LIST.map((sp) => (
+                {periodOptions.map((sp) => (
                   <option key={sp.code} value={sp.code}>
                     {sp.fullLabel}
                   </option>
@@ -1249,6 +1263,12 @@ export const PayrollImportPage: React.FC = () => {
           </div>
         </Card>
       )}
+      <PayrollPeriodsModal
+        isOpen={isPeriodsModalOpen}
+        onClose={() => setIsPeriodsModalOpen(false)}
+        company={importCompany}
+        onPeriodChanged={() => refreshPeriods()}
+      />
     </div>
   );
 };

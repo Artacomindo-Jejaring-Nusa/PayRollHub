@@ -1,8 +1,16 @@
+import { useState, useEffect, useCallback } from 'react';
+import { payrollPeriodService } from '../features/payroll/services/payrollPeriodService';
+import { PayrollPeriodItem } from '../types/payroll';
+
 export interface SPPeriodItem {
   code: string;
   name: string;
   fullLabel: string;
   isCurrent?: boolean;
+  isSp?: boolean;
+  isVisibleToUser?: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 export const MONTH_NAMES: { [key: number]: string } = {
@@ -35,6 +43,101 @@ export const SP_PERIOD_LIST: SPPeriodItem[] = [
   { code: 'SP 11', name: 'Surat Pesanan 11', fullLabel: 'SP 11 (Surat Pesanan 11)' },
   { code: 'SP 12', name: 'Surat Pesanan 12', fullLabel: 'SP 12 (Surat Pesanan 12)' },
 ];
+
+/**
+ * Merge standard SP 1..12 with any dynamic periods from backend/database
+ */
+export const buildPeriodOptions = (
+  dynamicPeriods: Array<{
+    code: string;
+    name?: string;
+    is_sp?: boolean;
+    is_visible_to_user?: boolean;
+    start_date?: string | null;
+    end_date?: string | null;
+  }> = []
+): SPPeriodItem[] => {
+  const optionsMap = new Map<string, SPPeriodItem>();
+
+  // 1. Initial base: SP 1 to SP 12
+  SP_PERIOD_LIST.forEach((sp) => {
+    optionsMap.set(sp.code.trim().toLowerCase(), {
+      ...sp,
+      isSp: true,
+      isVisibleToUser: true,
+    });
+  });
+
+  // 2. Merge dynamic periods from database
+  if (Array.isArray(dynamicPeriods)) {
+    dynamicPeriods.forEach((dp) => {
+      if (!dp || !dp.code) return;
+      const cleanCode = dp.code.trim();
+      const key = cleanCode.toLowerCase();
+      const existing = optionsMap.get(key);
+
+      let fullLabel = existing?.fullLabel;
+      if (!fullLabel) {
+        if (dp.name && dp.name.trim() && dp.name.trim().toLowerCase() !== cleanCode.toLowerCase()) {
+          fullLabel = `${cleanCode} (${dp.name.trim()})`;
+        } else {
+          fullLabel = cleanCode;
+        }
+      }
+
+      optionsMap.set(key, {
+        code: existing ? existing.code : cleanCode,
+        name: dp.name || (existing ? existing.name : cleanCode),
+        fullLabel,
+        isSp: dp.is_sp ?? existing?.isSp ?? true,
+        isVisibleToUser: dp.is_visible_to_user ?? existing?.isVisibleToUser ?? true,
+        startDate: dp.start_date || existing?.startDate || null,
+        endDate: dp.end_date || existing?.endDate || null,
+      });
+    });
+  }
+
+  return Array.from(optionsMap.values());
+};
+
+/**
+ * React hook to load dynamic periods from backend database,
+ * falling back to standard SP 1..12 while loading or on error.
+ */
+export const usePeriodOptions = (company?: string) => {
+  const [periodOptions, setPeriodOptions] = useState<SPPeriodItem[]>(() => buildPeriodOptions([]));
+  const [rawPeriods, setRawPeriods] = useState<PayrollPeriodItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchPeriods = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await payrollPeriodService.getPeriods({ company });
+      if (Array.isArray(data) && data.length > 0) {
+        setRawPeriods(data);
+        setPeriodOptions(buildPeriodOptions(data));
+      }
+    } catch {
+      try {
+        const publicData = await payrollPeriodService.getPublicPeriods({ company });
+        if (Array.isArray(publicData) && publicData.length > 0) {
+          setRawPeriods(publicData);
+          setPeriodOptions(buildPeriodOptions(publicData));
+        }
+      } catch (err2) {
+        console.error('Failed to fetch period options:', err2);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [company]);
+
+  useEffect(() => {
+    fetchPeriods();
+  }, [fetchPeriods]);
+
+  return { periodOptions, rawPeriods, isLoading, refreshPeriods: fetchPeriods };
+};
 
 // Opsi untuk filter admin
 export const MONTH_PERIOD_OPTIONS = SP_PERIOD_LIST.map((sp) => ({
@@ -127,9 +230,9 @@ export const formatEmployeePeriod = (period?: string | null): string => {
 
 /**
  * Format untuk Admin Dashboard:
- * Menampilkan Surat Pesanan (SP)
+ * Menampilkan Surat Pesanan (SP) atau Nama Periode Custom
  */
-export const formatPeriodDisplay = (period?: string | null): string => {
+export const formatPeriodDisplay = (period?: string | null, dynamicPeriods?: SPPeriodItem[]): string => {
   if (!period) return '-';
   const clean = period.trim();
 
@@ -154,7 +257,8 @@ export const formatPeriodDisplay = (period?: string | null): string => {
     return `SP ${monthNum} (Surat Pesanan ${monthNum})`;
   }
 
-  const match = SP_PERIOD_LIST.find((item) => item.code.toLowerCase() === clean.toLowerCase());
+  const list = dynamicPeriods && dynamicPeriods.length > 0 ? dynamicPeriods : SP_PERIOD_LIST;
+  const match = list.find((item) => item.code.toLowerCase() === clean.toLowerCase());
   return match ? match.fullLabel : clean;
 };
 

@@ -13,7 +13,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { Skeleton } from '../../../components/ui/Skeleton';
 import { formatCurrency } from '../../../lib/utils';
-import { SP_PERIOD_LIST, formatPeriodDisplay } from '../../../lib/period';
+import { SP_PERIOD_LIST, formatPeriodDisplay, usePeriodOptions } from '../../../lib/period';
 import {
   FileSpreadsheet,
   FileText,
@@ -67,6 +67,7 @@ export const DashboardOverviewPage: React.FC = () => {
   // Filter states
   const [selectedProvince, setSelectedProvince] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState('');
+  const { periodOptions: spPeriodOptions } = usePeriodOptions(tenant.id);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [wilayahTab, setWilayahTab] = useState<'top5' | 'all'>('top5');
@@ -250,7 +251,7 @@ export const DashboardOverviewPage: React.FC = () => {
               className="h-9 pl-3 pr-8 bg-surface-panel rounded-lg text-[13px] font-medium text-text-primary border border-border-subtle outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
               <option value="">Semua Periode / SP</option>
-              {SP_PERIOD_LIST.map((sp) => (
+              {spPeriodOptions.map((sp) => (
                 <option key={sp.code} value={sp.code}>
                   {sp.fullLabel}
                 </option>

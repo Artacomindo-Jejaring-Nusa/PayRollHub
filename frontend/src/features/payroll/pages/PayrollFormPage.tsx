@@ -5,7 +5,7 @@ import { payrollService } from '../services/payrollService';
 import { attendanceService } from '../../attendance/services/attendanceService';
 import { INDONESIAN_PROVINCES } from '../../../lib/constants';
 import { formatCurrency } from '../../../lib/utils';
-import { SP_PERIOD_LIST, normalizePeriodToSP } from '../../../lib/period';
+import { SP_PERIOD_LIST, normalizePeriodToSP, CALENDAR_MONTH_OPTIONS } from '../../../lib/period';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
@@ -62,7 +62,7 @@ export const PayrollFormPage: React.FC = () => {
   // Status & Rekening (Kotak 2)
   const [status, setStatus] = useState<'active' | 'off'>('active');
   const [resignDate, setResignDate] = useState('');
-  const [period, setPeriod] = useState('SP 1');
+  const [period, setPeriod] = useState('2026-10');
   const [isVisibleToUser, setIsVisibleToUser] = useState<boolean>(true);
   const [availablePeriods, setAvailablePeriods] = useState<PayrollPeriodItem[]>([]);
   const [isPeriodsModalOpen, setIsPeriodsModalOpen] = useState(false);
@@ -246,7 +246,7 @@ export const PayrollFormPage: React.FC = () => {
           setPosition(data.position || 'Wali Asuh');
           setMaritalStatus(data.marital_status || '');
           setJoinDate(data.join_date || '');
-          setPeriod(normalizePeriodToSP(data.period));
+          setPeriod(data.period || '2026-10');
           setIsVisibleToUser(data.is_visible_to_user ?? true);
           setCompany(data.company === 'rimamandiri' ? 'rimamandiri' : 'rbs');
           setStatus(data.status || 'active');
@@ -702,6 +702,7 @@ export const PayrollFormPage: React.FC = () => {
 
                 {(() => {
                   const optionsMap = new Map<string, string>();
+                  CALENDAR_MONTH_OPTIONS.forEach((m) => optionsMap.set(m.code, `${m.label} (${m.code})`));
                   SP_PERIOD_LIST.forEach((sp) => optionsMap.set(sp.code, sp.fullLabel));
                   availablePeriods.forEach((ap) => {
                     const suffix = ap.is_visible_to_user === false ? ' (Luar SP — Hidden)' : (!ap.is_sp ? ' (Luar SP)' : '');

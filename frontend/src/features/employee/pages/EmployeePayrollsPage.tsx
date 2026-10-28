@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { employeeService } from '../services/employeeService';
 import { PayrollItem } from '../../../types/payroll';
 import { formatCurrency } from '../../../lib/utils';
-import { formatEmployeePeriod, EMPLOYEE_MONTH_OPTIONS, normalizePeriodToSP } from '../../../lib/period';
+import { formatEmployeePeriod } from '../../../lib/period';
 import { Card } from '../../../components/ui/Card';
 import {
   FileText,
@@ -59,13 +59,24 @@ export const EmployeePayrollsPage: React.FC = () => {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  // Helper untuk mendapatkan index nomor periode (1 - 12)
-  const getPeriodNum = (periodStr?: string | null): number => {
-    if (!periodStr) return 1;
-    const norm = normalizePeriodToSP(periodStr);
-    const m = norm.match(/^SP\s*(\d+)$/i);
-    return m ? parseInt(m[1], 10) : 1;
-  };
+  // Periode riil yang tersedia pada slip karyawan ini
+  const availablePeriods = useMemo(() => {
+    const list: { code: string; label: string }[] = [];
+    const seen = new Set<string>();
+
+    payrolls.forEach((p) => {
+      const code = (p.period || '').trim();
+      if (code && !seen.has(code.toLowerCase())) {
+        seen.add(code.toLowerCase());
+        list.push({
+          code,
+          label: formatEmployeePeriod(code),
+        });
+      }
+    });
+
+    return list;
+  }, [payrolls]);
 
   const filteredPayrolls = useMemo(() => {
     if (filterMode === 'all') {
@@ -75,21 +86,19 @@ export const EmployeePayrollsPage: React.FC = () => {
     if (filterMode === 'single') {
       if (!selectedMonth) return payrolls;
       return payrolls.filter((p) => {
-        const norm = normalizePeriodToSP(p.period);
-        return (
-          norm.toLowerCase() === selectedMonth.toLowerCase() ||
-          p.period.toLowerCase() === selectedMonth.toLowerCase()
-        );
+        const cleanPeriod = (p.period || '').trim().toLowerCase();
+        const cleanSelected = selectedMonth.trim().toLowerCase();
+        return cleanPeriod === cleanSelected;
       });
     }
 
     if (filterMode === 'range') {
-      const minIdx = Math.min(getPeriodNum(startPeriod), getPeriodNum(endPeriod));
-      const maxIdx = Math.max(getPeriodNum(startPeriod), getPeriodNum(endPeriod));
-
+      if (!startPeriod && !endPeriod) return payrolls;
       return payrolls.filter((p) => {
-        const idx = getPeriodNum(p.period);
-        return idx >= minIdx && idx <= maxIdx;
+        const code = (p.period || '').trim();
+        if (startPeriod && code < startPeriod) return false;
+        if (endPeriod && code > endPeriod) return false;
+        return true;
       });
     }
 
@@ -148,7 +157,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                   onClick={() => {
                     setFilterMode('single');
                     if (!selectedMonth && payrolls.length > 0) {
-                      setSelectedMonth(normalizePeriodToSP(payrolls[0].period));
+                      setSelectedMonth(payrolls[0].period);
                     }
                   }}
                   className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
@@ -196,7 +205,7 @@ export const EmployeePayrollsPage: React.FC = () => {
                 className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer max-w-xs"
               >
                 <option value="">Semua Periode</option>
-                {EMPLOYEE_MONTH_OPTIONS.map((opt) => (
+                {availablePeriods.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.label}
                   </option>
@@ -213,7 +222,8 @@ export const EmployeePayrollsPage: React.FC = () => {
                 onChange={(e) => setStartPeriod(e.target.value)}
                 className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer"
               >
-                {EMPLOYEE_MONTH_OPTIONS.map((opt) => (
+                <option value="">Periode Awal</option>
+                {availablePeriods.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.label}
                   </option>
@@ -227,7 +237,8 @@ export const EmployeePayrollsPage: React.FC = () => {
                 onChange={(e) => setEndPeriod(e.target.value)}
                 className="h-9 px-3 bg-surface rounded-lg text-[12.5px] border border-border-subtle outline-none focus:ring-2 focus:ring-primary font-medium cursor-pointer"
               >
-                {EMPLOYEE_MONTH_OPTIONS.map((opt) => (
+                <option value="">Periode Akhir</option>
+                {availablePeriods.map((opt) => (
                   <option key={opt.code} value={opt.code}>
                     {opt.label}
                   </option>

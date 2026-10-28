@@ -63,10 +63,10 @@
             $monthNum = (int)$m[2];
             $monthNameOnly = $months[$monthNum] ?? "Bulan {$monthNum}";
             $periodDisplay = "{$monthNameOnly} {$year}";
-        } elseif (preg_match('/(?:SP|Surat\s+Pesanan)?\s*(\d+)/i', $periodStr, $m)) {
+        } elseif (preg_match('/^(?:SP|Surat\s+Pesanan)\s*(\d+)$/i', $periodStr, $m)) {
             $spNum = (int)$m[1];
-            $monthNameOnly = $months[$spNum] ?? "Bulan {$spNum}";
-            $periodDisplay = "{$monthNameOnly} 2026";
+            $monthNameOnly = "SP {$spNum}";
+            $periodDisplay = "SP {$spNum}";
         } else {
             $monthNameOnly = $periodStr ?: 'Agustus';
             $periodDisplay = $periodStr ?: 'Agustus 2026';

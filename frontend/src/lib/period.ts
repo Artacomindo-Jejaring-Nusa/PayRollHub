@@ -165,48 +165,36 @@ export const MONTH_PERIOD_OPTIONS = SP_PERIOD_LIST.map((sp) => ({
   label: sp.fullLabel,
 }));
 
-// Khusus Tampilan Karyawan / Gaji: Murni nama bulan tanpa kata SP
-export const EMPLOYEE_MONTH_OPTIONS = [
-  { code: 'SP 1', label: 'Januari 2026' },
-  { code: 'SP 2', label: 'Februari 2026' },
-  { code: 'SP 3', label: 'Maret 2026' },
-  { code: 'SP 4', label: 'April 2026' },
-  { code: 'SP 5', label: 'Mei 2026' },
-  { code: 'SP 6', label: 'Juni 2026' },
-  { code: 'SP 7', label: 'Juli 2026' },
-  { code: 'SP 8', label: 'Agustus 2026' },
-  { code: 'SP 9', label: 'September 2026' },
-  { code: 'SP 10', label: 'Oktober 2026' },
-  { code: 'SP 11', label: 'November 2026' },
-  { code: 'SP 12', label: 'Desember 2026' },
+// Pilihan Bulan Penggajian (Periode Kalender Terdekat & Aktif)
+export const CALENDAR_MONTH_OPTIONS = [
+  { code: '2026-10', label: 'Oktober 2026' },
+  { code: '2026-11', label: 'November 2026' },
+  { code: '2026-09', label: 'September 2026' },
+  { code: '2026-12', label: 'Desember 2026' },
 ];
 
+// Alias untuk kompatibilitas ke belakang
+export const EMPLOYEE_MONTH_OPTIONS = CALENDAR_MONTH_OPTIONS;
+
 export const normalizePeriodToSP = (period?: string | null): string => {
-  if (!period) return 'SP 1';
+  if (!period) return '';
   const clean = period.trim();
 
-  // Jika sudah format SP, e.g. "SP 1", "SP1", "sp 2"
+  // Jika format kalender YYYY-MM (e.g. "2026-10", "2026-09"), pertahankan format kalender murni
+  if (/^\d{4}-\d{2}$/.test(clean)) {
+    return clean;
+  }
+
+  // Jika format SP, e.g. "SP 1", "SP1", "sp 2"
   const spMatch = clean.match(/^SP\s*(\d+)$/i);
   if (spMatch) {
-    return `SP ${spMatch[1]}`;
-  }
-
-  // Format tanggal YYYY-MM lama dari import awal e.g. "2026-08", "2026-03", "2026-09", "2026-01" -> SP 1
-  if (/^2026-(08|03|09|01)$/.test(clean)) {
-    return 'SP 1';
-  }
-
-  // Format tanggal bulan lainnya: "2026-02" -> "SP 2", dst.
-  const ymMatch = clean.match(/^(\d{4})-(\d{2})$/);
-  if (ymMatch) {
-    const monthNum = parseInt(ymMatch[1], 10);
-    return `SP ${monthNum}`;
+    return `SP ${parseInt(spMatch[1], 10)}`;
   }
 
   // Jika formatnya "Surat Pesanan X"
   const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
   if (suratPesananMatch) {
-    return `SP ${suratPesananMatch[1]}`;
+    return `SP ${parseInt(suratPesananMatch[1], 10)}`;
   }
 
   const found = SP_PERIOD_LIST.find((item) => item.code.toLowerCase() === clean.toLowerCase());
@@ -217,26 +205,14 @@ export const normalizePeriodToSP = (period?: string | null): string => {
 
 /**
  * Format untuk Portal Karyawan & Slip Gaji:
- * Murni hanya bulan & tahun (contoh: "September 2026") tanpa kata SP.
+ * Murni hanya bulan & tahun kalender (contoh: "Oktober 2026").
+ * SP murni ditampilkan sebagai nomor SP kontrak, TIDAK lagi dipaksa dikonversi ke bulan.
  */
 export const formatEmployeePeriod = (period?: string | null): string => {
   if (!period) return '-';
   const clean = period.trim();
 
-  const spMatch = clean.match(/^SP\s*(\d+)$/i);
-  if (spMatch) {
-    const num = parseInt(spMatch[1], 10);
-    const month = MONTH_NAMES[num];
-    return month ? `${month} 2026` : clean;
-  }
-
-  const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
-  if (suratPesananMatch) {
-    const num = parseInt(suratPesananMatch[1], 10);
-    const month = MONTH_NAMES[num];
-    return month ? `${month} 2026` : clean;
-  }
-
+  // 1. Format tanggal YYYY-MM e.g. "2026-10" -> "Oktober 2026"
   const ymMatch = clean.match(/^(\d{4})-(\d{2})$/);
   if (ymMatch) {
     const year = ymMatch[1];
@@ -245,36 +221,50 @@ export const formatEmployeePeriod = (period?: string | null): string => {
     return month ? `${month} ${year}` : clean;
   }
 
+  // 2. Jika formatnya SP e.g. "SP 3" atau "Surat Pesanan 3":
+  // Tampilkan sebagai SP kontrak murni (JANGAN dipaksa jadi Maret!)
+  const spMatch = clean.match(/^SP\s*(\d+)$/i);
+  if (spMatch) {
+    return `SP ${parseInt(spMatch[1], 10)}`;
+  }
+
+  const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
+  if (suratPesananMatch) {
+    return `SP ${parseInt(suratPesananMatch[1], 10)}`;
+  }
+
   return clean;
 };
 
 /**
  * Format untuk Admin Dashboard:
- * Menampilkan Surat Pesanan (SP) atau Nama Periode Custom
+ * Menampilkan nama sebenarnya: jika YYYY-MM maka Bulan Kalender, jika SP maka Surat Pesanan
  */
 export const formatPeriodDisplay = (period?: string | null, dynamicPeriods?: SPPeriodItem[]): string => {
   if (!period) return '-';
   const clean = period.trim();
 
-  // Jika formatnya SP X e.g. "SP 9", "SP9", "SP 1"
+  // 1. Format tanggal YYYY-MM e.g. "2026-10" -> Tampilkan murni "Oktober 2026" (JANGAN dipaksa jadi SP 10!)
+  const ymMatch = clean.match(/^(\d{4})-(\d{2})$/);
+  if (ymMatch) {
+    const year = ymMatch[1];
+    const monthNum = parseInt(ymMatch[2], 10);
+    const month = MONTH_NAMES[monthNum] || `Bulan ${monthNum}`;
+    return `${month} ${year}`;
+  }
+
+  // 2. Jika formatnya SP X e.g. "SP 9", "SP9", "SP 1"
   const spMatch = clean.match(/^SP\s*(\d+)$/i);
   if (spMatch) {
     const num = parseInt(spMatch[1], 10);
     return `SP ${num} (Surat Pesanan ${num})`;
   }
 
-  // Jika formatnya "Surat Pesanan X"
+  // 3. Jika formatnya "Surat Pesanan X"
   const suratPesananMatch = clean.match(/^Surat\s+Pesanan\s*(\d+)/i);
   if (suratPesananMatch) {
     const num = parseInt(suratPesananMatch[1], 10);
     return `SP ${num} (Surat Pesanan ${num})`;
-  }
-
-  // Format tanggal YYYY-MM e.g. "2026-08", "2026-09"
-  const ymMatch = clean.match(/^(\d{4})-(\d{2})$/);
-  if (ymMatch) {
-    const monthNum = parseInt(ymMatch[2], 10);
-    return `SP ${monthNum} (Surat Pesanan ${monthNum})`;
   }
 
   const list = dynamicPeriods && dynamicPeriods.length > 0 ? dynamicPeriods : SP_PERIOD_LIST;

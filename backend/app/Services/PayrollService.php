@@ -500,7 +500,14 @@ class PayrollService
             if (!$spRange) {
                 // Default fallback: 21 bulan lalu s/d 20 bulan ini
                 $now = Carbon::now('Asia/Jakarta');
-                if (preg_match('/^SP\s*(\d+)$/i', $targetPeriod, $m)) {
+                if (preg_match('/^(\d{4})-(\d{2})$/', $targetPeriod, $ym)) {
+                    $targetYear = (int) $ym[1];
+                    $monthNum = (int) $ym[2];
+                    $targetMonth = Carbon::create($targetYear, $monthNum, 1);
+                    $startCutoff = (clone $targetMonth)->subMonth()->day(21)->toDateString();
+                    $endCutoff = (clone $targetMonth)->day(20)->toDateString();
+                    $spRange = [$startCutoff, $endCutoff];
+                } elseif (preg_match('/^SP\s*(\d+)$/i', $targetPeriod, $m)) {
                     $monthNum = (int) $m[1];
                     $targetYear = $now->year;
                     $targetMonth = Carbon::create($targetYear, $monthNum, 1);

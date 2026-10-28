@@ -185,3 +185,4 @@ class PayrollGeneratePeriodTest extends TestCase
         ]);
     }
 }
+

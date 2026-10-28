@@ -359,6 +359,15 @@ export const PayrollListPage: React.FC = () => {
               <Button
                 variant="outline"
                 size="sm"
+                leftIcon={<Sparkles className="w-4 h-4 text-amber-600" />}
+                className="bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 font-semibold shadow-2xs"
+                onClick={() => setIsGenerateModalOpen(true)}
+              >
+                Generate Payroll
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 leftIcon={<Upload className="w-4 h-4 text-primary" />}
                 onClick={() => navigate('/payrolls/import')}
               >
@@ -1124,6 +1133,14 @@ export const PayrollListPage: React.FC = () => {
         isOpen={isPeriodModalOpen}
         onClose={() => setIsPeriodModalOpen(false)}
         onPeriodUpdated={fetchData}
+      />
+
+      {/* Generate Payroll Periode Baru Modal */}
+      <GeneratePayrollModal
+        isOpen={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        onSuccess={fetchData}
+        company={tenant.id}
       />
 
     </div>

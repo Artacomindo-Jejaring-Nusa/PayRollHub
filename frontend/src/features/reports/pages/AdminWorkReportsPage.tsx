@@ -28,6 +28,7 @@ import {
   Table as TableIcon,
   LayoutGrid,
   Download,
+  Sparkles,
   X,
 } from 'lucide-react';
 
@@ -207,9 +208,46 @@ export const AdminWorkReportsPage: React.FC = () => {
     setSelectedReportIds([]);
   }, [page, perPage, statusFilter, dateFilter, startDate, endDate, selectedSp, debouncedSearch]);
 
-  useEffect(() => {
-    fetchReports();
-  }, [page, perPage, statusFilter, dateFilter, startDate, endDate, selectedSp, debouncedSearch]);
+  // Quick Presets untuk Rentang Tanggal (Hari Ini, Bulan Ini, Tutup Absen 21-20, Semua)
+  const handleSetDatePreset = (preset: 'today' | 'this_month' | 'tutup_absen' | 'all') => {
+    const now = new Date();
+    const toYmd = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    if (preset === 'today') {
+      const todayStr = toYmd(now);
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+      setDateFilter('');
+    } else if (preset === 'this_month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStartDate(toYmd(startOfMonth));
+      setEndDate(toYmd(now));
+      setDateFilter('');
+    } else if (preset === 'tutup_absen') {
+      let startCutoff: Date;
+      let endCutoff: Date;
+      if (now.getDate() >= 21) {
+        startCutoff = new Date(now.getFullYear(), now.getMonth(), 21);
+        endCutoff = new Date(now.getFullYear(), now.getMonth() + 1, 20);
+      } else {
+        startCutoff = new Date(now.getFullYear(), now.getMonth() - 1, 21);
+        endCutoff = new Date(now.getFullYear(), now.getMonth(), 20);
+      }
+      setStartDate(toYmd(startCutoff));
+      setEndDate(toYmd(endCutoff));
+      setDateFilter('');
+    } else if (preset === 'all') {
+      setStartDate('');
+      setEndDate('');
+      setDateFilter('');
+    }
+    setPage(1);
+  };
 
   const fetchReports = async () => {
     setIsLoading(true);
@@ -234,6 +272,10 @@ export const AdminWorkReportsPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchReports();
+  }, [page, perPage, statusFilter, dateFilter, startDate, endDate, selectedSp, debouncedSearch]);
 
   const handleExportExcel = async () => {
     setIsExportingExcel(true);
@@ -491,28 +533,83 @@ export const AdminWorkReportsPage: React.FC = () => {
             <option value="rejected">Perlu Revisi</option>
           </select>
 
-          {/* Date Filter */}
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => {
-              setDateFilter(e.target.value);
-              setPage(1);
-            }}
-            className="h-9 px-3 rounded-lg border border-border-subtle bg-surface text-[12.5px] text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-
-          {dateFilter && (
-            <button
-              onClick={() => {
+          {/* Rentang Tanggal (Dari Kapan Sampai Kapan) */}
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-surface-container/60 rounded-xl border border-border-subtle">
+            <div className="flex items-center gap-1 pl-1 text-xs text-text-muted font-medium">
+              <Calendar className="w-3.5 h-3.5 text-primary" />
+              <span>Rentang:</span>
+            </div>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                const newStart = e.target.value;
+                setStartDate(newStart);
+                if (endDate && newStart > endDate) setEndDate(newStart);
                 setDateFilter('');
                 setPage(1);
               }}
-              className="text-[12px] text-text-muted hover:text-text-primary cursor-pointer"
-            >
-              Reset Tanggal
-            </button>
-          )}
+              className="px-2.5 py-1 text-xs bg-surface border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
+              title="Dari Tanggal (Mulai)"
+            />
+            <span className="text-xs text-text-muted font-semibold">s/d</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                const newEnd = e.target.value;
+                setEndDate(newEnd);
+                if (startDate && newEnd < startDate) setStartDate(newEnd);
+                setDateFilter('');
+                setPage(1);
+              }}
+              className="px-2.5 py-1 text-xs bg-surface border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
+              title="Sampai Tanggal (Selesai)"
+            />
+
+            {/* Quick Preset Buttons */}
+            <div className="flex items-center gap-1 pl-1">
+              <button
+                type="button"
+                onClick={() => handleSetDatePreset('today')}
+                className={`text-[10.5px] font-semibold px-2 py-1 rounded-md transition-all cursor-pointer ${
+                  startDate === new Date().toISOString().split('T')[0] && endDate === new Date().toISOString().split('T')[0]
+                    ? 'bg-primary text-white shadow-2xs font-bold'
+                    : 'bg-surface hover:bg-surface-container text-text-muted hover:text-text-primary border border-border-subtle'
+                }`}
+                title="Setel ke Tanggal Hari Ini"
+              >
+                Hari Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetDatePreset('this_month')}
+                className="text-[10.5px] font-semibold px-2 py-1 rounded-md bg-surface hover:bg-surface-container text-text-muted hover:text-text-primary border border-border-subtle transition-all cursor-pointer"
+                title="Setel ke Bulan Berjalan (Tgl 1 s/d Hari ini)"
+              >
+                Bulan Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetDatePreset('tutup_absen')}
+                className="text-[10.5px] font-bold px-2 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/40 shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                title="Setel Rentang Periode Tutup Absen (Tgl 21 s/d 20)"
+              >
+                <Sparkles className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                <span>Tutup Absen (21-20)</span>
+              </button>
+              {(startDate || endDate) && (
+                <button
+                  type="button"
+                  onClick={() => handleSetDatePreset('all')}
+                  className="text-[10.5px] font-medium px-1.5 py-1 rounded-md text-text-muted hover:text-rose-500 transition-all cursor-pointer"
+                  title="Reset rentang tanggal (tampilkan semua)"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Search */}
@@ -1187,11 +1284,15 @@ export const AdminWorkReportsPage: React.FC = () => {
             <span className="text-xs font-bold text-text-primary">
               {selectedReportIds.length} Laporan Kerja Dipilih
             </span>
-            {dateFilter && (
+            {startDate && endDate ? (
+              <span className="text-[11px] text-text-muted hidden sm:inline">
+                ({startDate} s/d {endDate})
+              </span>
+            ) : dateFilter ? (
               <span className="text-[11px] text-text-muted hidden sm:inline">
                 (Tanggal {dateFilter})
               </span>
-            )}
+            ) : null}
           </div>
           <div className="h-4 w-px bg-border-subtle hidden sm:block" />
           <div className="flex items-center gap-2">

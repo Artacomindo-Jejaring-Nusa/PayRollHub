@@ -2020,7 +2020,7 @@ export const AdminAttendancePage: React.FC = () => {
               </div>
 
               <div className="overflow-x-auto scrollbar-thin">
-                <table className="w-full min-w-[1000px] text-left text-xs border-collapse">
+                <table className="w-full min-w-[1150px] text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-border-subtle bg-surface-container/50 text-text-muted font-semibold whitespace-nowrap">
                       <th className="py-3 px-3 text-center w-10">
@@ -2044,6 +2044,8 @@ export const AdminAttendancePage: React.FC = () => {
                       <th className="py-3 px-3 text-center">Terlambat</th>
                       <th className="py-3 px-3 text-center">Dinas Luar</th>
                       <th className="py-3 px-3 text-center">Libur</th>
+                      <th className="py-3 px-3 text-center">Sakit</th>
+                      <th className="py-3 px-3 text-center">Izin</th>
                       <th className="py-3 px-3 text-center">8 Jam OK</th>
                       <th className="py-3 px-3 text-center">Total Jam Kerja</th>
                       <th className="py-3 px-4 text-center">Aksi</th>
@@ -2052,13 +2054,13 @@ export const AdminAttendancePage: React.FC = () => {
                   <tbody className="divide-y divide-border-subtle">
                     {employeeRecapLoading ? (
                       <tr>
-                        <td colSpan={13} className="py-10 text-center text-text-muted">
+                        <td colSpan={15} className="py-10 text-center text-text-muted">
                           Menghitung rekapitulasi data kehadiran per karyawan untuk {selectedSp}...
                         </td>
                       </tr>
                     ) : employeeRecapData.length === 0 ? (
                       <tr>
-                        <td colSpan={13} className="py-10 text-center text-text-muted">
+                        <td colSpan={15} className="py-10 text-center text-text-muted">
                           Tidak ada data karyawan ditemukan.
                         </td>
                       </tr>
@@ -2130,6 +2132,16 @@ export const AdminAttendancePage: React.FC = () => {
                           <td className="py-3 px-3 text-center">
                             <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
                               {emp.total_holiday}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800" title="Jumlah Sakit (dengan Surat Dokter)">
+                              {emp.total_sick || 0}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800" title="Jumlah Izin Resmi">
+                              {emp.total_permit || 0}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-center">

@@ -141,6 +141,8 @@ class ReportExportFeatureTest extends TestCase
         $response->sendContent();
         $content = ob_get_clean();
 
+        $this->assertStringContainsString('Sakit', $content);
+        $this->assertStringContainsString('Izin', $content);
         $this->assertStringContainsString('Budi Santoso', $content);
         $this->assertStringNotContainsString('Siti Rahma', $content);
     }

@@ -1014,11 +1014,13 @@ class AdminAttendanceController extends Controller
 
             foreach ($users as $user) {
                 $logs = $attendances->get($user->id, collect());
-                $totalPresent = $logs->whereNotIn('attendance_type', ['libur', 'dinas_luar'])->count();
-                $totalOnTime = $logs->whereNotIn('attendance_type', ['libur', 'dinas_luar'])->where('check_in_status', 'on_time')->count();
-                $totalLate = $logs->whereNotIn('attendance_type', ['libur', 'dinas_luar'])->where('check_in_status', 'late')->count();
+                $totalPresent = $logs->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin'])->count();
+                $totalOnTime = $logs->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin'])->where('check_in_status', 'on_time')->count();
+                $totalLate = $logs->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin'])->where('check_in_status', 'late')->count();
                 $totalBusinessTrip = $logs->where('attendance_type', 'dinas_luar')->count();
                 $totalHoliday = $logs->where('attendance_type', 'libur')->count();
+                $totalSick = $logs->where('attendance_type', 'sakit')->count();
+                $totalPermit = $logs->where('attendance_type', 'izin')->count();
 
                 // Saring jika filter status aktif
                 if ($status && $status !== 'all') {
@@ -1026,6 +1028,8 @@ class AdminAttendanceController extends Controller
                     if ($status === 'on_time' && $totalOnTime === 0) continue;
                     if (($status === 'dinas_luar' || $status === 'business_trip') && $totalBusinessTrip === 0) continue;
                     if (($status === 'holiday' || $status === 'libur') && $totalHoliday === 0) continue;
+                    if ($status === 'sakit' && $totalSick === 0) continue;
+                    if ($status === 'izin' && $totalPermit === 0) continue;
                 }
 
                 $totalWorkMinutes = 0;
@@ -1057,6 +1061,8 @@ class AdminAttendanceController extends Controller
                     'total_late' => $totalLate,
                     'total_business_trip' => $totalBusinessTrip,
                     'total_holiday' => $totalHoliday,
+                    'total_sick' => $totalSick,
+                    'total_permit' => $totalPermit,
                     'eight_hours_count' => $eightHoursCount,
                     'duration_formatted' => $durFormatted,
                 ];
@@ -1092,6 +1098,8 @@ class AdminAttendanceController extends Controller
                         'Terlambat',
                         'Perjalanan Dinas',
                         'Libur / Off',
+                        'Sakit',
+                        'Izin',
                         'Memenuhi Target Shift (Hari)',
                         'Total Durasi Kerja',
                     ]);
@@ -1110,6 +1118,8 @@ class AdminAttendanceController extends Controller
                             $row['total_late'],
                             $row['total_business_trip'],
                             $row['total_holiday'],
+                            $row['total_sick'],
+                            $row['total_permit'],
                             $row['eight_hours_count'],
                             $row['duration_formatted'],
                         ]);
@@ -1137,6 +1147,8 @@ class AdminAttendanceController extends Controller
                 'Terlambat',
                 'Perjalanan Dinas',
                 'Libur / Off',
+                'Sakit',
+                'Izin',
                 'Memenuhi Target Shift (Hari)',
                 'Total Durasi Kerja',
             ];
@@ -1157,6 +1169,8 @@ class AdminAttendanceController extends Controller
                     $row['total_late'],
                     $row['total_business_trip'],
                     $row['total_holiday'],
+                    $row['total_sick'],
+                    $row['total_permit'],
                     $row['eight_hours_count'],
                     $row['duration_formatted'],
                 ];
@@ -1167,7 +1181,7 @@ class AdminAttendanceController extends Controller
             }
 
             // Styling Header
-            $sheet->getStyle('A1:N1')->applyFromArray([
+            $sheet->getStyle('A1:P1')->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
                 'alignment' => [
                     'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -1193,9 +1207,11 @@ class AdminAttendanceController extends Controller
                 $sheet->setCellValue("K{$totalRow}", "=SUM(K2:K{$lastRow})");
                 $sheet->setCellValue("L{$totalRow}", "=SUM(L2:L{$lastRow})");
                 $sheet->setCellValue("M{$totalRow}", "=SUM(M2:M{$lastRow})");
-                $sheet->setCellValue("N{$totalRow}", '-');
+                $sheet->setCellValue("N{$totalRow}", "=SUM(N2:N{$lastRow})");
+                $sheet->setCellValue("O{$totalRow}", "=SUM(O2:O{$lastRow})");
+                $sheet->setCellValue("P{$totalRow}", '-');
 
-                $sheet->getStyle("A{$totalRow}:N{$totalRow}")->applyFromArray([
+                $sheet->getStyle("A{$totalRow}:P{$totalRow}")->applyFromArray([
                     'font' => ['bold' => true, 'color' => ['rgb' => '0F172A']],
                     'fill' => [
                         'fillType' => Fill::FILL_SOLID,
@@ -1207,20 +1223,20 @@ class AdminAttendanceController extends Controller
                     ],
                 ]);
                 $sheet->getStyle("A{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("H{$totalRow}:M{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("H{$totalRow}:O{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getRowDimension($totalRow)->setRowHeight(24);
                 $lastRow = $totalRow;
             }
 
             // Borders & Alignments
-            $sheet->getStyle("A1:N{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+            $sheet->getStyle("A1:P{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
             $sheet->getStyle("A2:B{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("D2:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("G2:M{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("G2:O{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
             $sheet->freezePane('A2');
 
-            foreach (range('A', 'N') as $col) {
+            foreach (range('A', 'P') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
             }
 
@@ -1397,14 +1413,25 @@ class AdminAttendanceController extends Controller
                     $jenisAbsen = match ($row->attendance_type) {
                         'libur' => 'Libur / Off',
                         'dinas_luar' => 'Perjalanan Dinas',
+                        'sakit' => 'Sakit (Surat Dokter)',
+                        'izin' => 'Izin Resmi',
                         default => 'Masuk Kerja',
                     };
                     $lokasi = $row->location_name ?: ($row->location->name ?? '-');
-                    $statusKehadiran = $row->attendance_type === 'libur'
-                        ? 'Libur'
-                        : ($row->attendance_type === 'dinas_luar'
-                            ? 'Dinas Luar'
-                            : ($row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status))));
+                    $statusKehadiran = match ($row->attendance_type) {
+                        'libur' => 'Libur',
+                        'dinas_luar' => 'Dinas Luar',
+                        'sakit' => 'Sakit',
+                        'izin' => 'Izin',
+                        default => ($row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status))),
+                    };
+                    $statusMasuk = match ($row->attendance_type) {
+                        'libur' => 'Libur',
+                        'dinas_luar' => 'Dinas Luar',
+                        'sakit' => 'Sakit',
+                        'izin' => 'Izin',
+                        default => ($row->check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu'),
+                    };
 
                     $targetHours = ($row->shift && $row->shift->work_hours > 0)
                         ? (float) $row->shift->work_hours
@@ -1426,7 +1453,7 @@ class AdminAttendanceController extends Controller
                         $lokasi,
                         $row->check_in_time ? substr($row->check_in_time, 0, 5) : '-',
                         $row->check_in_distance_meters !== null ? $row->check_in_distance_meters . ' m' : '-',
-                        $row->attendance_type === 'libur' ? 'Libur' : ($row->attendance_type === 'dinas_luar' ? 'Dinas Luar' : ($row->check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu')),
+                        $statusMasuk,
                         $row->check_out_time ? substr($row->check_out_time, 0, 5) : '-',
                         $row->check_out_distance_meters !== null ? $row->check_out_distance_meters . ' m' : '-',
                         $row->work_duration_formatted ?? '-',
@@ -1475,14 +1502,25 @@ class AdminAttendanceController extends Controller
             $jenisAbsen = match ($row->attendance_type) {
                 'libur' => 'Libur / Off',
                 'dinas_luar' => 'Perjalanan Dinas',
+                'sakit' => 'Sakit (Surat Dokter)',
+                'izin' => 'Izin Resmi',
                 default => 'Masuk Kerja',
             };
             $lokasi = $row->location_name ?: ($row->location->name ?? '-');
-            $statusKehadiran = $row->attendance_type === 'libur'
-                ? 'Libur'
-                : ($row->attendance_type === 'dinas_luar'
-                    ? 'Dinas Luar'
-                    : ($row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status))));
+            $statusKehadiran = match ($row->attendance_type) {
+                'libur' => 'Libur',
+                'dinas_luar' => 'Dinas Luar',
+                'sakit' => 'Sakit',
+                'izin' => 'Izin',
+                default => ($row->status === 'present' ? 'Hadir' : ($row->status === 'late' ? 'Terlambat' : ucfirst($row->status))),
+            };
+            $statusMasuk = match ($row->attendance_type) {
+                'libur' => 'Libur',
+                'dinas_luar' => 'Dinas Luar',
+                'sakit' => 'Sakit',
+                'izin' => 'Izin',
+                default => ($row->check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu'),
+            };
 
             $targetHours = ($row->shift && $row->shift->work_hours > 0)
                 ? (float) $row->shift->work_hours
@@ -1504,7 +1542,7 @@ class AdminAttendanceController extends Controller
                 $lokasi,
                 $row->check_in_time ? substr($row->check_in_time, 0, 5) : '-',
                 $row->check_in_distance_meters !== null ? $row->check_in_distance_meters . ' m' : '-',
-                $row->attendance_type === 'libur' ? 'Libur' : ($row->attendance_type === 'dinas_luar' ? 'Dinas Luar' : ($row->check_in_status === 'late' ? 'Terlambat' : 'Tepat Waktu')),
+                $statusMasuk,
                 $row->check_out_time ? substr($row->check_out_time, 0, 5) : '-',
                 $row->check_out_distance_meters !== null ? $row->check_out_distance_meters . ' m' : '-',
                 $row->work_duration_formatted ?? '-',

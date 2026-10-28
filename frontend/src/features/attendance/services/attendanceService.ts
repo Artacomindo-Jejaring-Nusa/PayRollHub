@@ -262,6 +262,8 @@ export const attendanceService = {
   // Admin Portal APIs
   getAdminAttendances: async (params?: {
     date?: string;
+    start_date?: string;
+    end_date?: string;
     sp_period?: string;
     month?: string;
     search?: string;
@@ -274,10 +276,27 @@ export const attendanceService = {
     return response.data.data;
   },
 
-  getAdminSummary: async (date?: string, sp_period?: string, role?: string): Promise<AttendanceSummary> => {
+  getAdminSummary: async (
+    date?: string,
+    sp_period?: string,
+    role?: string,
+    start_date?: string,
+    end_date?: string
+  ): Promise<AttendanceSummary> => {
     const response = await api.get('/admin/attendances/summary', {
-      params: { date, sp_period, role },
+      params: { date, sp_period, role, start_date, end_date },
     });
+    return response.data.data;
+  },
+
+  getEmployeeAttendanceDetail: async (params: {
+    user_id: number;
+    start_date?: string;
+    end_date?: string;
+    sp_period?: string;
+    month?: string;
+  }): Promise<any> => {
+    const response = await api.get('/admin/attendances/employee-detail', { params });
     return response.data.data;
   },
 
@@ -378,6 +397,8 @@ export const attendanceService = {
     mode: 'detail' | 'employee_recap';
     sp_period?: string;
     date?: string;
+    start_date?: string;
+    end_date?: string;
     month?: string;
     status?: string;
     search?: string;
@@ -411,7 +432,8 @@ export const attendanceService = {
 
     const ext = isExcel ? 'xlsx' : 'csv';
     const cleanSp = params.sp_period ? params.sp_period.replace(/\s+/g, '_') : '';
-    const datePart = params.date || cleanSp || new Date().toISOString().slice(0, 10);
+    const dateRangePart = params.start_date && params.end_date ? `${params.start_date}_sd_${params.end_date}` : '';
+    const datePart = dateRangePart || params.date || cleanSp || new Date().toISOString().slice(0, 10);
     const modePart = params.mode === 'employee_recap' ? 'rekap_karyawan' : 'log_detail';
     const statusPart = params.status && params.status !== 'all' ? `_${params.status}` : '';
     const hasSelection = (params.attendance_ids && (Array.isArray(params.attendance_ids) ? params.attendance_ids.length > 0 : String(params.attendance_ids).length > 0)) ||

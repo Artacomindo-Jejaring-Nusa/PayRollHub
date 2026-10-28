@@ -52,6 +52,24 @@ import {
   Shift,
 } from '../types/attendance';
 
+const formatIndonesianDate = (dateStr: string) => {
+  if (!dateStr) return '-';
+  try {
+    const parts = String(dateStr).split('-');
+    if (parts.length !== 3) return dateStr;
+    const y = parts[0];
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return `${d} ${monthNames[m - 1] || ''} ${y}`;
+  } catch {
+    return dateStr;
+  }
+};
+
 export const AdminAttendancePage: React.FC = () => {
   const { user: currentUser } = useAuthStore();
   const isLordAdmin = currentUser?.role === 'lord_admin';
@@ -66,11 +84,31 @@ export const AdminAttendancePage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
   });
+  // Date Range Filter (Mendukung rentang tanggal tarik tutup absen)
+  const [startDate, setStartDate] = useState<string>(() => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const tzOffset = firstDay.getTimezoneOffset() * 60000;
+    return new Date(firstDay.getTime() - tzOffset).toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - tzOffset).toISOString().split('T')[0];
+  });
+
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
+
+  // Modal Detail & Riwayat Presensi Karyawan (Cek Tanggal Tidak Masuk / Alpa)
+  const [employeeDetailModalOpen, setEmployeeDetailModalOpen] = useState<boolean>(false);
+  const [selectedEmployeeForDetail, setSelectedEmployeeForDetail] = useState<EmployeeRecapItem | null>(null);
+  const [employeeDetailData, setEmployeeDetailData] = useState<any | null>(null);
+  const [employeeDetailLoading, setEmployeeDetailLoading] = useState<boolean>(false);
+  const [employeeDetailFilter, setEmployeeDetailFilter] = useState<'all' | 'absent' | 'present' | 'permit_sick' | 'holiday'>('all');
 
   // Pagination State Presensi Detail (Log Detail)
   const [attendancePage, setAttendancePage] = useState<number>(1);
@@ -339,7 +377,7 @@ export const AdminAttendancePage: React.FC = () => {
   const [gpsDetecting, setGpsDetecting] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Fetch Attendance Records & Summary (Point 6: SP 1-9 & Harian)
+  // Fetch Attendance Records & Summary (Point 6: SP 1-9 & Rentang Tanggal Tutup Absen / Harian)
   const fetchRecap = useCallback(async () => {
     try {
       setLoading(true);
@@ -353,16 +391,21 @@ export const AdminAttendancePage: React.FC = () => {
       if (selectedSp && selectedSp !== 'all') {
         params.sp_period = selectedSp;
       }
-      if (selectedDate && selectedDate !== 'all') {
+      if (startDate && endDate) {
+        params.start_date = startDate;
+        params.end_date = endDate;
+      } else if (selectedDate && selectedDate !== 'all') {
         params.date = selectedDate;
       }
 
       const [listRes, sumRes] = await Promise.allSettled([
         attendanceService.getAdminAttendances(params),
         attendanceService.getAdminSummary(
-          selectedDate && selectedDate !== 'all' ? selectedDate : undefined,
+          startDate === endDate ? startDate : (selectedDate && selectedDate !== 'all' ? selectedDate : undefined),
           selectedSp && selectedSp !== 'all' ? selectedSp : undefined,
-          roleFilter !== 'all' ? roleFilter : undefined
+          roleFilter !== 'all' ? roleFilter : undefined,
+          startDate || undefined,
+          endDate || undefined
         ),
       ]);
       if (listRes.status === 'fulfilled') {
@@ -397,13 +440,13 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedSp, selectedDate, statusFilter, roleFilter, searchQuery, attendancePage, attendancePerPage]);
+  }, [selectedSp, selectedDate, startDate, endDate, statusFilter, roleFilter, searchQuery, attendancePage, attendancePerPage]);
 
   // Reset page to 1 & clear selections on filter changes
   useEffect(() => {
     setAttendancePage(1);
     setSelectedAttendanceIds([]);
-  }, [selectedSp, selectedDate, statusFilter, roleFilter, searchQuery]);
+  }, [selectedSp, selectedDate, startDate, endDate, statusFilter, roleFilter, searchQuery]);
 
   useEffect(() => {
     setSelectedAttendanceIds([]);
@@ -412,9 +455,9 @@ export const AdminAttendancePage: React.FC = () => {
   useEffect(() => {
     setEmployeeRecapPage(1);
     setSelectedEmployeeIds([]);
-  }, [selectedSp, roleFilter, searchQuery, selectedDate]);
+  }, [selectedSp, roleFilter, searchQuery, selectedDate, startDate, endDate]);
 
-  // Point 6: Rekapitulasi Presensi per Karyawan
+  // Point 6: Rekapitulasi Presensi per Karyawan (Mendukung Rentang Tanggal Tutup Absen)
   const fetchEmployeeRecap = useCallback(async () => {
     try {
       setEmployeeRecapLoading(true);
@@ -422,7 +465,9 @@ export const AdminAttendancePage: React.FC = () => {
         sp_period: selectedSp !== 'all' ? selectedSp : undefined,
         search: searchQuery || undefined,
         role: roleFilter !== 'all' ? roleFilter : undefined,
-        month: selectedDate ? selectedDate.substring(0, 7) : undefined,
+        month: startDate ? startDate.substring(0, 7) : (selectedDate ? selectedDate.substring(0, 7) : undefined),
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
       });
       setEmployeeRecapData(res.items || []);
     } catch (err: any) {
@@ -430,7 +475,7 @@ export const AdminAttendancePage: React.FC = () => {
     } finally {
       setEmployeeRecapLoading(false);
     }
-  }, [selectedSp, roleFilter, searchQuery, selectedDate]);
+  }, [selectedSp, roleFilter, searchQuery, selectedDate, startDate, endDate]);
 
   const paginatedEmployeeRecap = useMemo(() => {
     const start = (employeeRecapPage - 1) * employeeRecapPerPage;
@@ -1073,7 +1118,44 @@ export const AdminAttendancePage: React.FC = () => {
     }
   };
 
-  // Handle Export Rekap Absensi (.xlsx / .csv) sesuai filter aktif via Authenticated Blob
+  // Quick Presets untuk Rentang Tanggal (Bulan Ini, Hari Ini, Tutup Absen)
+  const handleSetDatePreset = (preset: 'today' | 'this_month' | 'tutup_absen') => {
+    const now = new Date();
+    const toYmd = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    if (preset === 'today') {
+      const todayStr = toYmd(now);
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+      setSelectedDate(todayStr);
+    } else if (preset === 'this_month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStartDate(toYmd(startOfMonth));
+      setEndDate(toYmd(now));
+      setSelectedDate(toYmd(now));
+    } else if (preset === 'tutup_absen') {
+      // Cut-off Tutup Absen: 21 bulan lalu s/d 20 bulan ini (atau 21 bulan ini s/d 20 bulan depan jika tgl >= 21)
+      let startCutoff: Date;
+      let endCutoff: Date;
+      if (now.getDate() >= 21) {
+        startCutoff = new Date(now.getFullYear(), now.getMonth(), 21);
+        endCutoff = new Date(now.getFullYear(), now.getMonth() + 1, 20);
+      } else {
+        startCutoff = new Date(now.getFullYear(), now.getMonth() - 1, 21);
+        endCutoff = new Date(now.getFullYear(), now.getMonth(), 20);
+      }
+      setStartDate(toYmd(startCutoff));
+      setEndDate(toYmd(endCutoff));
+      setSelectedDate(toYmd(endCutoff));
+    }
+  };
+
+  // Handle Export Rekap Absensi (.xlsx / .csv) sesuai filter rentang tanggal aktif via Authenticated Blob
   const handleExportAttendance = async (format: 'xlsx' | 'csv') => {
     try {
       setExportingAttendanceType(format);
@@ -1082,8 +1164,10 @@ export const AdminAttendancePage: React.FC = () => {
         format,
         mode: recapViewMode,
         sp_period: selectedSp !== 'all' ? selectedSp : undefined,
-        date: selectedDate && selectedDate !== 'all' ? selectedDate : undefined,
-        month: recapViewMode === 'employee_recap' && selectedDate ? selectedDate.substring(0, 7) : undefined,
+        date: startDate === endDate ? startDate : (selectedDate && selectedDate !== 'all' ? selectedDate : undefined),
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        month: startDate ? startDate.substring(0, 7) : (selectedDate ? selectedDate.substring(0, 7) : undefined),
         status: statusFilter !== 'all' ? statusFilter : undefined,
         role: roleFilter !== 'all' ? roleFilter : undefined,
         search: searchQuery.trim() || undefined,
@@ -1095,6 +1179,29 @@ export const AdminAttendancePage: React.FC = () => {
       alert(err.response?.data?.message || 'Gagal mengekspor laporan absensi.');
     } finally {
       setExportingAttendanceType(null);
+    }
+  };
+
+  // Buka Modal Detail & Riwayat Presensi Karyawan (Cek Tanggal Tidak Masuk / Alpa)
+  const handleOpenEmployeeDetail = async (emp: EmployeeRecapItem) => {
+    setSelectedEmployeeForDetail(emp);
+    setEmployeeDetailModalOpen(true);
+    setEmployeeDetailLoading(true);
+    setEmployeeDetailFilter('all');
+    try {
+      const res = await attendanceService.getEmployeeAttendanceDetail({
+        user_id: emp.user_id,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        sp_period: selectedSp !== 'all' ? selectedSp : undefined,
+        month: startDate ? startDate.substring(0, 7) : undefined,
+      });
+      setEmployeeDetailData(res);
+    } catch (err: any) {
+      console.error('Failed to load employee attendance detail', err);
+      alert(err.response?.data?.message || 'Gagal memuat rincian absensi karyawan.');
+    } finally {
+      setEmployeeDetailLoading(false);
     }
   };
 
@@ -1516,25 +1623,70 @@ export const AdminAttendancePage: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Tanggal Harian */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-text-muted font-medium">Tanggal:</span>
+                {/* Rentang Tanggal (Date Range Filter) */}
+                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-surface-container/60 rounded-xl border border-border-subtle">
+                  <div className="flex items-center gap-1 pl-1 text-xs text-text-muted font-medium">
+                    <Calendar className="w-3.5 h-3.5 text-primary" />
+                    <span>Rentang:</span>
+                  </div>
                   <input
                     type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-3 py-1.5 text-xs bg-surface-container border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                    value={startDate}
+                    onChange={(e) => {
+                      const newStart = e.target.value;
+                      setStartDate(newStart);
+                      if (newStart > endDate) setEndDate(newStart);
+                      setSelectedDate(newStart);
+                    }}
+                    className="px-2.5 py-1 text-xs bg-surface-panel border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
+                    title="Tanggal Mulai"
                   />
-                  {selectedDate !== new Date().toISOString().split('T')[0] && (
+                  <span className="text-xs text-text-muted font-semibold">s/d</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      const newEnd = e.target.value;
+                      setEndDate(newEnd);
+                      if (newEnd < startDate) setStartDate(newEnd);
+                      setSelectedDate(newEnd);
+                    }}
+                    className="px-2.5 py-1 text-xs bg-surface-panel border border-border-subtle rounded-lg text-text-primary font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
+                    title="Tanggal Selesai"
+                  />
+
+                  {/* Preset Buttons */}
+                  <div className="flex items-center gap-1 pl-1">
                     <button
                       type="button"
-                      onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
-                      className="text-[11px] text-primary hover:underline font-semibold cursor-pointer px-1.5 py-1 rounded bg-primary/10"
+                      onClick={() => handleSetDatePreset('today')}
+                      className={`text-[10.5px] font-semibold px-2 py-1 rounded-md transition-all cursor-pointer ${
+                        startDate === new Date().toISOString().split('T')[0] && endDate === new Date().toISOString().split('T')[0]
+                          ? 'bg-primary text-white shadow-2xs font-bold'
+                          : 'bg-surface-panel hover:bg-surface-panel/80 text-text-muted hover:text-text-primary border border-border-subtle'
+                      }`}
                       title="Setel ke Tanggal Hari Ini"
                     >
                       Hari Ini
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => handleSetDatePreset('this_month')}
+                      className="text-[10.5px] font-semibold px-2 py-1 rounded-md bg-surface-panel hover:bg-surface-panel/80 text-text-muted hover:text-text-primary border border-border-subtle transition-all cursor-pointer"
+                      title="Setel ke Bulan Berjalan (Tgl 1 s/d Hari ini)"
+                    >
+                      Bulan Ini
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetDatePreset('tutup_absen')}
+                      className="text-[10.5px] font-bold px-2 py-1 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                      title="Setel Rentang Periode Tutup Absen (Tgl 21 s/d 20)"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-600" />
+                      <span>Tarik Tutup Absen (21-20)</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Status Filter */}
@@ -2153,15 +2305,26 @@ export const AdminAttendancePage: React.FC = () => {
                             {emp.total_work_formatted}
                           </td>
                           <td className="py-3 px-4 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenCreateAttendance(emp.user_id)}
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all flex items-center gap-1 mx-auto cursor-pointer"
-                              title="Tambah Presensi untuk Karyawan Ini"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>+ Presensi</span>
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEmployeeDetail(emp)}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-primary text-white hover:bg-primary/90 shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+                                title="Lihat Riwayat & Cek Tanggal Berapa Saja Tidak Masuk"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Detail</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCreateAttendance(emp.user_id)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-surface-container hover:bg-surface-container/80 text-text-primary border border-border-subtle transition-all flex items-center gap-1 cursor-pointer"
+                                title="Tambah Presensi Manual untuk Karyawan Ini"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>+ Presensi</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         );
@@ -5033,6 +5196,420 @@ export const AdminAttendancePage: React.FC = () => {
                   <span>{verifyLoading ? 'Memproses...' : 'Setujui & Sahkan'}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETAIL & RIWAYAT PRESENSI KARYAWAN (CEK TANGGAL TIDAK MASUK / ALPA) */}
+      {employeeDetailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+          <div className="bg-surface-panel border border-border-subtle rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] flex flex-col">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-text-primary">
+                    Detail Presensi & Riwayat Kehadiran Karyawan
+                  </h3>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Evaluasi kehadiran per tanggal, cek keterlambatan, dan daftar tanggal tidak masuk/alpa.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmployeeDetailModalOpen(false);
+                  setEmployeeDetailData(null);
+                }}
+                className="text-text-muted hover:text-text-primary p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {employeeDetailLoading ? (
+              <div className="py-16 text-center text-text-muted flex flex-col items-center justify-center gap-3">
+                <RefreshCw className="w-6 h-6 animate-spin text-primary" />
+                <span className="text-xs font-semibold">Memuat riwayat kehadiran karyawan...</span>
+              </div>
+            ) : !employeeDetailData ? (
+              <div className="py-12 text-center text-text-muted text-xs">
+                Data presensi tidak dapat dimuat.
+              </div>
+            ) : (
+              <div className="overflow-y-auto space-y-4 pr-1 scrollbar-thin">
+                {/* Info Karyawan & Periode */}
+                <div className="p-4 bg-surface-container/50 rounded-xl border border-border-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-text-primary">
+                        {employeeDetailData.user.name}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-primary/10 text-primary">
+                        NIK: {employeeDetailData.user.nik || '-'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-surface-panel text-text-muted border border-border-subtle">
+                        {employeeDetailData.user.company}
+                      </span>
+                    </div>
+                    <div className="text-xs text-text-muted mt-1 flex items-center gap-3 flex-wrap">
+                      <span>Unit: <strong className="text-text-primary">{employeeDetailData.user.school_unit || '-'}</strong></span>
+                      <span>Jabatan: <strong className="text-text-primary">{employeeDetailData.user.position || '-'}</strong></span>
+                      {employeeDetailData.user.shift && (
+                        <span>Shift: <strong className="text-text-primary">{employeeDetailData.user.shift}</strong></span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right sm:text-right bg-surface-panel px-3 py-2 rounded-lg border border-border-subtle shrink-0">
+                    <div className="text-[10px] uppercase font-bold text-text-muted tracking-wider">
+                      Rentang Tanggal Evaluasi
+                    </div>
+                    <div className="text-xs font-bold text-text-primary mt-0.5">
+                      {formatIndonesianDate(employeeDetailData.date_range.start)} s/d {formatIndonesianDate(employeeDetailData.date_range.end)}
+                    </div>
+                    <div className="text-[10.5px] text-text-muted">
+                      Total: {employeeDetailData.summary.total_days} Hari
+                    </div>
+                  </div>
+                </div>
+
+                {/* ALERT KHUSUS: DAFTAR TANGGAL TIDAK MASUK (BANG MAUN FEATURE) */}
+                {employeeDetailData.summary.total_absent > 0 ? (
+                  <div className="p-4 bg-gradient-to-r from-rose-50 via-rose-50/80 to-amber-50/50 border border-rose-300 rounded-xl shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 text-rose-900 font-bold text-xs uppercase tracking-wider">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Karyawan ini TIDAK MASUK / ALPA sebanyak {employeeDetailData.summary.total_absent} Hari Kerja:</span>
+                      </div>
+                      <span className="text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200">
+                        {employeeDetailData.summary.total_absent} Hari Tidak Hadir
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      {employeeDetailData.summary.absent_dates.map((dtStr: string) => (
+                        <span
+                          key={dtStr}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-rose-600 text-white shadow-2xs"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>{formatIndonesianDate(dtStr)}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-rose-800/80 pt-0.5">
+                      💡 Hari Minggu otomatis dihitung sebagai Libur dan tidak dimasukkan ke dalam daftar ketidakhadiran di atas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-emerald-900 shadow-2xs">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold">Kehadiran Penuh / Tanpa Alpa</div>
+                      <div className="text-[11px] text-emerald-800">
+                        Karyawan ini selalu hadir, dinas, cuti sakit/izin resmi, atau libur pada rentang tanggal yang dipilih.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Summary Stat Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                  <div className="p-2.5 bg-surface-panel border border-border-subtle rounded-xl text-center">
+                    <div className="text-[10px] text-text-muted uppercase font-bold">Hadir Masuk</div>
+                    <div className="text-base font-bold text-emerald-700 mt-0.5">
+                      {employeeDetailData.summary.total_present}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5">
+                      {employeeDetailData.summary.total_on_time} tepat • {employeeDetailData.summary.total_late} telat
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-surface-panel border border-border-subtle rounded-xl text-center">
+                    <div className="text-[10px] text-text-muted uppercase font-bold">Dinas Luar</div>
+                    <div className="text-base font-bold text-indigo-700 mt-0.5">
+                      {employeeDetailData.summary.total_business_trip}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-surface-panel border border-border-subtle rounded-xl text-center">
+                    <div className="text-[10px] text-text-muted uppercase font-bold">Libur / Off</div>
+                    <div className="text-base font-bold text-amber-700 mt-0.5">
+                      {employeeDetailData.summary.total_holiday}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-surface-panel border border-rose-200 bg-rose-50/20 rounded-xl text-center">
+                    <div className="text-[10px] text-rose-800 uppercase font-bold">Sakit (Dokter)</div>
+                    <div className="text-base font-bold text-rose-700 mt-0.5">
+                      {employeeDetailData.summary.total_sick}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-surface-panel border border-amber-200 bg-amber-50/20 rounded-xl text-center">
+                    <div className="text-[10px] text-amber-900 uppercase font-bold">Izin Resmi</div>
+                    <div className="text-base font-bold text-amber-800 mt-0.5">
+                      {employeeDetailData.summary.total_permit}
+                    </div>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl text-center border ${
+                    employeeDetailData.summary.total_absent > 0
+                      ? 'bg-rose-100 border-rose-300 text-rose-900'
+                      : 'bg-surface-panel border-border-subtle text-text-muted'
+                  }`}>
+                    <div className="text-[10px] uppercase font-bold">Tidak Masuk (Alpa)</div>
+                    <div className={`text-base font-bold mt-0.5 ${employeeDetailData.summary.total_absent > 0 ? 'text-rose-700' : 'text-text-primary'}`}>
+                      {employeeDetailData.summary.total_absent}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-surface-panel border border-emerald-200 bg-emerald-50/20 rounded-xl text-center col-span-2 sm:col-span-1">
+                    <div className="text-[10px] text-emerald-900 uppercase font-bold">8 Jam Terpenuhi</div>
+                    <div className="text-base font-bold text-emerald-800 mt-0.5">
+                      {employeeDetailData.summary.eight_hours_met_count || 0} Hari
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Tabs for Modal Breakdown */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                  <div className="flex items-center gap-1 p-0.5 bg-surface-container rounded-lg border border-border-subtle">
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeDetailFilter('all')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        employeeDetailFilter === 'all'
+                          ? 'bg-surface-panel text-primary shadow-2xs font-bold'
+                          : 'text-text-muted hover:text-text-primary'
+                      }`}
+                    >
+                      Semua Hari ({employeeDetailData.days.length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeDetailFilter('absent')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        employeeDetailFilter === 'absent'
+                          ? 'bg-rose-600 text-white shadow-2xs font-bold'
+                          : 'text-rose-700 hover:bg-rose-50'
+                      }`}
+                    >
+                      ⛔ Tidak Masuk Saja ({employeeDetailData.summary.total_absent})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeDetailFilter('present')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        employeeDetailFilter === 'present'
+                          ? 'bg-surface-panel text-emerald-700 shadow-2xs font-bold'
+                          : 'text-text-muted hover:text-text-primary'
+                      }`}
+                    >
+                      Hadir ({employeeDetailData.summary.total_present})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeDetailFilter('permit_sick')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        employeeDetailFilter === 'permit_sick'
+                          ? 'bg-surface-panel text-amber-800 shadow-2xs font-bold'
+                          : 'text-text-muted hover:text-text-primary'
+                      }`}
+                    >
+                      Sakit / Izin ({employeeDetailData.summary.total_sick + employeeDetailData.summary.total_permit})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeDetailFilter('holiday')}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                        employeeDetailFilter === 'holiday'
+                          ? 'bg-surface-panel text-amber-800 shadow-2xs font-bold'
+                          : 'text-text-muted hover:text-text-primary'
+                      }`}
+                    >
+                      Libur ({employeeDetailData.summary.total_holiday})
+                    </button>
+                  </div>
+
+                  <span className="text-xs text-text-muted">
+                    Menampilkan {
+                      employeeDetailData.days.filter((d: any) => {
+                        if (employeeDetailFilter === 'absent') return d.status_type === 'absent';
+                        if (employeeDetailFilter === 'present') return d.status_type === 'on_time' || d.status_type === 'late' || d.status_type === 'business_trip';
+                        if (employeeDetailFilter === 'permit_sick') return d.status_type === 'sick' || d.status_type === 'permit';
+                        if (employeeDetailFilter === 'holiday') return d.status_type === 'holiday';
+                        return true;
+                      }).length
+                    } catatan
+                  </span>
+                </div>
+
+                {/* Table Breakdown Hari per Hari */}
+                <div className="border border-border-subtle rounded-xl overflow-hidden shadow-2xs">
+                  <div className="overflow-x-auto scrollbar-thin max-h-[350px]">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="sticky top-0 bg-surface-container border-b border-border-subtle text-text-muted font-semibold z-10">
+                        <tr>
+                          <th className="py-2.5 px-3 text-center w-12">No</th>
+                          <th className="py-2.5 px-3">Hari & Tanggal</th>
+                          <th className="py-2.5 px-3">Status Kehadiran</th>
+                          <th className="py-2.5 px-3 text-center">Jam Masuk</th>
+                          <th className="py-2.5 px-3 text-center">Jam Pulang</th>
+                          <th className="py-2.5 px-3 text-center">Durasi</th>
+                          <th className="py-2.5 px-3">Lokasi</th>
+                          <th className="py-2.5 px-3">Foto / Bukti</th>
+                          <th className="py-2.5 px-3">Catatan</th>
+                          <th className="py-2.5 px-3 text-center">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-subtle">
+                        {employeeDetailData.days
+                          .filter((d: any) => {
+                            if (employeeDetailFilter === 'absent') return d.status_type === 'absent';
+                            if (employeeDetailFilter === 'present') return d.status_type === 'on_time' || d.status_type === 'late' || d.status_type === 'business_trip';
+                            if (employeeDetailFilter === 'permit_sick') return d.status_type === 'sick' || d.status_type === 'permit';
+                            if (employeeDetailFilter === 'holiday') return d.status_type === 'holiday';
+                            return true;
+                          })
+                          .map((dayItem: any, index: number) => {
+                            const isAbsent = dayItem.status_type === 'absent';
+                            const isLate = dayItem.status_type === 'late';
+                            const isOnTime = dayItem.status_type === 'on_time';
+                            const isHoliday = dayItem.status_type === 'holiday';
+                            const isSick = dayItem.status_type === 'sick';
+                            const isPermit = dayItem.status_type === 'permit';
+                            const isTrip = dayItem.status_type === 'business_trip';
+
+                            return (
+                              <tr
+                                key={dayItem.date}
+                                className={`hover:bg-surface-container/30 transition-colors ${
+                                  isAbsent ? 'bg-rose-50/40' : ''
+                                }`}
+                              >
+                                <td className="py-2.5 px-3 text-center font-mono text-text-muted">{index + 1}</td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-semibold text-text-primary whitespace-nowrap">
+                                    {dayItem.day_name}, {formatIndonesianDate(dayItem.date)}
+                                  </div>
+                                  <div className="text-[10px] text-text-muted font-mono">{dayItem.date}</div>
+                                </td>
+                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${
+                                      isAbsent
+                                        ? 'bg-rose-600 text-white'
+                                        : isLate
+                                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                        : isOnTime
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                        : isSick
+                                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                        : isPermit
+                                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                        : isHoliday
+                                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                        : isTrip
+                                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                        : 'bg-gray-100 text-gray-700'
+                                    }`}
+                                  >
+                                    {isAbsent && '⛔ '}
+                                    {isOnTime && '✓ '}
+                                    {isLate && '⚠️ '}
+                                    {dayItem.status_label}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-mono font-semibold text-text-primary whitespace-nowrap">
+                                  {dayItem.check_in_time || '-'}
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-mono font-semibold text-text-primary whitespace-nowrap">
+                                  {dayItem.check_out_time || '-'}
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-mono text-[11px] text-text-secondary whitespace-nowrap">
+                                  {dayItem.work_duration_formatted || '-'}
+                                </td>
+                                <td className="py-2.5 px-3 text-text-secondary text-[11px] max-w-[150px] truncate" title={dayItem.location_name}>
+                                  {dayItem.location_name}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  {dayItem.photo_url ? (
+                                    <div
+                                      onClick={() => setPreviewPhotoModal(getStorageUrl(dayItem.photo_url))}
+                                      className="flex items-center gap-1 cursor-pointer group text-primary hover:underline text-[11px]"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>Lihat Foto</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-text-muted text-[11px]">-</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-text-muted text-[11px] max-w-[150px] truncate" title={dayItem.notes || '-'}>
+                                  {dayItem.notes || '-'}
+                                </td>
+                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                  {isAbsent ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCreateForm({
+                                          user_id: employeeDetailData.user.id,
+                                          date: dayItem.date,
+                                          attendance_type: 'masuk',
+                                          location_name: '',
+                                          check_in_time: '08:00',
+                                          check_in_status: 'on_time',
+                                          check_out_time: '17:00',
+                                          status: 'present',
+                                          notes: 'Input susulan admin dari riwayat absensi',
+                                        });
+                                        setCreateAttendanceModalOpen(true);
+                                      }}
+                                      className="px-2 py-0.5 rounded text-[10.5px] font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all cursor-pointer"
+                                      title="Input Presensi Susulan untuk Tanggal Ini"
+                                    >
+                                      + Isi Absen
+                                    </button>
+                                  ) : (
+                                    <span className="text-text-muted text-[10px]">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer Modal */}
+            <div className="flex items-center justify-between pt-3 border-t border-border-subtle shrink-0">
+              <span className="text-xs text-text-muted">
+                {employeeDetailData ? `${employeeDetailData.user.name} • ${employeeDetailData.user.nik || '-'}` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmployeeDetailModalOpen(false);
+                  setEmployeeDetailData(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-surface-container hover:bg-surface-container/80 text-text-primary border border-border-subtle transition-all cursor-pointer"
+              >
+                Tutup Rincian
+              </button>
             </div>
           </div>
         </div>

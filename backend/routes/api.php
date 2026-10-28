@@ -131,6 +131,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/attendances', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'index']);
         Route::get('/admin/attendances/summary', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'summary']);
         Route::get('/admin/attendances/recap-by-employee', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'recapByEmployee']);
+        Route::get('/admin/attendances/employee-detail', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'employeeDetail']);
         Route::post('/admin/attendances', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'store']);
         Route::put('/admin/attendances/{attendance}', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'update']);
         Route::put('/admin/attendances/{attendance}/verify', [\App\Http\Controllers\Api\AdminAttendanceController::class, 'verify']);

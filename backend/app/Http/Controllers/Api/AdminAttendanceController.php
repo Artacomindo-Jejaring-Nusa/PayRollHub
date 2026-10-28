@@ -56,6 +56,8 @@ class AdminAttendanceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $currentUser = $request->user();
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
         $date = $request->query('date', Carbon::today('Asia/Jakarta')->toDateString());
         $spPeriod = $request->query('sp_period') ?: $request->query('sp');
         $month = $request->query('month');
@@ -122,9 +124,11 @@ class AdminAttendanceController extends Controller
             });
         }
 
-        // Filter rentang tanggal: SP cut-off khusus (jika ada) > Spesifik Tanggal > Bulan
+        // Filter rentang tanggal: Eksplisit Rentang Tanggal (start_date s/d end_date) > SP cut-off khusus (jika ada) > Spesifik Tanggal > Bulan
         $spRange = $this->getSpDateRange($spPeriod);
-        if ($spRange) {
+        if ($startDate && $endDate) {
+            $query->whereBetween('date', [$startDate, $endDate]);
+        } elseif ($spRange) {
             $query->whereBetween('date', $spRange);
         } elseif ($date && $date !== 'all' && !$month) {
             $query->where('date', $date);
@@ -185,6 +189,8 @@ class AdminAttendanceController extends Controller
     public function summary(Request $request): JsonResponse
     {
         $currentUser = $request->user();
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
         $date = $request->query('date', Carbon::today('Asia/Jakarta')->toDateString());
         $spPeriod = $request->query('sp_period') ?: $request->query('sp');
         $role = $request->query('role');
@@ -245,9 +251,13 @@ class AdminAttendanceController extends Controller
         $spRange = $this->getSpDateRange($spPeriod);
 
         // Tentukan filter tanggal untuk presensi:
+        // Jika parameter eksplisit start_date & end_date dikirim, gunakan rentang tersebut.
         // Jika SP memiliki cut-off tanggal khusus di database, gunakan cut-off tersebut.
         // Jika tidak, gunakan tanggal harian yang dipilih ($date, default hari ini).
-        if ($spRange) {
+        if ($startDate && $endDate) {
+            $attendanceQuery->whereBetween('date', [$startDate, $endDate]);
+            $label = ($startDate === $endDate) ? $startDate : "{$startDate} s/d {$endDate}";
+        } elseif ($spRange) {
             $attendanceQuery->whereBetween('date', $spRange);
             $label = "Periode {$spPeriod}";
         } elseif ($date && $date !== 'all') {
@@ -377,9 +387,18 @@ class AdminAttendanceController extends Controller
             ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
             : ($currentUser->company ?: 'rbs');
 
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
         $spPeriod = $request->query('sp_period') ?: $request->query('sp');
         $month = $request->query('month');
-        $spRange = $this->getSpDateRange($spPeriod);
+        $spRange = null;
+
+        // Eksplisit Rentang Tanggal mengambil prioritas tertinggi (misal untuk tutup absen)
+        if ($startDate && $endDate) {
+            $spRange = [$startDate, $endDate];
+        } elseif ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+            $spRange = $this->getSpDateRange($spPeriod);
+        }
 
         // Jika SP tidak memiliki cut-off tanggal eksplisit, gunakan bulan yang dipilih atau bulan berjalan
         if (!$spRange) {
@@ -388,8 +407,6 @@ class AdminAttendanceController extends Controller
                     Carbon::parse($month)->startOfMonth()->toDateString(),
                     Carbon::parse($month)->endOfMonth()->toDateString(),
                 ];
-            } elseif ($request->query('start_date') && $request->query('end_date')) {
-                $spRange = [$request->query('start_date'), $request->query('end_date')];
             } else {
                 $spRange = [
                     Carbon::today('Asia/Jakarta')->startOfMonth()->toDateString(),
@@ -904,6 +921,8 @@ class AdminAttendanceController extends Controller
 
         $format = strtolower($request->query('format', 'xlsx')); // 'xlsx' | 'csv'
         $mode = $request->query('mode', 'detail'); // 'detail' | 'employee_recap'
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
         $date = $request->query('date');
         $spPeriod = $request->query('sp_period') ?: $request->query('sp');
         $month = $request->query('month');
@@ -929,7 +948,12 @@ class AdminAttendanceController extends Controller
             ? ($request->query('company') && $request->query('company') !== 'all' ? $request->query('company') : null)
             : ($currentUser->company ?: 'rbs');
 
-        $spRange = $this->getSpDateRange($spPeriod);
+        $spRange = null;
+        if ($startDate && $endDate) {
+            $spRange = [$startDate, $endDate];
+        } elseif ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+            $spRange = $this->getSpDateRange($spPeriod);
+        }
 
         // =========================================================================
         // MODE 1: REKAPITULASI AGREGAT PER KARYAWAN
@@ -1069,7 +1093,9 @@ class AdminAttendanceController extends Controller
             }
 
             $suffixSelected = !empty($selectedUserIds) ? '_terpilih' : '';
-            $filterLabel = $spPeriod ? str_replace(' ', '_', $spPeriod) : "{$range[0]}_{$range[1]}";
+            $filterLabel = ($startDate && $endDate)
+                ? (($startDate === $endDate) ? "tanggal_{$startDate}" : "rentang_{$startDate}_sd_{$endDate}")
+                : ($spPeriod ? str_replace(' ', '_', $spPeriod) : "{$range[0]}_{$range[1]}");
             $filename = "rekap_karyawan_absensi_{$filterLabel}{$suffixSelected}";
 
             if ($format === 'csv') {
@@ -1313,6 +1339,9 @@ class AdminAttendanceController extends Controller
 
         if (!empty($selectedAttendanceIds)) {
             $filterLabel = "terpilih_" . count($selectedAttendanceIds);
+        } elseif ($startDate && $endDate) {
+            $query->whereBetween('date', [$startDate, $endDate]);
+            $filterLabel = ($startDate === $endDate) ? "tanggal_{$startDate}" : "rentang_{$startDate}_sd_{$endDate}";
         } elseif ($spRange) {
             $query->whereBetween('date', $spRange);
             $cleanSp = str_replace(' ', '_', $spPeriod);
@@ -1596,5 +1625,199 @@ class AdminAttendanceController extends Controller
             $writer = new Xlsx($spreadsheet);
             $writer->save('php://output');
         }, 200, $headers);
+    }
+
+    /**
+     * POINT Tambahan: Menampilkan breakdown kalender presensi harian karyawan tertentu
+     * untuk mengetahui tanggal berapa saja dia Hadir, Terlambat, Libur, Sakit, Izin,
+     * dan terutama TANGGAL BERAPA DIA TIDAK MASUK (Belum Absen / Alpa).
+     */
+    public function employeeDetail(Request $request): JsonResponse
+    {
+        $userId = $request->query('user_id');
+        if (!$userId) {
+            return response()->json(['status' => 'error', 'message' => 'User ID wajib diisi.'], 422);
+        }
+
+        $user = User::with('shift')->find($userId);
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan.'], 404);
+        }
+
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $spPeriod = $request->query('sp_period');
+        $month = $request->query('month');
+
+        if ($startDate && $endDate) {
+            $range = [$startDate, $endDate];
+        } elseif ($spPeriod && strtolower(trim($spPeriod)) !== 'all') {
+            $spRange = $this->getSpDateRange($spPeriod);
+            $range = $spRange ?: [
+                Carbon::today('Asia/Jakarta')->startOfMonth()->toDateString(),
+                Carbon::today('Asia/Jakarta')->endOfMonth()->toDateString(),
+            ];
+        } elseif ($month) {
+            $range = [
+                Carbon::parse($month)->startOfMonth()->toDateString(),
+                Carbon::parse($month)->endOfMonth()->toDateString(),
+            ];
+        } else {
+            $range = [
+                Carbon::today('Asia/Jakarta')->startOfMonth()->toDateString(),
+                Carbon::today('Asia/Jakarta')->endOfMonth()->toDateString(),
+            ];
+        }
+
+        $attendances = Attendance::with(['location', 'shift', 'approver'])
+            ->where('user_id', $user->id)
+            ->whereBetween('date', $range)
+            ->get()
+            ->keyBy(fn ($item) => Carbon::parse($item->date)->toDateString());
+
+        $current = Carbon::parse($range[0]);
+        $end = Carbon::parse($range[1]);
+        $today = Carbon::today('Asia/Jakarta')->toDateString();
+
+        $days = [];
+        $absentDates = [];
+        $totalPresent = 0;
+        $totalOnTime = 0;
+        $totalLate = 0;
+        $totalHoliday = 0;
+        $totalBusinessTrip = 0;
+        $totalSick = 0;
+        $totalPermit = 0;
+        $totalAbsent = 0;
+
+        $indonesianDays = [
+            0 => 'Minggu',
+            1 => 'Senin',
+            2 => 'Selasa',
+            3 => 'Rabu',
+            4 => 'Kamis',
+            5 => 'Jumat',
+            6 => 'Sabtu',
+        ];
+
+        while ($current->lte($end)) {
+            $dateStr = $current->toDateString();
+            $att = $attendances->get($dateStr);
+            $dayOfWeek = $current->dayOfWeek;
+            $dayName = $indonesianDays[$dayOfWeek];
+            $isSunday = ($dayOfWeek === 0);
+            $isFuture = ($dateStr > $today);
+
+            if ($att) {
+                $type = $att->attendance_type;
+                if ($type === 'libur') {
+                    $totalHoliday++;
+                    $statusType = 'holiday';
+                    $statusLabel = 'Libur / Off';
+                } elseif ($type === 'dinas_luar') {
+                    $totalBusinessTrip++;
+                    $statusType = 'business_trip';
+                    $statusLabel = 'Perjalanan Dinas';
+                } elseif ($type === 'sakit') {
+                    $totalSick++;
+                    $statusType = 'sick';
+                    $statusLabel = 'Sakit (Surat Dokter)';
+                } elseif ($type === 'izin') {
+                    $totalPermit++;
+                    $statusType = 'permit';
+                    $statusLabel = 'Izin Resmi';
+                } else {
+                    $totalPresent++;
+                    if ($att->check_in_status === 'late') {
+                        $totalLate++;
+                        $statusType = 'late';
+                        $statusLabel = 'Terlambat';
+                    } else {
+                        $totalOnTime++;
+                        $statusType = 'on_time';
+                        $statusLabel = 'Hadir Tepat Waktu';
+                    }
+                }
+
+                $days[] = [
+                    'date' => $dateStr,
+                    'day_name' => $dayName,
+                    'is_sunday' => $isSunday,
+                    'is_future' => $isFuture,
+                    'has_attendance' => true,
+                    'status_type' => $statusType,
+                    'status_label' => $statusLabel,
+                    'check_in_time' => $att->check_in_time ? substr($att->check_in_time, 0, 5) : null,
+                    'check_out_time' => $att->check_out_time ? substr($att->check_out_time, 0, 5) : null,
+                    'work_duration_formatted' => $att->work_duration_formatted ?? '-',
+                    'location_name' => $att->location_name ?: ($att->location->name ?? '-'),
+                    'photo_url' => $att->photo_full_url ?: $att->photo_url,
+                    'notes' => $att->notes,
+                    'attendance_id' => $att->id,
+                ];
+            } else {
+                if ($isFuture) {
+                    $statusType = 'future';
+                    $statusLabel = 'Belum Berjalan';
+                } elseif ($isSunday) {
+                    $totalHoliday++;
+                    $statusType = 'holiday';
+                    $statusLabel = 'Libur (Hari Minggu)';
+                } else {
+                    $totalAbsent++;
+                    $absentDates[] = $dateStr;
+                    $statusType = 'absent';
+                    $statusLabel = 'Tidak Masuk / Belum Absen';
+                }
+
+                $days[] = [
+                    'date' => $dateStr,
+                    'day_name' => $dayName,
+                    'is_sunday' => $isSunday,
+                    'is_future' => $isFuture,
+                    'has_attendance' => false,
+                    'status_type' => $statusType,
+                    'status_label' => $statusLabel,
+                    'check_in_time' => null,
+                    'check_out_time' => null,
+                    'work_duration_formatted' => '-',
+                    'location_name' => '-',
+                    'photo_url' => null,
+                    'notes' => null,
+                    'attendance_id' => null,
+                ];
+            }
+
+            $current->addDay();
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'nik' => $user->nik,
+                    'company' => strtoupper($user->company ?? '-'),
+                    'position' => $user->position ?? '-',
+                    'school_unit' => $user->school_unit ?? '-',
+                    'shift' => $user->shift ? $user->shift->name : null,
+                ],
+                'date_range' => $range,
+                'summary' => [
+                    'total_days' => count($days),
+                    'total_present' => $totalPresent,
+                    'total_on_time' => $totalOnTime,
+                    'total_late' => $totalLate,
+                    'total_business_trip' => $totalBusinessTrip,
+                    'total_holiday' => $totalHoliday,
+                    'total_sick' => $totalSick,
+                    'total_permit' => $totalPermit,
+                    'total_absent' => $totalAbsent,
+                    'absent_dates' => $absentDates,
+                ],
+                'days' => $days,
+            ],
+        ]);
     }
 }

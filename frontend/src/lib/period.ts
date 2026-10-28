@@ -101,6 +101,15 @@ export const buildPeriodOptions = (
 };
 
 /**
+ * Dispatch global event so all pages & hooks update their period list instantly
+ */
+export const notifyPayrollPeriodsUpdated = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('payroll-periods-updated'));
+  }
+};
+
+/**
  * React hook to load dynamic periods from backend database,
  * falling back to standard SP 1..12 while loading or on error.
  */
@@ -134,6 +143,17 @@ export const usePeriodOptions = (company?: string) => {
 
   useEffect(() => {
     fetchPeriods();
+
+    const handleUpdate = () => {
+      fetchPeriods();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('payroll-periods-updated', handleUpdate);
+      return () => {
+        window.removeEventListener('payroll-periods-updated', handleUpdate);
+      };
+    }
   }, [fetchPeriods]);
 
   return { periodOptions, rawPeriods, isLoading, refreshPeriods: fetchPeriods };

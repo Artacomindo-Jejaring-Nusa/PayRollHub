@@ -26,7 +26,7 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
   company,
 }) => {
   const [targetCompany, setTargetCompany] = useState<string>(company || 'all');
-  const { periodOptions, rawPeriods } = usePeriodOptions(targetCompany);
+  const { periodOptions, rawPeriods, refreshPeriods } = usePeriodOptions(targetCompany);
 
   // Form states
   const [targetPeriod, setTargetPeriod] = useState<string>('SP 2');
@@ -46,6 +46,20 @@ export const GeneratePayrollModal: React.FC<GeneratePayrollModalProps> = ({
     skipped_count: number;
     date_range: [string, string] | null;
   } | null>(null);
+
+  // Always refresh periods when modal opens so newly added SP appears immediately
+  useEffect(() => {
+    if (isOpen) {
+      refreshPeriods();
+    }
+  }, [isOpen, refreshPeriods]);
+
+  // Set default target period if not present
+  useEffect(() => {
+    if (periodOptions.length > 0 && !periodOptions.some((p) => p.code.toLowerCase() === targetPeriod.toLowerCase())) {
+      setTargetPeriod(periodOptions[0].code);
+    }
+  }, [periodOptions, targetPeriod]);
 
   // Sync date range based on target period or presets
   useEffect(() => {

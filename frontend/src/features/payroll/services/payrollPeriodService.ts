@@ -1,5 +1,6 @@
 import { api } from '../../../lib/api';
 import { PayrollPeriodItem } from '../../../types/payroll';
+import { notifyPayrollPeriodsUpdated } from '../../../lib/period';
 
 export const payrollPeriodService = {
   /**
@@ -41,6 +42,7 @@ export const payrollPeriodService = {
       '/admin/payroll-periods',
       data
     );
+    notifyPayrollPeriodsUpdated();
     return res.data.data;
   },
 
@@ -64,6 +66,7 @@ export const payrollPeriodService = {
       `/admin/payroll-periods/${id}`,
       data
     );
+    notifyPayrollPeriodsUpdated();
     return res.data.data;
   },
 
@@ -74,5 +77,6 @@ export const payrollPeriodService = {
     await api.delete(`/admin/payroll-periods/${id}`, {
       params: force ? { force: 1 } : undefined,
     });
+    notifyPayrollPeriodsUpdated();
   },
 };

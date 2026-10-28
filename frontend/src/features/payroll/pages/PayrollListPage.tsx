@@ -13,7 +13,7 @@ import { Skeleton } from '../../../components/ui/Skeleton';
 import { Modal } from '../../../components/ui/Modal';
 import { Pagination } from '../../../components/shared/Pagination';
 import { ConfirmDialog } from '../../../components/shared/ConfirmDialog';
-import { SP_PERIOD_LIST, MONTH_PERIOD_OPTIONS, formatPeriodDisplay } from '../../../lib/period';
+import { SP_PERIOD_LIST, MONTH_PERIOD_OPTIONS, formatPeriodDisplay, usePeriodOptions } from '../../../lib/period';
 import { ProvinceSettingsModal } from '../components/ProvinceSettingsModal';
 import { EmployeeReplacementsModal } from '../components/EmployeeReplacementsModal';
 import { PayrollPeriodsModal } from '../components/PayrollPeriodsModal';
@@ -62,6 +62,7 @@ export const PayrollListPage: React.FC = () => {
   const [provinceOptions, setProvinceOptions] = useState<string[]>([]);
   const [positionOptions, setPositionOptions] = useState<string[]>([]);
   const [periodOptions, setPeriodOptions] = useState<string[]>([]);
+  const { periodOptions: dynamicPeriodOptions, refreshPeriods } = usePeriodOptions(tenant.id);
 
   // Filter, Search & Pagination states
   const [search, setSearch] = useState('');
@@ -476,10 +477,10 @@ export const PayrollListPage: React.FC = () => {
             >
               <option value="">Semua SP / Periode</option>
               {Array.from(new Set([
-                ...SP_PERIOD_LIST.map((sp) => sp.code),
+                ...dynamicPeriodOptions.map((sp) => sp.code),
                 ...periodOptions,
               ])).map((pCode) => {
-                const std = SP_PERIOD_LIST.find((s) => s.code === pCode);
+                const std = dynamicPeriodOptions.find((s) => s.code.toLowerCase() === pCode.toLowerCase());
                 return (
                   <option key={pCode} value={pCode}>
                     {std ? std.fullLabel : formatPeriodDisplay(pCode)}
@@ -1132,14 +1133,21 @@ export const PayrollListPage: React.FC = () => {
       <PayrollPeriodsModal
         isOpen={isPeriodModalOpen}
         onClose={() => setIsPeriodModalOpen(false)}
-        onPeriodUpdated={fetchData}
+        onPeriodUpdated={() => {
+          fetchData();
+          refreshPeriods();
+        }}
+        company={tenant.id}
       />
 
       {/* Generate Payroll Periode Baru Modal */}
       <GeneratePayrollModal
         isOpen={isGenerateModalOpen}
         onClose={() => setIsGenerateModalOpen(false)}
-        onSuccess={fetchData}
+        onSuccess={() => {
+          fetchData();
+          refreshPeriods();
+        }}
         company={tenant.id}
       />
 

@@ -4,6 +4,10 @@ namespace App\Services;
 
 use App\Models\Payroll;
 use App\Models\User;
+use App\Models\Attendance;
+use App\Models\PayrollPeriod;
+use App\Models\ActivityLog;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -466,6 +470,270 @@ class PayrollService
             $payroll->update($updateData);
             return $payroll->fresh();
         });
+    }
+
+    /**
+     * Bulk generate payrolls for a target period from a source period,
+     * with optional attendance synchronization and immediate visibility in user portal.
+     */
+    public function generatePeriod(array $params, ?User $currentUser = null): array
+    {
+        $targetPeriod = trim($params['target_period'] ?? '');
+        if (empty($targetPeriod)) {
+            throw new \InvalidArgumentException('Target periode wajib diisi.');
+        }
+
+        $sourcePeriod = trim($params['source_period'] ?? 'latest');
+        $company = $params['company'] ?? 'all';
+        $syncAttendance = array_key_exists('sync_attendance', $params) ? (bool) $params['sync_attendance'] : true;
+        $isVisibleToUser = array_key_exists('is_visible_to_user', $params) ? (bool) $params['is_visible_to_user'] : true;
+        $duplicateAction = $params['duplicate_action'] ?? 'update'; // 'update' or 'skip'
+        $startDate = $params['start_date'] ?? null;
+        $endDate = $params['end_date'] ?? null;
+
+        // Resolve cut-off date range for target period
+        $spRange = null;
+        if (!empty($startDate) && !empty($endDate)) {
+            $spRange = [$startDate, $endDate];
+        } else {
+            $spRange = PayrollPeriod::resolveDateRange($targetPeriod);
+            if (!$spRange) {
+                // Default fallback: 21 bulan lalu s/d 20 bulan ini
+                $now = Carbon::now('Asia/Jakarta');
+                if (preg_match('/^SP\s*(\d+)$/i', $targetPeriod, $m)) {
+                    $monthNum = (int) $m[1];
+                    $targetYear = $now->year;
+                    $targetMonth = Carbon::create($targetYear, $monthNum, 1);
+                    $startCutoff = (clone $targetMonth)->subMonth()->day(21)->toDateString();
+                    $endCutoff = (clone $targetMonth)->day(20)->toDateString();
+                    $spRange = [$startCutoff, $endCutoff];
+                } else {
+                    $startCutoff = (clone $now)->subMonth()->day(21)->toDateString();
+                    $endCutoff = (clone $now)->day(20)->toDateString();
+                    $spRange = [$startCutoff, $endCutoff];
+                }
+            }
+        }
+
+        // Fetch source active employees
+        $sourceQuery = Payroll::query()
+            ->where(function ($q) {
+                $q->where('status', '!=', 'off')->orWhereNull('status');
+            });
+
+        if ($company && $company !== 'all') {
+            $sourceQuery->where('company', $company);
+        }
+
+        if ($sourcePeriod && $sourcePeriod !== 'latest' && $sourcePeriod !== 'all') {
+            $sourceQuery->where('period', $sourcePeriod);
+        } else {
+            // Latest active payroll record per employee by max id
+            $latestIds = (clone $sourceQuery)
+                ->select(DB::raw('MAX(id) as max_id'))
+                ->groupBy('employee_name', 'company')
+                ->pluck('max_id');
+            $sourceQuery->whereIn('id', $latestIds);
+        }
+
+        $sourcePayrolls = $sourceQuery->get();
+
+        if ($sourcePayrolls->isEmpty()) {
+            return [
+                'target_period' => $targetPeriod,
+                'source_period' => $sourcePeriod,
+                'total_processed' => 0,
+                'created_count' => 0,
+                'updated_count' => 0,
+                'skipped_count' => 0,
+                'date_range' => $spRange,
+                'is_visible_to_user' => $isVisibleToUser,
+            ];
+        }
+
+        // Pre-fetch attendance logs if sync_attendance is true
+        $attendancesByUser = collect();
+        $usersMap = collect();
+
+        if ($syncAttendance && $spRange) {
+            $cleanNiks = $sourcePayrolls->pluck('nik')->filter()->map(fn ($n) => trim(ltrim((string) $n, "'")))->toArray();
+            $names = $sourcePayrolls->pluck('employee_name')->filter()->map(fn ($n) => trim($n))->toArray();
+
+            $users = User::query()
+                ->where(function ($q) use ($cleanNiks, $names) {
+                    if (!empty($cleanNiks)) {
+                        $q->whereIn('nik', $cleanNiks);
+                    }
+                    if (!empty($names)) {
+                        $q->orWhereIn('name', $names);
+                    }
+                })
+                ->get();
+
+            foreach ($users as $u) {
+                if (!empty($u->nik)) {
+                    $usersMap[trim(ltrim((string) $u->nik, "'"))] = $u;
+                }
+                $usersMap[strtolower(trim($u->name))] = $u;
+            }
+
+            $userIds = $users->pluck('id')->unique();
+            if ($userIds->isNotEmpty()) {
+                $attendancesByUser = Attendance::whereIn('user_id', $userIds)
+                    ->whereBetween('date', $spRange)
+                    ->get()
+                    ->groupBy('user_id');
+            }
+        }
+
+        $createdCount = 0;
+        $updatedCount = 0;
+        $skippedCount = 0;
+
+        DB::transaction(function () use (
+            $sourcePayrolls,
+            $targetPeriod,
+            $syncAttendance,
+            $isVisibleToUser,
+            $duplicateAction,
+            $spRange,
+            $usersMap,
+            $attendancesByUser,
+            &$createdCount,
+            &$updatedCount,
+            &$skippedCount
+        ) {
+            foreach ($sourcePayrolls as $source) {
+                $existing = Payroll::where('employee_name', $source->employee_name)
+                    ->where('company', $source->company)
+                    ->where('period', $targetPeriod)
+                    ->first();
+
+                if ($existing && $duplicateAction === 'skip') {
+                    $skippedCount++;
+                    continue;
+                }
+
+                $attendedDays = (int) ($source->attended_days ?? 0);
+                $holidayDays = (int) ($source->holiday_days ?? 0);
+                $absenceCount = (int) ($source->absence_count ?? 0);
+                $absenceRate = (float) ($source->absence_rate ?? 0);
+                $absenceDeduction = (float) ($source->absence_deduction ?? 0);
+
+                if ($syncAttendance && $spRange) {
+                    $cleanNik = !empty($source->nik) ? trim(ltrim((string) $source->nik, "'")) : null;
+                    $matchedUser = ($cleanNik && isset($usersMap[$cleanNik]))
+                        ? $usersMap[$cleanNik]
+                        : ($usersMap[strtolower(trim($source->employee_name))] ?? null);
+
+                    if ($matchedUser) {
+                        $logs = $attendancesByUser->get($matchedUser->id, collect());
+                        $attendedDays = $logs->whereNotIn('attendance_type', ['libur', 'dinas_luar', 'sakit', 'izin'])->count();
+                        $holidayDays = $logs->where('attendance_type', 'libur')->count();
+
+                        if ($absenceRate > 0) {
+                            $absenceDeduction = $absenceCount * $absenceRate;
+                        }
+                    }
+                }
+
+                $basicSalary = (float) ($source->basic_salary ?? 0);
+                $bpjsKes = (float) ($source->bpjs_kes ?? 0);
+                $allowance = (float) ($source->allowance ?? 0);
+                $deduction = (float) ($source->deduction ?? 0);
+                $pph21 = (float) ($source->pph21 ?? 0);
+
+                $customDeductions = $source->custom_deductions;
+                $customDeductionsSum = 0;
+                if (is_array($customDeductions)) {
+                    foreach ($customDeductions as $cd) {
+                        $customDeductionsSum += (float) ($cd['amount'] ?? 0);
+                    }
+                }
+
+                $totalEarnings = $basicSalary + $bpjsKes + $allowance;
+                $totalDeductions = $deduction + $absenceDeduction + $customDeductionsSum + $pph21;
+                $takeHomePay = max(0, $totalEarnings - $totalDeductions);
+
+                $payload = [
+                    'row_no' => $source->row_no,
+                    'employee_name' => $source->employee_name,
+                    'nik' => $source->nik,
+                    'province' => $source->province,
+                    'school_unit' => $source->school_unit,
+                    'position' => $source->position,
+                    'birth_date' => $source->birth_date,
+                    'gender' => $source->gender,
+                    'marital_status' => $source->marital_status,
+                    'whatsapp' => $source->whatsapp,
+                    'email' => $source->email,
+                    'join_date' => $source->join_date,
+                    'status' => 'active',
+                    'company' => $source->company,
+                    'period' => $targetPeriod,
+                    'is_visible_to_user' => $isVisibleToUser,
+                    'basic_salary' => $basicSalary,
+                    'net_base_price' => $source->net_base_price,
+                    'bpjs_kes' => $bpjsKes,
+                    'bpjs_tk' => $source->bpjs_tk,
+                    'bpjs_tk_jht' => $source->bpjs_tk_jht,
+                    'bpjs_tk_jp' => $source->bpjs_tk_jp,
+                    'allowance' => $allowance,
+                    'deduction' => $deduction,
+                    'attended_days' => $attendedDays,
+                    'holiday_days' => $holidayDays,
+                    'absence_count' => $absenceCount,
+                    'absence_rate' => $absenceRate,
+                    'absence_deduction' => $absenceDeduction,
+                    'absence_note' => $source->absence_note,
+                    'custom_deductions' => $customDeductions,
+                    'pph21' => $pph21,
+                    'take_home_pay' => $takeHomePay,
+                    'bank_account' => $source->bank_account,
+                    'bank_name' => $source->bank_name,
+                ];
+
+                if ($existing) {
+                    $existing->update($payload);
+                    self::syncEmployeeAccount($existing);
+                    $updatedCount++;
+                } else {
+                    $newPayroll = Payroll::create($payload);
+                    self::syncEmployeeAccount($newPayroll);
+                    $createdCount++;
+                }
+            }
+        });
+
+        // Record Activity Log
+        ActivityLog::record(
+            action: 'GENERATE_PAYROLL_PERIOD',
+            module: 'payroll',
+            description: "Generate payroll periode {$targetPeriod}: {$createdCount} dibuat, {$updatedCount} diperbarui, {$skippedCount} dilewati (Visibilitas User: " . ($isVisibleToUser ? 'Tampil' : 'Tersembunyi') . ").",
+            details: [
+                'target_period' => $targetPeriod,
+                'source_period' => $sourcePeriod,
+                'company' => $company,
+                'sync_attendance' => $syncAttendance,
+                'date_range' => $spRange,
+                'created_count' => $createdCount,
+                'updated_count' => $updatedCount,
+                'skipped_count' => $skippedCount,
+                'is_visible_to_user' => $isVisibleToUser,
+            ],
+            company: $company !== 'all' ? $company : null
+        );
+
+        return [
+            'target_period' => $targetPeriod,
+            'source_period' => $sourcePeriod,
+            'total_processed' => $createdCount + $updatedCount + $skippedCount,
+            'created_count' => $createdCount,
+            'updated_count' => $updatedCount,
+            'skipped_count' => $skippedCount,
+            'date_range' => $spRange,
+            'is_visible_to_user' => $isVisibleToUser,
+        ];
     }
 }
 

@@ -736,6 +736,48 @@ class PayrollController extends Controller
     }
 
     /**
+     * Bulk generate payrolls for a target period from a source period. (Admin only)
+     */
+    public function generatePeriod(Request $request): JsonResponse
+    {
+        $request->validate([
+            'target_period' => ['required', 'string'],
+            'source_period' => ['nullable', 'string'],
+            'company' => ['nullable', 'string'],
+            'sync_attendance' => ['nullable', 'boolean'],
+            'is_visible_to_user' => ['nullable', 'boolean'],
+            'duplicate_action' => ['nullable', 'in:update,skip'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+        ]);
+
+        $company = $this->payrollService->resolveCompany($request) ?: $request->input('company', 'all');
+        $params = $request->all();
+        $params['company'] = $company;
+
+        try {
+            $result = $this->payrollService->generatePeriod($params, $request->user());
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "Berhasil generate payroll periode {$result['target_period']}: {$result['created_count']} data baru dibuat, {$result['updated_count']} diperbarui, {$result['skipped_count']} dilewati.",
+                'data' => $result,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal generate payroll: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Determine which worksheet to read, ensuring PETUNJUK_PENGISIAN is never loaded.
      */
     protected function resolveTargetSheet($file, string $period): int|string

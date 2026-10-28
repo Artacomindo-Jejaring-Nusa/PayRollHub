@@ -173,6 +173,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/payrolls/{payroll}', [PayrollController::class, 'destroy']);
         Route::post('/payrolls/import/preview', [PayrollController::class, 'previewImport']);
         Route::post('/payrolls/import', [PayrollController::class, 'import']);
+        Route::post('/payrolls/generate-period', [PayrollController::class, 'generatePeriod']);
 
         // Data Validation & AI Cross-Check Hub (Pemeriksaan & Validasi Silang Data Baru vs Data Lama)
         Route::post('/admin/validation/upload', [\App\Http\Controllers\Api\DataValidationController::class, 'uploadAndValidate']);

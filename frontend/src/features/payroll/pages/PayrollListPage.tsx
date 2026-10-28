@@ -17,6 +17,7 @@ import { SP_PERIOD_LIST, MONTH_PERIOD_OPTIONS, formatPeriodDisplay } from '../..
 import { ProvinceSettingsModal } from '../components/ProvinceSettingsModal';
 import { EmployeeReplacementsModal } from '../components/EmployeeReplacementsModal';
 import { PayrollPeriodsModal } from '../components/PayrollPeriodsModal';
+import { GeneratePayrollModal } from '../components/GeneratePayrollModal';
 import {
   Search,
   Filter,
@@ -38,6 +39,7 @@ import {
   SlidersHorizontal,
   History,
   Layers,
+  Sparkles,
 } from 'lucide-react';
 
 export const PayrollListPage: React.FC = () => {
@@ -110,6 +112,7 @@ export const PayrollListPage: React.FC = () => {
   const [isProvinceModalOpen, setIsProvinceModalOpen] = useState(false);
   const [isReplacementModalOpen, setIsReplacementModalOpen] = useState(false);
   const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const [selectedVisibility, setSelectedVisibility] = useState<string>('');
   const [filterDuplicateAccount, setFilterDuplicateAccount] = useState(false);
   const [totalDuplicateAccounts, setTotalDuplicateAccounts] = useState(0);

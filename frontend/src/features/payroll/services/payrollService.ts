@@ -323,5 +323,30 @@ export const payrollService = {
   deleteEmployeeReplacement: async (id: number): Promise<void> => {
     await api.delete(`/employee-replacements/${id}`);
   },
+  generatePeriod: async (payload: {
+    target_period: string;
+    source_period?: string;
+    company?: string;
+    sync_attendance?: boolean;
+    is_visible_to_user?: boolean;
+    duplicate_action?: 'update' | 'skip';
+    start_date?: string;
+    end_date?: string;
+  }): Promise<{
+    status: string;
+    message: string;
+    data: {
+      target_period: string;
+      source_period: string;
+      total_processed: number;
+      created_count: number;
+      updated_count: number;
+      skipped_count: number;
+      date_range: [string, string] | null;
+      is_visible_to_user: boolean;
+    };
+  }> => {
+    const response = await api.post('/payrolls/generate-period', payload);
+    return response.data;
+  },
 };
-

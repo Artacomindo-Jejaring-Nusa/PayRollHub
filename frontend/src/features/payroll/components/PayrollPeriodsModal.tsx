@@ -156,7 +156,7 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
 
   const handleDelete = async (item: PayrollPeriodItem) => {
     if (!item.id) return;
-    const isStandard = /^SP\s*\d+$/i.test(item.code);
+    const isStandard = /^SP\s*(1[0-2]|[1-9])$/i.test(item.code);
     if (isStandard) {
       alert('Periode standar SP 1 s/d SP 12 tidak dapat dihapus.');
       return;

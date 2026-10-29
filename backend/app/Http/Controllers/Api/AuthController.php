@@ -70,9 +70,9 @@ class AuthController extends Controller
         });
 
         if ($requestedCompany) {
-            // Priority: find user belonging to this company, or admin / super_admin / lord_admin (role setara)
+            // Priority: find user belonging to this company, or super_admin / lord_admin
             $user = (clone $userQuery)->where(function ($q) use ($requestedCompany) {
-                $q->where('company', $requestedCompany)->orWhereIn('role', ['admin', 'super_admin', 'lord_admin']);
+                $q->where('company', $requestedCompany)->orWhereIn('role', ['super_admin', 'lord_admin']);
             })->first();
 
             // If not found, look for any user with this identifier to detect wrong portal

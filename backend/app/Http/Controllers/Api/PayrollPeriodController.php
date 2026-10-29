@@ -18,24 +18,19 @@ class PayrollPeriodController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $company = $request->input('company');
+        $company = $request->input('company') ?: ($user?->company ?: 'all');
 
-        $query = PayrollPeriod::query();
+        $query = PayrollPeriod::query()
+            ->forCompany($company);
 
-        // Karyawan hanya bisa melihat periode yang diizinkan untuk perusahaannya (is_visible_to_user = true)
+        // Karyawan hanya bisa melihat periode yang diizinkan (is_visible_to_user = true)
         if ($user && $user->role === 'karyawan') {
-            $company = $company ?: ($user->company ?: 'all');
-            $query->forCompany($company)->visibleToUser();
-        } elseif ($user && $user->isAdmin()) {
-            // Admin & Super Admin: role setara dalam melihat periode / target SP
-            // Seluruh target periode ditampilkan agar konsisten di portal admin manapun
-        } else {
-            $query->forCompany($company ?: 'all');
+            $query->visibleToUser();
         }
 
         $periods = $query->orderBy('id', 'asc')->get();
 
-        // Jika dipanggil oleh Admin / Super Admin, sertakan total karyawan terdaftar di periode ini
+        // Jika dipanggil oleh Admin, sertakan total karyawan terdaftar di periode ini
         if ($user && $user->isAdmin()) {
             $periodsData = $periods->map(function ($period) use ($company) {
                 $payrollCountQuery = Payroll::where('period', $period->code);

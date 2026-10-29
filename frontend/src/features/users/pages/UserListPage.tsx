@@ -130,7 +130,7 @@ export const UserListPage: React.FC = () => {
       name: formName.trim(),
       email: formEmail.trim(),
       role: formRole,
-      company: (formRole === 'super_admin' || formRole === 'admin') ? null : (formRole === 'lord_admin' ? (formCompany || 'rbs') : formCompany),
+      company: formRole === 'super_admin' ? null : (formRole === 'lord_admin' ? (formCompany || 'rbs') : formCompany),
       nik: formNik.trim() || null,
       school_unit: formSchoolUnit.trim() || null,
       marital_status: formMaritalStatus || null,
@@ -470,15 +470,15 @@ export const UserListPage: React.FC = () => {
             onChange={(e) => setFormRole(e.target.value as UserRole)}
             options={[
               ...(currentUser?.role === 'lord_admin' ? [{ label: '👑 Lord Admin (Owner / Dewa Admin - Hak Akses Tertinggi)', value: 'lord_admin' }] : []),
-              { label: '⭐ Super Admin (Akses Penuh Seluruh Sistem & Entitas)', value: 'super_admin' },
-              { label: '🛡️ Admin (Akses Penuh Seluruh Sistem & Entitas)', value: 'admin' },
+              { label: '⭐ Super Admin (Akses Kedua Dashboard & Melihat Audit Log)', value: 'super_admin' },
+              { label: '🛡️ Admin Perusahaan (Akses Penuh Kelola Data Gaji & Absensi)', value: 'admin' },
               { label: '👤 User (Hanya View & Search Data Penggajian)', value: 'user' },
               { label: '📱 Karyawan (Portal Mandiri: Slip Gaji, Laporan, Profil)', value: 'karyawan' },
             ]}
             error={formErrors.role}
           />
 
-          {formRole !== 'super_admin' && formRole !== 'admin' && formRole !== 'lord_admin' && (
+          {formRole !== 'super_admin' && formRole !== 'lord_admin' && (
             <Select
               label="Entitas Perusahaan"
               required

@@ -90,11 +90,10 @@ class User extends Authenticatable
 
     /**
      * Check if user is super admin or lord admin (highest access).
-     * Admin dan Super Admin disetarakan hak akses dan kewenangannya.
      */
     public function isSuperAdmin(): bool
     {
-        return in_array($this->role, ['admin', 'super_admin', 'lord_admin']);
+        return in_array($this->role, ['super_admin', 'lord_admin']);
     }
 
     /**

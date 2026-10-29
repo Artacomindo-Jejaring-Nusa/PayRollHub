@@ -49,7 +49,7 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
   // Form Tambah
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [targetCompany, setTargetCompany] = useState<string>(company || 'all');
+  const [targetCompany, setTargetCompany] = useState<string>('all');
   const [isSp, setIsSp] = useState<boolean>(false);
   const [isVisibleToUser, setIsVisibleToUser] = useState<boolean>(false);
   const [description, setDescription] = useState('');
@@ -71,7 +71,7 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
   const fetchPeriods = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await payrollPeriodService.getPeriods({ company: targetCompany });
+      const data = await payrollPeriodService.getPeriods();
       setPeriods(data);
       if (onPeriodChanged) {
         onPeriodChanged(data);
@@ -81,7 +81,7 @@ export const PayrollPeriodsModal: React.FC<PayrollPeriodsModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [targetCompany, onPeriodChanged]);
+  }, [onPeriodChanged]);
 
   useEffect(() => {
     if (isOpen) {

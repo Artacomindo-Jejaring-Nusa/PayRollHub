@@ -443,10 +443,11 @@ class PayrollService
      */
     public function getDistinctPeriods(?string $company = null): array
     {
-        $masterPeriods = \App\Models\PayrollPeriod::forCompany($company)->pluck('code')->toArray();
+        // Admin & Super Admin role setara: selalu sertakan seluruh master period yang ada di sistem
+        $masterPeriods = \App\Models\PayrollPeriod::query()->pluck('code')->toArray();
 
         $query = Payroll::query()->select('period')->whereNotNull('period');
-        if ($company) {
+        if ($company && $company !== 'all') {
             $query->where('company', $company);
         }
         $existingPeriods = $query->distinct()->orderByDesc('period')->pluck('period')->toArray();
